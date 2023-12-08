@@ -1,9 +1,10 @@
 import torch
 
+from kolpinn import io
 from kolpinn import grid_quantities
 from kolpinn.grid_quantities import Grid, Quantity, get_quantity
 from kolpinn.batching import Batcher
-from kolpinn.model import QuantityModel, load_weights
+from kolpinn.model import SimpleNNModel, FunctionModel
 from kolpinn.training import Trainer
 
 import parameters as params
@@ -37,7 +38,6 @@ class Device:
         self.m_effs = m_effs
 
         self.models = {}
-        self.diffable_quantities = {}
         self.grids_training = {}
         self.grids_validation = {}
         self.batchers_training = {}
@@ -51,7 +51,7 @@ class Device:
         for i in range(1,N+1):
             x_left = self.boundaries[i-1]
             x_right = self.boundaries[i]
-            self.models['phi' + str(i)] = QuantityModel(
+            self.models['phi' + str(i)] = SimpleNNModel(
                 ['E','x'],
                 {
                     'E': lambda E, q: E / physics.V_OOM,
@@ -62,7 +62,7 @@ class Device:
                 params.activation_function,
                 n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
                 n_hidden_layers = params.n_hidden_layers,
-                network_dtype = params.model_dtype,
+                model_dtype = params.model_dtype,
                 output_dtype = params.si_complex_dtype,
                 device = params.device,
             )
@@ -102,10 +102,8 @@ class Device:
                      ),
             })
 
-        load_weights(self.models, params.loaded_weights_index)
 
-
-        # Quantities
+        # FunctionModels
 
         self.qs_training = physics.quantities_factory.get_quantities_dict(self.grids_training)
         self.qs_validation = physics.quantities_factory.get_quantities_dict(self.grids_validation)
@@ -117,13 +115,13 @@ class Device:
                 potential = lambda q, p=potential: Quantity(torch.tensor(p), q.grid)
             if not callable(m_eff):
                 m_eff = lambda q, m=m_eff: Quantity(torch.tensor(m), q.grid)
-            self.diffable_quantities['V'+str(i)] = potential
-            self.diffable_quantities['m_eff'+str(i)] = m_eff
+            self.models['V'+str(i)] = FunctionModel(potential)
+            self.models['m_eff'+str(i)] = FunctionModel(m_eff)
 
         for i in (0, N+1):
             k_function = lambda q, i=i: \
                 (2 * q['m_eff'+str(i)] * (q['E']-q['V'+str(i)]) / physics.H_BAR**2).set_dtype(params.si_complex_dtype).transform(torch.sqrt)
-            self.diffable_quantities['k'+str(i)] = k_function
+            self.models['k'+str(i)] = FunctionModel(k_function)
 
 
         # Batchers & Losses
@@ -193,7 +191,7 @@ class Device:
             self.quantities_requiring_grad_dict,
             params.Optimizer,
             params.learn_rate,
-            diffable_quantities = self.diffable_quantities,
+            saved_parameters_index = io.get_next_parameters_index(),
+            name = 'trainer',
         )
-
-        self.model_parameters = {}
+        self.trainer.load(params.loaded_parameters_index)

@@ -5,7 +5,7 @@ deprecated.py
 matlab_results/
 old/
 plots/
-weights/
+parameters/
 
 
 # Below: github/gitignore/Python.gitignore

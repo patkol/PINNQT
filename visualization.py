@@ -1,11 +1,10 @@
-import os
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
 from kolpinn.mathematics import complex_abs2
 from kolpinn.grid_quantities import Quantity
-from kolpinn.model import get_extended_q
+from kolpinn.model import get_extended_q, get_extended_q_batchwise
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
 
@@ -16,8 +15,7 @@ import physics
 
 def visualize(device):
     trainer = device.trainer
-    path_prefix = f'plots/{trainer.saved_weights_index:04d}/'
-    os.makedirs(path_prefix, exist_ok=True)
+    path_prefix = f'plots/{trainer.saved_parameters_index:04d}/'
     visualization.save_training_history_plot(trainer)
     visualization.save_loss_plots(trainer, 'E')
 
@@ -31,15 +29,13 @@ def visualize(device):
 
     batcher_left = trainer.batchers_validation['boundary'+left_contact_index]
     batcher_right = trainer.batchers_validation['boundary'+right_layer_index]
-    q_left = batcher_left.get_extended_q(
+    q_left = get_extended_q_batchwise(
+        batcher_left,
         trainer.models,
-        trainer.model_parameters,
-        trainer.diffable_quantities,
     )
-    q_right = batcher_right.get_extended_q(
+    q_right = get_extended_q_batchwise(
+        batcher_right,
         trainer.models,
-        trainer.model_parameters,
-        trainer.diffable_quantities,
     )
 
     abs_group_velocity_left_contact = (2*(q_left['E']-q_left['V'+left_contact_index])
@@ -84,15 +80,11 @@ def visualize(device):
     for i in range(1, device.n_layers+1):
         batcher = trainer.batchers_validation['bulk'+str(i)]
         # OPTIM: Only evaluate phi[i] here
-        diffable_quantities = {'x_expanded': lambda q: q['x'],}
-        diffable_quantities.update(trainer.diffable_quantities)
 
         q = get_extended_q(
             batcher.q_full,
             models = trainer.models,
             models_require_grad = False,
-            model_parameters = trainer.model_parameters,
-            diffable_quantities = diffable_quantities,
             quantities_requiring_grad_labels = ['x'],
         )
 
@@ -135,7 +127,7 @@ def visualize(device):
 
         phi = q['phi'+str(i)]
         phi_dx = phi.get_grad(
-            q['x_expanded'],
+            q['x'],
             retain_graph=True, # Necessary for evaluation in later layers
             create_graph=False,
         )

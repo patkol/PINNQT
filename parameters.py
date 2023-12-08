@@ -12,15 +12,15 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Training
-n_training_steps = 200
-report_each = 10
+n_training_steps = 1000
+report_each = 100
 max_time = None
 Optimizer = torch.optim.Adam
 learn_rate = 1e-3
 loss_function = lambda x: x.transform(mathematics.complex_abs2).mean()
 
 # Models
-loaded_weights_index = None
+loaded_parameters_index = None
 n_hidden_layers = 5
 n_neurons_per_hidden_layer = 30
 activation_function = torch.nn.SiLU()
