@@ -10,13 +10,8 @@ def get_SE_loss(q, *, with_grad, i):
     """
     i: layer index in [1,N]
     """
-    phi_dx = q['phi'+str(i)].get_grad(
-        q['x'],
-        retain_graph=True,
-        create_graph=True,
-    )
     # Multiplying hbar here for numerical stability
-    hbar_phi_dx_over_m = phi_dx * (physics.H_BAR / q['m_eff'+str(i)])
+    hbar_phi_dx_over_m = q['phi_dx' + str(i)] * (physics.H_BAR / q['m_eff'+str(i)])
     hbar2_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_grad(
         q['x'],
         retain_graph=True,
@@ -42,20 +37,12 @@ def get_cc_loss(q, *, with_grad, i, N):
         b_l = q['phi'+right_index] - physics.A_L
         phi_dx_left = 1j * q['k'+left_index] * (physics.A_L - b_l)
     else:
-        phi_dx_left = q['phi'+left_index].get_grad(
-            q['x'],
-            retain_graph=True,
-            create_graph=with_grad,
-        )
+        phi_dx_left = q['phi_dx'+left_index]
     if i==N: # Rightmost boundary
         b_r = q['phi'+left_index] - physics.A_R
         phi_dx_right = 1j * q['k'+right_index] * (b_r - physics.A_R)
     else:
-        phi_dx_right = q['phi'+right_index].get_grad(
-            q['x'],
-            retain_graph=True,
-            create_graph=with_grad,
-        )
+        phi_dx_right = q['phi_dx'+right_index]
     residual = phi_dx_left / q['m_eff'+left_index] - phi_dx_right / q['m_eff'+right_index]
     residual /= physics.CURRENT_CONTINUITY_OOM
 
@@ -63,14 +50,8 @@ def get_cc_loss(q, *, with_grad, i, N):
 
 def get_const_j_loss(q, *, with_grad, i):
     phi = q['phi'+str(i)]
-    # OPTIM: same phi_dx in SE loss
-    phi_dx = phi.get_grad(
-        q['x'],
-        retain_graph=True,
-        create_graph=with_grad,
-    )
-    prob_current_complex = physics.H_BAR * phi.transform(torch.conj) * phi_dx / q['m_eff'+str(i)]
-    prob_current = prob_current_complex.transform(torch.imag)
+    prob_current = (physics.H_BAR * phi.transform(torch.conj)
+                    * q['phi_dx'+str(i)] / q['m_eff'+str(i)]).transform(torch.imag)
     residual = prob_current - prob_current.mean_dimension('x')
     residual /= physics.PROBABILITY_CURRENT_OOM
     # (j - j_mean) / j_mean

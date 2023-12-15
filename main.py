@@ -26,9 +26,18 @@ device = Device(**physics.device_kwargs)
 
 
 if __name__ == "__main__":
-    device.trainer.train(
-        params.n_training_steps,
-        params.report_each,
-        max_time = params.max_time,
-    )
+    previous_trainer = None
+    for energy_string, trainer in device.trainers.items():
+        if params.continuous_training and not previous_trainer is None:
+            trainer.load_models(previous_trainer.models_dict)
+
+        trainer.train(
+            report_each = params.report_each,
+            max_n_steps = params.max_n_training_steps,
+            max_time = params.max_time,
+            min_loss = params.min_loss,
+        )
+
+        previous_trainer = trainer
+
     visualize(device)

@@ -4,7 +4,7 @@ from kolpinn import io
 from kolpinn import grid_quantities
 from kolpinn.grid_quantities import Grid, Quantity, get_quantity
 from kolpinn.batching import Batcher
-from kolpinn.model import SimpleNNModel, FunctionModel
+from kolpinn.model import SimpleNNModel, FunctionModel, get_extended_q_batchwise
 from kolpinn.training import Trainer
 
 import parameters as params
@@ -37,110 +37,40 @@ class Device:
         self.potentials = potentials
         self.m_effs = m_effs
 
-        self.models = {}
+        self.models = {} # Shared by multiple trainers
         self.grids_training = {}
         self.grids_validation = {}
-        self.batchers_training = {}
-        self.batchers_validation = {}
         self.loss_functions = {}
+        self.trainers = {}
+
+        saved_parameters_index = io.get_next_parameters_index()
+        print('saved_parameters_index =', saved_parameters_index)
+
+        energies = torch.linspace(
+            physics.E_MIN,
+            physics.E_MAX,
+            params.N_E,
+            dtype=params.si_real_dtype,
+        )
 
 
-        # Models & Grids
-
-        ## Layers
-        for i in range(1,N+1):
-            x_left = self.boundaries[i-1]
-            x_right = self.boundaries[i]
-            self.models['phi' + str(i)] = SimpleNNModel(
-                ['E','x'],
-                {
-                    'E': lambda E, q: E / physics.V_OOM,
-                    'x': lambda x, q, x_left=x_left, x_right=x_right: # Capturing x_left/right
-                             (x - x_left) / (x_right - x_left),
-                },
-                lambda phi, q: phi,
-                params.activation_function,
-                n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
-                n_hidden_layers = params.n_hidden_layers,
-                model_dtype = params.model_dtype,
-                output_dtype = params.si_complex_dtype,
-                device = params.device,
-            )
-            self.grids_training['bulk' + str(i)] = Grid({
-                'E': torch.linspace(physics.E_MIN, physics.E_MAX, params.N_E_training),
-                'x': torch.linspace(x_left, x_right, params.N_x_training),
-            })
-            self.grids_validation['bulk' + str(i)] = Grid({
-                'E': torch.linspace(physics.E_MIN, physics.E_MAX, params.N_E_validation),
-                'x': torch.linspace(x_left, x_right, params.N_x_validation),
-            })
-
-        ## Boundaries
-        for i in range(0,N+1):
-            self.grids_training['boundary' + str(i)] = Grid({
-                'E': torch.linspace(
-                         physics.E_MIN,
-                         physics.E_MAX,
-                         params.N_E_training,
-                         dtype=params.si_real_dtype,
-                     ),
-                'x': torch.tensor(
-                         [self.boundaries[i]],
-                         dtype=params.si_real_dtype,
-                     ),
-            })
-            self.grids_validation['boundary' + str(i)] = Grid({
-                'E': torch.linspace(
-                         physics.E_MIN,
-                         physics.E_MAX,
-                         params.N_E_validation,
-                         dtype=params.si_real_dtype,
-                     ),
-                'x': torch.tensor(
-                         [self.boundaries[i]],
-                         dtype=params.si_real_dtype,
-                     ),
-            })
-
-
-        # FunctionModels
-
-        self.qs_training = physics.quantities_factory.get_quantities_dict(self.grids_training)
-        self.qs_validation = physics.quantities_factory.get_quantities_dict(self.grids_validation)
-
-        for i in range(0,N+2):
-            potential = potentials[i]
-            m_eff = m_effs[i]
-            if not callable(potential):
-                potential = lambda q, p=potential: Quantity(torch.tensor(p), q.grid)
-            if not callable(m_eff):
-                m_eff = lambda q, m=m_eff: Quantity(torch.tensor(m), q.grid)
-            self.models['V'+str(i)] = FunctionModel(potential)
-            self.models['m_eff'+str(i)] = FunctionModel(m_eff)
-
-        for i in (0, N+1):
-            k_function = lambda q, i=i: \
-                (2 * q['m_eff'+str(i)] * (q['E']-q['V'+str(i)]) / physics.H_BAR**2).set_dtype(params.si_complex_dtype).transform(torch.sqrt)
-            self.models['k'+str(i)] = FunctionModel(k_function)
-
-
-        # Batchers & Losses
+        # Models, Grids
 
         ## Layers
         for i in range(1,N+1):
             name = 'bulk' + str(i)
-            self.batchers_training[name] = Batcher(
-                self.qs_training[name],
-                self.grids_training[name],
-                ['E','x'],
-                [params.batch_size_E, params.batch_size_x],
-            )
-            self.batchers_validation[name] = Batcher(
-                self.qs_validation[name],
-                self.grids_validation[name],
-                ['E','x'],
-                [1, params.batch_size_x],
-            )
+            x_left = self.boundaries[i-1]
+            x_right = self.boundaries[i]
+
+            self.grids_training[name] = Grid({
+                'E': energies,
+                'x': torch.linspace(x_left, x_right, params.N_x_training),
+            })
+            self.grids_validation[name] = Grid({
+                'E': energies,
+                'x': torch.linspace(x_left, x_right, params.N_x_validation),
+            })
+
             se_loss_function = lambda q, with_grad, i=i: \
                 loss.get_SE_loss(q, with_grad=with_grad, i=i)
             const_j_loss_function = lambda q, with_grad, i=i: \
@@ -149,22 +79,29 @@ class Device:
                 'SE'+str(i): se_loss_function,
                 'const_j'+str(i): const_j_loss_function,
             }
+            self.models['phi_dx' + str(i)] = FunctionModel(
+                lambda q, i=i, **kwargs: q['phi'+str(i)].get_grad(q['x'], **kwargs),
+                retain_graph = True,
+                create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
+            )
 
         ## Boundaries
         for i in range(0,N+1):
             name = 'boundary' + str(i)
-            self.batchers_training[name] = Batcher(
-                self.qs_training[name],
-                self.grids_training[name],
-                ['E'],
-                [1],
-            )
-            self.batchers_validation[name] = Batcher(
-                self.qs_validation[name],
-                self.grids_validation[name],
-                ['E'],
-                [1],
-            )
+            self.grids_training[name] = Grid({
+                'E': energies,
+                'x': torch.tensor(
+                         [self.boundaries[i]],
+                         dtype=params.si_real_dtype,
+                     ),
+            })
+            self.grids_validation[name] = Grid({
+                'E': energies,
+                'x': torch.tensor(
+                         [self.boundaries[i]],
+                         dtype=params.si_real_dtype,
+                     ),
+            })
 
             self.loss_functions[name] = {}
             if not i in (0,N):
@@ -177,21 +114,158 @@ class Device:
                 loss.get_cc_loss(q, with_grad=with_grad, i=i, N=N)
             self.loss_functions[name]['cc'+str(i)] = cc_loss_function
 
-        self.quantities_requiring_grad_dict = dict((batcher_name, ['x'])
-                                                   for batcher_name in self.batchers_training.keys())
+        ## Layers and contacts
+        for i in range(0,N+2):
+            potential = potentials[i]
+            m_eff = m_effs[i]
+            if not callable(potential):
+                potential = lambda q, p=potential: Quantity(torch.tensor(p), q.grid)
+            if not callable(m_eff):
+                m_eff = lambda q, m=m_eff: Quantity(torch.tensor(m), q.grid)
+            self.models['V'+str(i)] = FunctionModel(potential)
+            self.models['m_eff'+str(i)] = FunctionModel(m_eff)
+
+        ## Contacts
+        for i in (0, N+1):
+            k_function = lambda q, i=i: \
+                (2 * q['m_eff'+str(i)] * (q['E']-q['V'+str(i)]) / physics.H_BAR**2).set_dtype(params.si_complex_dtype).transform(torch.sqrt)
+            self.models['k'+str(i)] = FunctionModel(k_function)
 
 
-        # Trainer
+        # Trainers
 
-        self.trainer = Trainer(
-            self.models,
-            self.batchers_training,
-            self.batchers_validation,
-            self.loss_functions,
-            self.quantities_requiring_grad_dict,
-            params.Optimizer,
-            params.learn_rate,
-            saved_parameters_index = io.get_next_parameters_index(),
-            name = 'trainer',
-        )
-        self.trainer.load(params.loaded_parameters_index)
+        for energy in energies.cpu().numpy():
+            energy_string = f'E={energy/physics.EV:.16e}'
+            energy_subgrids_training = dict(
+                (label, grid.get_subgrid({'E': lambda E: E == energy},
+                                         copy_all = True))
+                for label, grid in self.grids_training.items()
+            )
+            energy_subgrids_validation = dict(
+                (label, grid.get_subgrid({'E': lambda E: E == energy},
+                                         copy_all = True))
+                for label, grid in self.grids_validation.items()
+            )
+            qs_training = physics.quantities_factory.get_quantities_dict(energy_subgrids_training)
+            qs_validation = physics.quantities_factory.get_quantities_dict(energy_subgrids_validation)
+
+            batchers_training = {}
+            batchers_validation = {}
+            trainer_models = {}
+            models_dict = {}
+
+            ## Layers
+            for i in range(1,N+1):
+                name = 'bulk' + str(i)
+                x_left = self.boundaries[i-1]
+                x_right = self.boundaries[i]
+
+                batchers_training[name] = Batcher(
+                    qs_training[name],
+                    energy_subgrids_training[name],
+                    ['x'],
+                    [params.batch_size_x],
+                )
+                batchers_validation[name] = Batcher(
+                    qs_validation[name],
+                    energy_subgrids_validation[name],
+                    ['x'],
+                    [params.batch_size_x],
+                )
+
+                trainer_models['phi' + str(i)] = SimpleNNModel(
+                    ['x'],
+                    {
+                        'x': lambda x, q, x_left=x_left, x_right=x_right:
+                                 (x - x_left) / (x_right - x_left),
+                    },
+                    lambda phi, q: phi,
+                    params.activation_function,
+                    n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
+                    n_hidden_layers = params.n_hidden_layers,
+                    model_dtype = params.model_dtype,
+                    output_dtype = params.si_complex_dtype,
+                    device = params.device,
+                )
+
+                models_dict[name] = {
+                    'phi' + str(i): trainer_models['phi' + str(i)],
+                    'phi_dx' + str(i): self.models['phi_dx' + str(i)],
+                    'V' + str(i): self.models['V' + str(i)],
+                    'm_eff' + str(i): self.models['m_eff' + str(i)],
+                }
+
+            ## Boundaries
+            for i in range(0,N+1):
+                name = 'boundary' + str(i)
+                batchers_training[name] = Batcher(
+                    qs_training[name],
+                    energy_subgrids_training[name],
+                    [],
+                    [],
+                )
+                batchers_validation[name] = Batcher(
+                    qs_validation[name],
+                    energy_subgrids_validation[name],
+                    [],
+                    [],
+                )
+                models_dict[name] = {
+                    'V' + str(i): self.models['V' + str(i)],
+                    'V' + str(i+1): self.models['V' + str(i+1)],
+                    'm_eff' + str(i): self.models['m_eff' + str(i)],
+                    'm_eff' + str(i+1): self.models['m_eff' + str(i+1)],
+                }
+                if i == 0:
+                    models_dict[name]['k' + str(0)] = self.models['k' + str(0)]
+                else:
+                    models_dict[name]['phi' + str(i)] = trainer_models['phi' + str(i)]
+                    models_dict[name]['phi_dx' + str(i)] = self.models['phi_dx' + str(i)]
+                if i == N:
+                    models_dict[name]['k' + str(i+1)] = self.models['k' + str(i+1)]
+                else:
+                    models_dict[name]['phi' + str(i+1)] = trainer_models['phi' + str(i+1)]
+                    models_dict[name]['phi_dx' + str(i+1)] = self.models['phi_dx' + str(i+1)]
+
+
+            # Add the loss models
+
+            used_losses = {}
+            quantities_requiring_grad_dict = {}
+            for batcher_name, loss_functions_dict in self.loss_functions.items():
+                quantities_requiring_grad_dict[batcher_name] = ['x']
+                used_losses[batcher_name] = []
+                for loss_name, loss_function in loss_functions_dict.items():
+                    loss_model = FunctionModel(loss_function, with_grad = True)
+                    models_dict[batcher_name][loss_name] = loss_model
+                    used_losses[batcher_name].append(loss_name)
+
+
+            # Trainer
+
+            self.trainers[energy_string] = Trainer(
+                models_dict = models_dict,
+                batchers_training = batchers_training,
+                batchers_validation = batchers_validation,
+                used_losses = used_losses,
+                quantities_requiring_grad_dict = quantities_requiring_grad_dict,
+                Optimizer = params.Optimizer,
+                learn_rate = params.learn_rate,
+                Scheduler = params.Scheduler,
+                saved_parameters_index = saved_parameters_index,
+                name = energy_string,
+            )
+            self.trainers[energy_string].load(params.loaded_parameters_index)
+
+
+    def get_extended_qs(self):
+        qs_list = []
+        for trainer in self.trainers.values():
+            qs_list.append(trainer.get_extended_qs())
+
+        combined_qs = {}
+        for grid_name, grid in self.grids_validation.items():
+            q_list = [qs[grid_name] for qs in qs_list]
+            combined_qs[grid_name] = grid_quantities.combine_quantities(q_list, grid)
+
+        return combined_qs
