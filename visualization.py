@@ -119,16 +119,31 @@ def visualize(device):
     v_ratio = Quantity(v_ratio_values, q_right.grid)
 
     b_l = q_left['phi'+left_layer_index] - physics.A_L
-    b_r = q_right['phi'+left_layer_index] - physics.A_R
+    b_r = q_right['phi'+right_layer_index] - physics.A_R
 
 
     fig, ax = plt.subplots()
     add_lineplot(ax, b_l.transform(complex_abs2), 'Reflection probability', 'E', x_unit=physics.EV)
     add_lineplot(ax, v_ratio * b_r.transform(complex_abs2), 'Transmission probability', 'E', x_unit=physics.EV)
 
-    energies_matlab = np.loadtxt('matlab_results/E.txt', delimiter=',')
-    b_r_2_left_matlab = np.loadtxt('matlab_results/TEL.txt', delimiter=',')
-    ax.plot(energies_matlab, b_r_2_left_matlab, label='MATLAB |b_r|^2', linestyle='dashed', c='green')
+    try:
+        energies_matlab = np.loadtxt(
+            f'matlab_results/E_{params.simulated_device_name}.txt',
+            delimiter=',',
+        )
+        b_r_2_left_matlab = np.loadtxt(
+            f'matlab_results/TEL_{params.simulated_device_name}.txt',
+            delimiter=',',
+        )
+        ax.plot(
+            energies_matlab,
+            b_r_2_left_matlab,
+            label='MATLAB |b_r|^2',
+            linestyle='dashed',
+            c='green',
+        )
+    except:
+        pass
 
     ax.set_xlabel('E [eV]')
     ax.set_ylim(bottom=-0.1, top=1.1)

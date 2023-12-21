@@ -1,3 +1,4 @@
+import os
 import torch
 
 from kolpinn import io
@@ -46,12 +47,19 @@ class Device:
         saved_parameters_index = io.get_next_parameters_index()
         print('saved_parameters_index =', saved_parameters_index)
 
-        energies = torch.linspace(
-            physics.E_MIN,
-            physics.E_MAX,
-            params.N_E,
-            dtype=params.si_real_dtype,
-        )
+        if params.loaded_parameters_index is not None:
+            parameters_path = io.get_parameters_path(params.loaded_parameters_index)
+            saved_energies = sorted([float(s[2:24]) * physics.EV
+                                     for s in os.listdir(parameters_path)])
+            energies = torch.tensor(saved_energies, dtype=params.si_real_dtype)
+
+        else:
+            energies = torch.arange(
+                physics.E_MIN,
+                physics.E_MAX + physics.E_STEP,
+                physics.E_STEP,
+                dtype=params.si_real_dtype,
+            )
 
 
         # Models, Grids
@@ -250,8 +258,9 @@ class Device:
                 used_losses = used_losses,
                 quantities_requiring_grad_dict = quantities_requiring_grad_dict,
                 Optimizer = params.Optimizer,
-                learn_rate = params.learn_rate,
+                optimizer_kwargs = params.optimizer_kwargs,
                 Scheduler = params.Scheduler,
+                scheduler_kwargs = params.scheduler_kwargs,
                 saved_parameters_index = saved_parameters_index,
                 name = energy_string,
             )

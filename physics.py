@@ -13,8 +13,9 @@ EV = Q_E
 M_E = 9.1093837e-31
 NM = 1e-9
 
-E_MIN = 0.1 * EV
-E_MAX = 0.5 * EV
+E_MIN = 0.51 * EV
+E_MAX = 0.6 * EV
+E_STEP = 0.01 * EV
 
 A_L = 1 # Amplitude of the wave incoming from the left
 A_R = 0 # Amplitude of the wave incoming from the right
@@ -51,13 +52,13 @@ device_kwargs_dict = {
         'potentials': [
             0,
             lambda q: (-0.1 * EV * q['x'] / (34 * NM)
-                       + 0.3 * EV * (q['x'] > 15*NM and q['x'] < 19*NM)),
+                       + 0.3 * EV * (q['x'] > 15*NM) * (q['x'] < 19*NM)),
             -0.1 * EV,
         ],
         'm_effs': [
             0.065 * M_E,
             lambda q: (0.065 * M_E
-                       + 0.035 * M_E * (q['x'] > 15*NM and q['x'] < 19*NM)),
+                       + 0.035 * M_E * (q['x'] > 15*NM) * (q['x'] < 19*NM)),
             0.065 * M_E,
         ],
     },
