@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import torch
 
 from kolpinn import io
@@ -49,7 +50,7 @@ class Device:
 
         if params.loaded_parameters_index is not None:
             parameters_path = io.get_parameters_path(params.loaded_parameters_index)
-            saved_energies = sorted([float(s[2:24]) * physics.EV
+            saved_energies = sorted([float(Path(s).stem[2:]) * physics.EV
                                      for s in os.listdir(parameters_path)])
             energies = torch.tensor(saved_energies, dtype=params.si_real_dtype)
 
