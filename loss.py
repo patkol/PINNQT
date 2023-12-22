@@ -50,8 +50,8 @@ def get_cc_loss(q, *, with_grad, i, N):
 
 def get_const_j_loss(q, *, with_grad, i):
     phi = q['phi'+str(i)]
-    prob_current = (physics.H_BAR * phi.transform(torch.conj)
-                    * q['phi_dx'+str(i)] / q['m_eff'+str(i)]).transform(torch.imag)
+    prob_current = torch.imag(physics.H_BAR * torch.conj(phi)
+                              * q['phi_dx'+str(i)] / q['m_eff'+str(i)])
     residual = prob_current - prob_current.mean_dimension('x')
     residual /= physics.PROBABILITY_CURRENT_OOM
     # (j - j_mean) / j_mean

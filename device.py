@@ -5,7 +5,7 @@ from kolpinn import io
 from kolpinn import grid_quantities
 from kolpinn.grid_quantities import Grid, Quantity, get_quantity
 from kolpinn.batching import Batcher
-from kolpinn.model import SimpleNNModel, FunctionModel, get_extended_q_batchwise
+from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, get_model, get_extended_q_batchwise
 from kolpinn.training import Trainer
 
 import parameters as params
@@ -124,19 +124,22 @@ class Device:
 
         ## Layers and contacts
         for i in range(0,N+2):
-            potential = potentials[i]
-            m_eff = m_effs[i]
-            if not callable(potential):
-                potential = lambda q, p=potential: Quantity(torch.tensor(p), q.grid)
-            if not callable(m_eff):
-                m_eff = lambda q, m=m_eff: Quantity(torch.tensor(m), q.grid)
-            self.models['V'+str(i)] = FunctionModel(potential)
-            self.models['m_eff'+str(i)] = FunctionModel(m_eff)
+            self.models['V'+str(i)] = get_model(
+                potentials[i],
+                model_dtype = params.si_real_dtype,
+                output_dtype = params.si_real_dtype,
+            )
+            self.models['m_eff'+str(i)] = get_model(
+                m_effs[i],
+                model_dtype = params.si_real_dtype,
+                output_dtype = params.si_real_dtype,
+            )
 
         ## Contacts
         for i in (0, N+1):
             k_function = lambda q, i=i: \
-                (2 * q['m_eff'+str(i)] * (q['E']-q['V'+str(i)]) / physics.H_BAR**2).set_dtype(params.si_complex_dtype).transform(torch.sqrt)
+                torch.sqrt((2 * q['m_eff'+str(i)] * (q['E']-q['V'+str(i)])
+                            / physics.H_BAR**2).set_dtype(params.si_complex_dtype))
             self.models['k'+str(i)] = FunctionModel(k_function)
 
 
@@ -161,6 +164,7 @@ class Device:
             batchers_validation = {}
             trainer_models = {}
             models_dict = {}
+            trained_models_labels = []
 
             ## Layers
             for i in range(1,N+1):
@@ -195,6 +199,7 @@ class Device:
                     output_dtype = params.si_complex_dtype,
                     device = params.device,
                 )
+                trained_models_labels.append('phi' + str(i))
 
                 models_dict[name] = {
                     'phi' + str(i): trainer_models['phi' + str(i)],
@@ -257,6 +262,7 @@ class Device:
                 batchers_validation = batchers_validation,
                 used_losses = used_losses,
                 quantities_requiring_grad_dict = quantities_requiring_grad_dict,
+                trained_models_labels = trained_models_labels,
                 Optimizer = params.Optimizer,
                 optimizer_kwargs = params.optimizer_kwargs,
                 Scheduler = params.Scheduler,

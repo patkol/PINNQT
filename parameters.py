@@ -5,14 +5,14 @@ from kolpinn import mathematics
 
 
 # General
-simulated_device_name = 'field_barrier1'
+simulated_device_name = 'barrier1'
 seed = 0
 device = 'cuda'
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 24
+loaded_parameters_index = None
 n_hidden_layers = 5
 n_neurons_per_hidden_layer = 30
 activation_function = torch.nn.SiLU()
@@ -27,7 +27,7 @@ Optimizer = torch.optim.Adam
 optimizer_kwargs = {'lr': 1e-3}
 Scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau
 scheduler_kwargs = {'factor': 0.5}
-loss_function = lambda x: x.transform(mathematics.complex_abs2)
+loss_function = mathematics.complex_abs2
 # Whether to use the weights from the previous energy step
 continuous_training = loaded_parameters_index is None
 
