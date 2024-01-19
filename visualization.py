@@ -45,9 +45,10 @@ def visualize(device):
     for i in range(1, device.n_layers+1):
         q = qs['bulk' + str(i)]
 
-        ## Wave functions
+        ## Wave function
+        phi_i = q['phi'+str(i)]
         save_lineplot(
-            complex_abs2(q['phi'+str(i)]),
+            complex_abs2(phi_i),
             f'|phi{i}|^2',
             'x',
             'E',
@@ -58,7 +59,7 @@ def visualize(device):
             path_prefix = path_prefix,
         )
         save_lineplot(
-            torch.real(q['phi'+str(i)]),
+            torch.real(phi_i),
             f'Re(phi{i})',
             'x',
             'E',
@@ -69,7 +70,7 @@ def visualize(device):
             path_prefix = path_prefix,
         )
         save_lineplot(
-            torch.imag(q['phi'+str(i)]),
+            torch.imag(phi_i),
             f'Im(phi{i})',
             'x',
             'E',
@@ -79,9 +80,19 @@ def visualize(device):
             lines_unit_name = 'eV',
             path_prefix = path_prefix,
         )
+        visualization.save_complex_polar_plot(
+            phi_i,
+            f'phi{i}',
+            'x',
+            'E',
+            lines_unit = physics.EV,
+            lines_unit_name = 'eV',
+            path_prefix = path_prefix,
+        )
 
-        # Probability current
-        prob_current = torch.imag(physics.H_BAR * torch.conj(q['phi'+str(i)])
+
+        ## Probability current
+        prob_current = torch.imag(physics.H_BAR * torch.conj(phi_i)
                                   * q['phi_dx'+str(i)] / q['m_eff'+str(i)])
         save_lineplot(
             prob_current,
@@ -98,7 +109,7 @@ def visualize(device):
         )
 
         ## DOS
-        dos = 1/(2*np.pi) * complex_abs2(q['phi'+str(i)]) / dE_dk_left.values
+        dos = 1/(2*np.pi) * complex_abs2(phi_i) / dE_dk_left.values
         save_heatmap(
             dos, 'DOS'+str(i), 'x', 'E',
             quantity_unit = 1/physics.NM/physics.EV, quantity_unit_name = '1/nm/eV',
@@ -106,6 +117,35 @@ def visualize(device):
             y_unit = physics.EV, y_unit_name = 'eV',
             path_prefix=path_prefix,
         )
+
+        ## Losses
+        save_lineplot(
+            q['SE'+str(i)],
+            f'SE{i}',
+            'x',
+            'E',
+            x_unit = physics.NM,
+            x_unit_name = 'nm',
+            lines_unit = physics.EV,
+            lines_unit_name = 'eV',
+            quantity_unit = physics.H_BAR / physics.M_E / physics.NM,
+            quantity_unit_name = 'hbar/m0/nm',
+            path_prefix = path_prefix,
+        )
+
+        # NN inputs and outputs
+        for label in ('nn_input_x', 'nn_output0', 'nn_output1'):
+            save_lineplot(
+                q[label],
+                f'{label}_layer{i}',
+                'x',
+                'E',
+                x_unit = physics.NM,
+                x_unit_name = 'nm',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = path_prefix,
+            )
 
 
     # Transmission and reflection probabilities
@@ -126,8 +166,26 @@ def visualize(device):
 
 
     fig, ax = plt.subplots()
-    add_lineplot(ax, complex_abs2(b_l), 'Reflection probability', 'E', x_unit=physics.EV)
-    add_lineplot(ax, v_ratio * complex_abs2(b_r), 'Transmission probability', 'E', x_unit=physics.EV)
+    add_lineplot(
+        ax,
+        complex_abs2(b_l),
+        'Reflection probability',
+        'E',
+        x_unit=physics.EV,
+        marker = 'D',
+        linewidth = 0,
+        c='blue',
+    )
+    add_lineplot(
+        ax,
+        v_ratio * complex_abs2(b_r),
+        'Transmission probability',
+        'E',
+        x_unit=physics.EV,
+        marker = 'D',
+        linewidth = 0,
+        c='orange',
+    )
 
     try:
         energies_matlab = np.loadtxt(
@@ -141,9 +199,16 @@ def visualize(device):
         ax.plot(
             energies_matlab,
             b_r_2_left_matlab,
-            label='MATLAB |b_r|^2',
+            label='MATLAB Transmission',
             linestyle='dashed',
-            c='green',
+            c='orange',
+        )
+        ax.plot(
+            energies_matlab,
+            1 - b_r_2_left_matlab,
+            label='1 - MATLAB Transmission',
+            linestyle='dashed',
+            c='blue',
         )
     except:
         pass

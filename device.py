@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import numpy as np
 import torch
 
 from kolpinn import io
@@ -139,8 +140,7 @@ class Device:
         ## Contacts
         for i in (0, N+1):
             k_function = lambda q, i=i: \
-                torch.sqrt((2 * q['m_eff'+str(i)] * (q['E']-q['V'+str(i)])
-                            / physics.H_BAR**2).set_dtype(params.si_complex_dtype))
+                physics.k_function(q['m_eff'+str(i)], q['E']-q['V'+str(i)])
             self.models['k'+str(i)] = FunctionModel(k_function)
 
 
@@ -186,6 +186,23 @@ class Device:
                     [params.batch_size_x],
                 )
 
+                q = get_extended_q_batchwise(
+                    batchers_validation[name],
+                    models = {
+                        'V': self.models['V'+str(i)],
+                        'm_eff': self.models['m_eff'+str(i)],
+                    },
+                    models_require_grad = False,
+                )
+                mean = lambda x: torch.mean(x if torch.is_tensor(x) else x.values)
+                avg_V = mean(q['V'])
+                avg_m_eff = mean(q['m_eff'])
+                avg_k = physics.k_function(avg_m_eff, energy - avg_V)
+                estimated_phase_change = (avg_k * (x_right - x_left)).to(params.si_real_dtype)
+                print(f'Estimated phase change in Layer {i}: {estimated_phase_change}')
+                phase_multiplier = max(1, estimated_phase_change / (2 * np.pi))
+                phi_transformation = lambda x, phase_multiplier=phase_multiplier: \
+                    x * phase_multiplier
                 trainer_models['phi' + str(i)] = SimpleNNModel(
                     ['x'],
                     {
@@ -199,6 +216,8 @@ class Device:
                     model_dtype = params.model_dtype,
                     output_dtype = params.si_complex_dtype,
                     device = params.device,
+                    complex_polar = params.complex_polar,
+                    phi_transformation = phi_transformation,
                 )
                 trained_models_labels.append('phi' + str(i))
 
@@ -271,7 +290,11 @@ class Device:
                 saved_parameters_index = saved_parameters_index,
                 name = energy_string,
             )
-            self.trainers[energy_string].load(params.loaded_parameters_index)
+            self.trainers[energy_string].load(
+                params.loaded_parameters_index,
+                load_optimizer = params.load_optimizer,
+                load_scheduler = params.load_scheduler,
+            )
 
 
     def get_extended_qs(self):
