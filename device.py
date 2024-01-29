@@ -58,7 +58,7 @@ class Device:
         else:
             energies = torch.arange(
                 physics.E_MIN,
-                physics.E_MAX + physics.E_STEP,
+                physics.E_MAX,
                 physics.E_STEP,
                 dtype=params.si_real_dtype,
             )
@@ -93,6 +93,9 @@ class Device:
                 lambda q, i=i, **kwargs: q['phi'+str(i)].get_grad(q['x'], **kwargs),
                 retain_graph = True,
                 create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
+            )
+            self.models['phi_dx_fd' + str(i)] = FunctionModel(
+                lambda q, i=i, **kwargs: q['phi'+str(i)].get_fd_derivative('x'),
             )
 
         ## Boundaries
@@ -221,9 +224,10 @@ class Device:
                 )
                 trained_models_labels.append('phi' + str(i))
 
+                fd = '_fd' if params.fd_first_derivatives else ''
                 models_dict[name] = {
                     'phi' + str(i): trainer_models['phi' + str(i)],
-                    'phi_dx' + str(i): self.models['phi_dx' + str(i)],
+                    'phi_dx' + str(i): self.models['phi_dx' + fd + str(i)],
                     'V' + str(i): self.models['V' + str(i)],
                     'm_eff' + str(i): self.models['m_eff' + str(i)],
                 }
@@ -266,7 +270,13 @@ class Device:
             used_losses = {}
             quantities_requiring_grad_dict = {}
             for batcher_name, loss_functions_dict in self.loss_functions.items():
-                quantities_requiring_grad_dict[batcher_name] = ['x']
+                if (batcher_name.startswith('bulk')
+                    and params.fd_first_derivatives
+                    and params.fd_second_derivatives):
+                    # The bulk needs no gradient if all derivatives are taken numerically
+                    quantities_requiring_grad_dict[batcher_name] = []
+                else:
+                    quantities_requiring_grad_dict[batcher_name] = ['x']
                 used_losses[batcher_name] = []
                 for loss_name, loss_function in loss_functions_dict.items():
                     loss_model = FunctionModel(loss_function, with_grad = True)

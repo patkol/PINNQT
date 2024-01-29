@@ -12,11 +12,14 @@ def get_SE_loss(q, *, with_grad, i):
     """
     # Multiplying hbar here for numerical stability
     hbar_phi_dx_over_m = q['phi_dx' + str(i)] * (physics.H_BAR / q['m_eff'+str(i)])
-    hbar2_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_grad(
-        q['x'],
-        retain_graph=True,
-        create_graph=with_grad,
-    ) * physics.H_BAR
+    if params.fd_second_derivatives:
+        hbar2_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_fd_derivative('x') * physics.H_BAR
+    else:
+        hbar2_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_grad(
+            q['x'],
+            retain_graph=True,
+            create_graph=with_grad,
+        ) * physics.H_BAR
     residual = -0.5 * hbar2_phi_dx_over_m_dx + (q['V'+str(i)] - q['E']) * q['phi'+str(i)]
     residual /= physics.V_OOM
 
