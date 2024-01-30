@@ -32,8 +32,8 @@ optimizer_kwargs = {'lr': 1e-3}
 Scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau
 scheduler_kwargs = {'factor': 0.2, 'cooldown': 12, 'min_lr': 1e-6, 'eps': 0, 'verbose': True}
 loss_function = mathematics.complex_abs2
-fd_first_derivatives = False # Except for boundaries
-fd_second_derivatives = False
+fd_first_derivatives = True # Except for boundaries
+fd_second_derivatives = True
 # Whether to use the weights from the previous energy step
 continuous_training = loaded_parameters_index is None
 
@@ -41,3 +41,4 @@ continuous_training = loaded_parameters_index is None
 N_x_training = 500
 N_x_validation = 500
 batch_size_x = 500
+dx = 1e-9 * 1e-1

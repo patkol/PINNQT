@@ -10,16 +10,29 @@ def get_SE_loss(q, *, with_grad, i):
     """
     i: layer index in [1,N]
     """
-    # Multiplying hbar here for numerical stability
-    hbar_phi_dx_over_m = q['phi_dx' + str(i)] * (physics.H_BAR / q['m_eff'+str(i)])
+
     if params.fd_second_derivatives:
-        hbar2_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_fd_derivative('x') * physics.H_BAR
+        # Multiplying hbar here for numerical stability
+        hbar_phi_dx_over_m_phdx = (
+            (q[f'phi_pdx{i}'] - q[f'phi{i}']) / params.dx
+            * (physics.H_BAR / q[f'm_eff_phdx{i}'])
+        )
+        hbar_phi_dx_over_m_mhdx = (
+            (q[f'phi{i}'] - q[f'phi_mdx{i}']) / params.dx
+            * (physics.H_BAR / q[f'm_eff_phdx{i}'])
+        )
+        hbar2_phi_dx_over_m_dx = ((hbar_phi_dx_over_m_phdx - hbar_phi_dx_over_m_mhdx)
+                                  * (physics.H_BAR / params.dx))
+
     else:
+        # Multiplying hbar here for numerical stability
+        hbar_phi_dx_over_m = q['phi_dx' + str(i)] * (physics.H_BAR / q['m_eff'+str(i)])
         hbar2_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_grad(
             q['x'],
             retain_graph=True,
             create_graph=with_grad,
         ) * physics.H_BAR
+
     residual = -0.5 * hbar2_phi_dx_over_m_dx + (q['V'+str(i)] - q['E']) * q['phi'+str(i)]
     residual /= physics.V_OOM
 

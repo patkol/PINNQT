@@ -7,7 +7,8 @@ from kolpinn import io
 from kolpinn import grid_quantities
 from kolpinn.grid_quantities import Grid, Quantity, get_quantity
 from kolpinn.batching import Batcher
-from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, get_model, get_extended_q_batchwise
+from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, \
+                          TransformedModel, get_model, get_extended_q_batchwise
 from kolpinn.training import Trainer
 
 import parameters as params
@@ -89,14 +90,16 @@ class Device:
                 'SE'+str(i): se_loss_function,
                 'const_j'+str(i): const_j_loss_function,
             }
-            self.models['phi_dx' + str(i)] = FunctionModel(
-                lambda q, i=i, **kwargs: q['phi'+str(i)].get_grad(q['x'], **kwargs),
-                retain_graph = True,
-                create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
-            )
-            self.models['phi_dx_fd' + str(i)] = FunctionModel(
-                lambda q, i=i, **kwargs: q['phi'+str(i)].get_fd_derivative('x'),
-            )
+            if params.fd_first_derivatives:
+                self.models['phi_dx' + str(i)] = FunctionModel(
+                    lambda q, i=i, **kwargs: (q[f'phi_pdx{i}'] - q[f'phi_mdx{i}']) / (2 * params.dx)
+                )
+            else:
+                self.models['phi_dx' + str(i)] = FunctionModel(
+                    lambda q, i=i, **kwargs: q['phi'+str(i)].get_grad(q['x'], **kwargs),
+                    retain_graph = True,
+                    create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
+                )
 
         ## Boundaries
         for i in range(0,N+1):
@@ -129,16 +132,25 @@ class Device:
 
         ## Layers and contacts
         for i in range(0,N+2):
-            self.models['V'+str(i)] = get_model(
+            self.models[f'V{i}'] = get_model(
                 potentials[i],
                 model_dtype = params.si_real_dtype,
                 output_dtype = params.si_real_dtype,
             )
-            self.models['m_eff'+str(i)] = get_model(
+            self.models[f'm_eff{i}'] = get_model(
                 m_effs[i],
                 model_dtype = params.si_real_dtype,
                 output_dtype = params.si_real_dtype,
             )
+            self.models[f'm_eff_phdx{i}'] = TransformedModel(
+                self.models[f'm_eff{i}'],
+                input_transformations = {'x': lambda x, q: x + params.dx / 2},
+            )
+            self.models[f'm_eff_mhdx{i}'] = TransformedModel(
+                self.models[f'm_eff{i}'],
+                input_transformations = {'x': lambda x, q: x - params.dx / 2},
+            )
+
 
         ## Contacts
         for i in (0, N+1):
@@ -206,13 +218,8 @@ class Device:
                 phase_multiplier = max(1, estimated_phase_change / (2 * np.pi))
                 phi_transformation = lambda x, phase_multiplier=phase_multiplier: \
                     x * phase_multiplier
-                trainer_models['phi' + str(i)] = SimpleNNModel(
+                nn_model = SimpleNNModel(
                     ['x'],
-                    {
-                        'x': lambda x, q, x_left=x_left, x_right=x_right:
-                                 (x - x_left) / (x_right - x_left),
-                    },
-                    lambda phi, q: phi,
                     params.activation_function,
                     n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
                     n_hidden_layers = params.n_hidden_layers,
@@ -222,15 +229,37 @@ class Device:
                     complex_polar = params.complex_polar,
                     phi_transformation = phi_transformation,
                 )
+                trainer_models['phi' + str(i)] = TransformedModel(
+                    nn_model,
+                    input_transformations =
+                        {
+                            'x': lambda x, q, x_left=x_left, x_right=x_right:
+                                     (x - x_left) / (x_right - x_left),
+                        },
+                )
                 trained_models_labels.append('phi' + str(i))
+                trainer_models['phi_pdx' + str(i)] = TransformedModel(
+                    trainer_models['phi' + str(i)],
+                    input_transformations = {'x': lambda x, q: x + params.dx},
+                )
+                trainer_models['phi_mdx' + str(i)] = TransformedModel(
+                    trainer_models['phi' + str(i)],
+                    input_transformations = {'x': lambda x, q: x - params.dx},
+                )
 
-                fd = '_fd' if params.fd_first_derivatives else ''
                 models_dict[name] = {
-                    'phi' + str(i): trainer_models['phi' + str(i)],
-                    'phi_dx' + str(i): self.models['phi_dx' + fd + str(i)],
-                    'V' + str(i): self.models['V' + str(i)],
-                    'm_eff' + str(i): self.models['m_eff' + str(i)],
+                    f'phi{i}': trainer_models[f'phi{i}'],
+                    f'V{i}': self.models[f'V{i}'],
+                    f'm_eff{i}': self.models[f'm_eff{i}'],
                 }
+                if params.fd_first_derivatives or params.fd_second_derivatives:
+                    models_dict[name][f'phi_pdx{i}'] = trainer_models[f'phi_pdx{i}']
+                    models_dict[name][f'phi_mdx{i}'] = trainer_models[f'phi_mdx{i}']
+                # Depends on 'phi_[p/m]dx'
+                models_dict[name][f'phi_dx{i}'] = self.models[f'phi_dx{i}']
+                if params.fd_second_derivatives:
+                    models_dict[name][f'm_eff_phdx{i}'] = self.models[f'm_eff_phdx{i}']
+                    models_dict[name][f'm_eff_mhdx{i}'] = self.models[f'm_eff_mhdx{i}']
 
             ## Boundaries
             for i in range(0,N+1):
@@ -257,11 +286,18 @@ class Device:
                     models_dict[name]['k' + str(0)] = self.models['k' + str(0)]
                 else:
                     models_dict[name]['phi' + str(i)] = trainer_models['phi' + str(i)]
+                    if params.fd_first_derivatives:
+                        models_dict[name][f'phi_pdx{i}'] = trainer_models[f'phi_pdx{i}']
+                        models_dict[name][f'phi_mdx{i}'] = trainer_models[f'phi_mdx{i}']
+                    models_dict[name][f'phi_dx{i}'] = self.models[f'phi_dx{i}']
                     models_dict[name]['phi_dx' + str(i)] = self.models['phi_dx' + str(i)]
                 if i == N:
                     models_dict[name]['k' + str(i+1)] = self.models['k' + str(i+1)]
                 else:
                     models_dict[name]['phi' + str(i+1)] = trainer_models['phi' + str(i+1)]
+                    if params.fd_first_derivatives:
+                        models_dict[name][f'phi_pdx{i+1}'] = trainer_models[f'phi_pdx{i+1}']
+                        models_dict[name][f'phi_mdx{i+1}'] = trainer_models[f'phi_mdx{i+1}']
                     models_dict[name]['phi_dx' + str(i+1)] = self.models['phi_dx' + str(i+1)]
 
 
@@ -270,10 +306,8 @@ class Device:
             used_losses = {}
             quantities_requiring_grad_dict = {}
             for batcher_name, loss_functions_dict in self.loss_functions.items():
-                if (batcher_name.startswith('bulk')
-                    and params.fd_first_derivatives
-                    and params.fd_second_derivatives):
-                    # The bulk needs no gradient if all derivatives are taken numerically
+                if params.fd_first_derivatives and params.fd_second_derivatives:
+                    # We need no gradient if all derivatives are taken numerically
                     quantities_requiring_grad_dict[batcher_name] = []
                 else:
                     quantities_requiring_grad_dict[batcher_name] = ['x']

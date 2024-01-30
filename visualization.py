@@ -134,7 +134,7 @@ def visualize(device):
         )
 
         # NN inputs and outputs
-        for label in ('nn_input_x', 'nn_output0', 'nn_output1'):
+        for label in ('x_transformed', 'nn_output0', 'nn_output1'):
             save_lineplot(
                 q[label],
                 f'{label}_layer{i}',
