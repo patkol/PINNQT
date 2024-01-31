@@ -14,9 +14,9 @@ EV = Q_E
 M_E = 9.1093837e-31
 NM = 1e-9
 
-E_MIN = 0.5 * EV
-E_STEP = 0.1 * EV
-E_MAX = 0.51 * EV
+E_MIN = 0.2 * EV
+E_STEP = 0.01 * EV
+E_MAX = 0.60001 * EV
 
 A_L = 1 # Amplitude of the wave incoming from the left
 A_R = 0 # Amplitude of the wave incoming from the right
@@ -63,7 +63,7 @@ device_kwargs_dict = {
             0.065 * M_E,
         ],
     },
-    'double_barrier1': {
+    'rtd0': {
         'boundaries': [0 * NM, 2.6 * NM, 6.6 * NM, 9.2 * NM],
         'potentials': [0, 0.3 * EV, 0, 0.3 * EV, 0],
         'm_effs': [
@@ -73,8 +73,20 @@ device_kwargs_dict = {
             0.1 * M_E,
             0.065 * M_E,
         ],
-    }
-
+    },
+    'rtd0_extended': {
+        'boundaries': [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
+        'potentials': [0 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0 * EV],
+        'm_effs': [
+            0.065 * M_E,
+            0.065 * M_E,
+            0.1 * M_E,
+            0.065 * M_E,
+            0.1 * M_E,
+            0.065 * M_E,
+            0.065 * M_E,
+        ],
+    },
 }
 
 device_kwargs = device_kwargs_dict[params.simulated_device_name]
