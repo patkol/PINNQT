@@ -14,9 +14,9 @@ EV = Q_E
 M_E = 9.1093837e-31
 NM = 1e-9
 
-E_MIN = 0.2 * EV
+E_MIN = 0.5 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.60001 * EV
+E_MAX = 0.50001 * EV
 
 A_L = 1 # Amplitude of the wave incoming from the left
 A_R = 0 # Amplitude of the wave incoming from the right

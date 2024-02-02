@@ -150,10 +150,6 @@ class Device:
                 self.models[f'm_eff{i}'],
                 input_transformations = {'x': lambda x, q: x - params.dx / 2},
             )
-
-
-        ## Contacts
-        for i in (0, N+1):
             k_function = lambda q, i=i: \
                 physics.k_function(q['m_eff'+str(i)], q['E']-q['V'+str(i)])
             self.models['k'+str(i)] = FunctionModel(k_function)
@@ -201,23 +197,27 @@ class Device:
                     [params.batch_size_x],
                 )
 
-                q = get_extended_q_batchwise(
-                    batchers_validation[name],
-                    models = {
-                        'V': self.models['V'+str(i)],
-                        'm_eff': self.models['m_eff'+str(i)],
-                    },
-                    models_require_grad = False,
-                )
-                mean = lambda x: torch.mean(x if torch.is_tensor(x) else x.values)
-                avg_V = mean(q['V'])
-                avg_m_eff = mean(q['m_eff'])
-                avg_k = physics.k_function(avg_m_eff, energy - avg_V)
-                estimated_phase_change = (avg_k * (x_right - x_left)).to(params.si_real_dtype)
-                print(f'Estimated phase change in Layer {i}: {estimated_phase_change}')
-                phase_multiplier = max(1, estimated_phase_change / (2 * np.pi))
-                phi_transformation = lambda x, phase_multiplier=phase_multiplier: \
-                    x * phase_multiplier
+                if params.complex_polar:
+                    q = get_extended_q_batchwise(
+                        batchers_validation[name],
+                        models = {
+                            'V': self.models['V'+str(i)],
+                            'm_eff': self.models['m_eff'+str(i)],
+                        },
+                        models_require_grad = False,
+                    )
+                    mean = lambda x: torch.mean(x if torch.is_tensor(x) else x.values)
+                    avg_V = mean(q['V'])
+                    avg_m_eff = mean(q['m_eff'])
+                    avg_k = physics.k_function(avg_m_eff, energy - avg_V)
+                    estimated_phase_change = torch.real(avg_k * (x_right - x_left)).to(params.si_real_dtype)
+                    print(f'Estimated phase change in Layer {i}: {estimated_phase_change}')
+                    phase_multiplier = max(1, estimated_phase_change / (2 * np.pi))
+                    phi_transformation = lambda x, phase_multiplier=phase_multiplier: \
+                        x * phase_multiplier
+                else:
+                    phi_transformation = None
+
                 nn_model = SimpleNNModel(
                     ['x'],
                     params.activation_function,
@@ -229,15 +229,44 @@ class Device:
                     complex_polar = params.complex_polar,
                     phi_transformation = phi_transformation,
                 )
-                trainer_models['phi' + str(i)] = TransformedModel(
-                    nn_model,
-                    input_transformations =
-                        {
-                            'x': lambda x, q, x_left=x_left, x_right=x_right:
-                                     (x - x_left) / (x_right - x_left),
-                        },
-                )
-                trained_models_labels.append('phi' + str(i))
+                x_scaling_transformations = {
+                    'x': lambda x, q, x_left=x_left, x_right=x_right:
+                             (x - x_left) / (x_right - x_left),
+                }
+                if params.model_ab:
+                    nn_model2 = SimpleNNModel(
+                        ['x'],
+                        params.activation_function,
+                        n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
+                        n_hidden_layers = params.n_hidden_layers,
+                        model_dtype = params.model_dtype,
+                        output_dtype = params.si_complex_dtype,
+                        device = params.device,
+                        complex_polar = params.complex_polar,
+                        phi_transformation = phi_transformation,
+                    )
+                    trainer_models[f'a{i}'] = TransformedModel(
+                        nn_model,
+                        input_transformations = x_scaling_transformations,
+                    )
+                    trained_models_labels.append(f'a{i}')
+                    trainer_models[f'b{i}'] = TransformedModel(
+                        nn_model2,
+                        input_transformations = x_scaling_transformations,
+                    )
+                    trained_models_labels.append(f'b{i}')
+                    trainer_models[f'phi{i}'] = FunctionModel(
+                        lambda q, i=i: (q[f'a{i}'] * torch.exp(1j * q[f'k{i}'] * q['x'])
+                                        + q[f'b{i}'] * torch.exp(-1j * q[f'k{i}'] * q['x'])),
+                        output_dtype = params.si_complex_dtype,
+                    )
+                else:
+                    trainer_models['phi' + str(i)] = TransformedModel(
+                        nn_model,
+                        input_transformations = x_scaling_transformations,
+                    )
+                    trained_models_labels.append('phi' + str(i))
+
                 trainer_models['phi_pdx' + str(i)] = TransformedModel(
                     trainer_models['phi' + str(i)],
                     input_transformations = {'x': lambda x, q: x + params.dx},
@@ -248,10 +277,15 @@ class Device:
                 )
 
                 models_dict[name] = {
-                    f'phi{i}': trainer_models[f'phi{i}'],
                     f'V{i}': self.models[f'V{i}'],
                     f'm_eff{i}': self.models[f'm_eff{i}'],
                 }
+                if params.model_ab:
+                    models_dict[name][f'k{i}'] = self.models[f'k{i}']
+                    models_dict[name][f'a{i}'] = trainer_models[f'a{i}']
+                    models_dict[name][f'b{i}'] = trainer_models[f'b{i}']
+                # Can depend on a, b, k
+                models_dict[name][f'phi{i}'] = trainer_models[f'phi{i}']
                 if params.fd_first_derivatives or params.fd_second_derivatives:
                     models_dict[name][f'phi_pdx{i}'] = trainer_models[f'phi_pdx{i}']
                     models_dict[name][f'phi_mdx{i}'] = trainer_models[f'phi_mdx{i}']
@@ -282,18 +316,23 @@ class Device:
                     'm_eff' + str(i): self.models['m_eff' + str(i)],
                     'm_eff' + str(i+1): self.models['m_eff' + str(i+1)],
                 }
-                if i == 0:
-                    models_dict[name]['k' + str(0)] = self.models['k' + str(0)]
-                else:
+                if i == 0 or params.model_ab:
+                    models_dict[name]['k' + str(i)] = self.models['k' + str(i)]
+                if i != 0:
+                    if params.model_ab:
+                        models_dict[name][f'a{i}'] = trainer_models[f'a{i}']
+                        models_dict[name][f'b{i}'] = trainer_models[f'b{i}']
                     models_dict[name]['phi' + str(i)] = trainer_models['phi' + str(i)]
                     if params.fd_first_derivatives:
                         models_dict[name][f'phi_pdx{i}'] = trainer_models[f'phi_pdx{i}']
                         models_dict[name][f'phi_mdx{i}'] = trainer_models[f'phi_mdx{i}']
                     models_dict[name][f'phi_dx{i}'] = self.models[f'phi_dx{i}']
-                    models_dict[name]['phi_dx' + str(i)] = self.models['phi_dx' + str(i)]
-                if i == N:
+                if i == N or params.model_ab:
                     models_dict[name]['k' + str(i+1)] = self.models['k' + str(i+1)]
-                else:
+                if i != N:
+                    if params.model_ab:
+                        models_dict[name][f'a{i+1}'] = trainer_models[f'a{i+1}']
+                        models_dict[name][f'b{i+1}'] = trainer_models[f'b{i+1}']
                     models_dict[name]['phi' + str(i+1)] = trainer_models['phi' + str(i+1)]
                     if params.fd_first_derivatives:
                         models_dict[name][f'phi_pdx{i+1}'] = trainer_models[f'phi_pdx{i+1}']

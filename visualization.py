@@ -91,6 +91,29 @@ def visualize(device):
         )
 
 
+        ## a, b
+        if params.model_ab:
+            visualization.save_complex_polar_plot(
+                q[f'a{i}'],
+                f'a{i}',
+                'x',
+                'E',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = path_prefix,
+            )
+            visualization.save_complex_polar_plot(
+                q[f'b{i}'],
+                f'b{i}',
+                'x',
+                'E',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = path_prefix,
+            )
+
+
+
         ## Probability current
         prob_current = torch.imag(physics.H_BAR * torch.conj(phi_i)
                                   * q['phi_dx'+str(i)] / q['m_eff'+str(i)])
