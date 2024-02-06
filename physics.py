@@ -14,15 +14,18 @@ EV = Q_E
 M_E = 9.1093837e-31
 NM = 1e-9
 
-E_MIN = 0.5 * EV
+E_MIN = 0.2 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.50001 * EV
+E_MAX = 0.60001 * EV
 
 A_L = 1 # Amplitude of the wave incoming from the left
 A_R = 0 # Amplitude of the wave incoming from the right
 
 
 # Devices
+
+# V_applied: Electron potential due to an applied voltage of `V` over a distance `d`
+V_applied = lambda V, d, q: -V * EV * q['x'] / d
 
 device_kwargs_dict = {
     'barrier1': {
@@ -34,9 +37,9 @@ device_kwargs_dict = {
         'boundaries': [0, 15 * NM, 19 * NM, 34 * NM],
         'potentials': [
             0,
-            lambda q: -0.1 * EV * q['x'] / (34 * NM),
-            lambda q: -0.1 * EV * q['x'] / (34 * NM) + 0.3 * EV,
-            lambda q: -0.1 * EV * q['x'] / (34 * NM),
+            lambda q: V_applied(0.1, 34 * NM, q),
+            lambda q: V_applied(0.1, 34 * NM, q) + 0.3 * EV,
+            lambda q: V_applied(0.1, 34 * NM, q),
             -0.1 * EV,
         ],
         'm_effs': [
@@ -52,7 +55,7 @@ device_kwargs_dict = {
         'boundaries': [0, 34 * NM],
         'potentials': [
             0,
-            lambda q: (-0.1 * EV * q['x'] / (34 * NM)
+            lambda q: (V_applied(0.1, 34 * NM, q)
                        + 0.3 * EV * (q['x'] > 15*NM) * (q['x'] < 19*NM)),
             -0.1 * EV,
         ],
@@ -77,6 +80,27 @@ device_kwargs_dict = {
     'rtd0_extended': {
         'boundaries': [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
         'potentials': [0 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0 * EV],
+        'm_effs': [
+            0.065 * M_E,
+            0.065 * M_E,
+            0.1 * M_E,
+            0.065 * M_E,
+            0.1 * M_E,
+            0.065 * M_E,
+            0.065 * M_E,
+        ],
+    },
+    'rtd0.1': {
+        'boundaries': [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
+        'potentials': [
+            0 * EV,
+            lambda q: V_applied(0.1, 29.2 * NM, q),
+            lambda q: V_applied(0.1, 29.2 * NM, q) + 0.3 * EV,
+            lambda q: V_applied(0.1, 29.2 * NM, q),
+            lambda q: V_applied(0.1, 29.2 * NM, q) + 0.3 * EV,
+            lambda q: V_applied(0.1, 29.2 * NM, q),
+            -0.1 * EV,
+        ],
         'm_effs': [
             0.065 * M_E,
             0.065 * M_E,

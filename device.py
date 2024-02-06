@@ -90,16 +90,14 @@ class Device:
                 'SE'+str(i): se_loss_function,
                 'const_j'+str(i): const_j_loss_function,
             }
-            if params.fd_first_derivatives:
-                self.models['phi_dx' + str(i)] = FunctionModel(
-                    lambda q, i=i, **kwargs: (q[f'phi_pdx{i}'] - q[f'phi_mdx{i}']) / (2 * params.dx)
-                )
-            else:
-                self.models['phi_dx' + str(i)] = FunctionModel(
-                    lambda q, i=i, **kwargs: q['phi'+str(i)].get_grad(q['x'], **kwargs),
-                    retain_graph = True,
-                    create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
-                )
+            self.models['phi_dx_fd' + str(i)] = FunctionModel(
+                lambda q, i=i, **kwargs: q['phi'+str(i)].get_fd_derivative('x'),
+            )
+            self.models['phi_dx' + str(i)] = FunctionModel(
+                lambda q, i=i, **kwargs: q['phi'+str(i)].get_grad(q['x'], **kwargs),
+                retain_graph = True,
+                create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
+            )
 
         ## Boundaries
         for i in range(0,N+1):
@@ -142,17 +140,32 @@ class Device:
                 model_dtype = params.si_real_dtype,
                 output_dtype = params.si_real_dtype,
             )
-            self.models[f'm_eff_phdx{i}'] = TransformedModel(
-                self.models[f'm_eff{i}'],
-                input_transformations = {'x': lambda x, q: x + params.dx / 2},
-            )
-            self.models[f'm_eff_mhdx{i}'] = TransformedModel(
-                self.models[f'm_eff{i}'],
-                input_transformations = {'x': lambda x, q: x - params.dx / 2},
-            )
             k_function = lambda q, i=i: \
                 physics.k_function(q['m_eff'+str(i)], q['E']-q['V'+str(i)])
             self.models['k'+str(i)] = FunctionModel(k_function)
+
+            # The minimum gradient would lead to nans in the backpropagation
+            def no_grad_minimum(a, b):
+                with torch.no_grad():
+                    return torch.minimum(a, b)
+            # bump_function: Implemented using torch.minimum s.t.
+            # it will return -inf for |x|>=1 -> exp is zero.
+            # An implementation using
+            # a heaviside function outside of the exp could result
+            # in +inf * 0 = nan at |x| >~ 1
+            bump_function = lambda x: \
+                torch.exp(1 - 1 / (1 - no_grad_minimum(x**2, torch.ones_like(x))))
+            smoother_function = lambda x: x * (1 - bump_function(x))
+            scaled_smoother_function = lambda x, smoothing_range: \
+                smoothing_range * smoother_function(x / smoothing_range)
+            smoothing_range = 0.1 * physics.EV
+            smooth_k_function = lambda q, i=i, smoothing_range=smoothing_range: \
+                physics.k_function(
+                    q['m_eff'+str(i)],
+                    scaled_smoother_function(q['E']-q['V'+str(i)], smoothing_range),
+                )
+            # smooth_k: Fixing the non-smoothness of k in V at E=V
+            self.models['smooth_k'+str(i)] = FunctionModel(smooth_k_function)
 
 
         # Trainers
@@ -255,9 +268,13 @@ class Device:
                         input_transformations = x_scaling_transformations,
                     )
                     trained_models_labels.append(f'b{i}')
+                    # The shifts by x_left/x_right are important for
+                    # energies smaller than V, it keeps them from exploding.
                     trainer_models[f'phi{i}'] = FunctionModel(
-                        lambda q, i=i: (q[f'a{i}'] * torch.exp(1j * q[f'k{i}'] * q['x'])
-                                        + q[f'b{i}'] * torch.exp(-1j * q[f'k{i}'] * q['x'])),
+                        lambda q, i=i, x_left=x_left, x_right=x_right: (
+                            q[f'a{i}'] * torch.exp(1j * q[f'smooth_k{i}'] * (q['x'] - x_left))
+                            + q[f'b{i}'] * torch.exp(-1j * q[f'smooth_k{i}'] * (q['x'] - x_right))
+                        ),
                         output_dtype = params.si_complex_dtype,
                     )
                 else:
@@ -267,33 +284,20 @@ class Device:
                     )
                     trained_models_labels.append('phi' + str(i))
 
-                trainer_models['phi_pdx' + str(i)] = TransformedModel(
-                    trainer_models['phi' + str(i)],
-                    input_transformations = {'x': lambda x, q: x + params.dx},
-                )
-                trainer_models['phi_mdx' + str(i)] = TransformedModel(
-                    trainer_models['phi' + str(i)],
-                    input_transformations = {'x': lambda x, q: x - params.dx},
-                )
-
                 models_dict[name] = {
                     f'V{i}': self.models[f'V{i}'],
                     f'm_eff{i}': self.models[f'm_eff{i}'],
                 }
                 if params.model_ab:
-                    models_dict[name][f'k{i}'] = self.models[f'k{i}']
+                    models_dict[name][f'smooth_k{i}'] = self.models[f'smooth_k{i}']
                     models_dict[name][f'a{i}'] = trainer_models[f'a{i}']
                     models_dict[name][f'b{i}'] = trainer_models[f'b{i}']
                 # Can depend on a, b, k
                 models_dict[name][f'phi{i}'] = trainer_models[f'phi{i}']
-                if params.fd_first_derivatives or params.fd_second_derivatives:
-                    models_dict[name][f'phi_pdx{i}'] = trainer_models[f'phi_pdx{i}']
-                    models_dict[name][f'phi_mdx{i}'] = trainer_models[f'phi_mdx{i}']
-                # Depends on 'phi_[p/m]dx'
-                models_dict[name][f'phi_dx{i}'] = self.models[f'phi_dx{i}']
-                if params.fd_second_derivatives:
-                    models_dict[name][f'm_eff_phdx{i}'] = self.models[f'm_eff_phdx{i}']
-                    models_dict[name][f'm_eff_mhdx{i}'] = self.models[f'm_eff_mhdx{i}']
+                if params.fd_first_derivatives:
+                    models_dict[name][f'phi_dx{i}'] = self.models[f'phi_dx_fd{i}']
+                else:
+                    models_dict[name][f'phi_dx{i}'] = self.models[f'phi_dx{i}']
 
             ## Boundaries
             for i in range(0,N+1):
@@ -316,27 +320,24 @@ class Device:
                     'm_eff' + str(i): self.models['m_eff' + str(i)],
                     'm_eff' + str(i+1): self.models['m_eff' + str(i+1)],
                 }
-                if i == 0 or params.model_ab:
+                if i == 0:
                     models_dict[name]['k' + str(i)] = self.models['k' + str(i)]
                 if i != 0:
                     if params.model_ab:
                         models_dict[name][f'a{i}'] = trainer_models[f'a{i}']
                         models_dict[name][f'b{i}'] = trainer_models[f'b{i}']
+                        models_dict[name]['smooth_k' + str(i)] = self.models['smooth_k' + str(i)]
                     models_dict[name]['phi' + str(i)] = trainer_models['phi' + str(i)]
-                    if params.fd_first_derivatives:
-                        models_dict[name][f'phi_pdx{i}'] = trainer_models[f'phi_pdx{i}']
-                        models_dict[name][f'phi_mdx{i}'] = trainer_models[f'phi_mdx{i}']
+                    # Always using the exact derivatives on the boundaries
                     models_dict[name][f'phi_dx{i}'] = self.models[f'phi_dx{i}']
-                if i == N or params.model_ab:
+                if i == N:
                     models_dict[name]['k' + str(i+1)] = self.models['k' + str(i+1)]
                 if i != N:
                     if params.model_ab:
                         models_dict[name][f'a{i+1}'] = trainer_models[f'a{i+1}']
                         models_dict[name][f'b{i+1}'] = trainer_models[f'b{i+1}']
+                        models_dict[name]['smooth_k' + str(i+1)] = self.models['smooth_k' + str(i+1)]
                     models_dict[name]['phi' + str(i+1)] = trainer_models['phi' + str(i+1)]
-                    if params.fd_first_derivatives:
-                        models_dict[name][f'phi_pdx{i+1}'] = trainer_models[f'phi_pdx{i+1}']
-                        models_dict[name][f'phi_mdx{i+1}'] = trainer_models[f'phi_mdx{i+1}']
                     models_dict[name]['phi_dx' + str(i+1)] = self.models['phi_dx' + str(i+1)]
 
 
@@ -345,11 +346,8 @@ class Device:
             used_losses = {}
             quantities_requiring_grad_dict = {}
             for batcher_name, loss_functions_dict in self.loss_functions.items():
-                if params.fd_first_derivatives and params.fd_second_derivatives:
-                    # We need no gradient if all derivatives are taken numerically
-                    quantities_requiring_grad_dict[batcher_name] = []
-                else:
-                    quantities_requiring_grad_dict[batcher_name] = ['x']
+                # OPTIM: Use fd on boundary and require no grad
+                quantities_requiring_grad_dict[batcher_name] = ['x']
                 used_losses[batcher_name] = []
                 for loss_name, loss_function in loss_functions_dict.items():
                     loss_model = FunctionModel(loss_function, with_grad = True)

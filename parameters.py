@@ -5,21 +5,21 @@ from kolpinn import mathematics
 
 
 # General
-simulated_device_name = 'rtd0_extended'
+simulated_device_name = 'rtd0.1'
 seed = 0
 device = 'cuda'
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 215
+loaded_parameters_index = 327
 # Whether to use the state of the saved optimizer (possibly overwriting optimizer_kwargs)
 load_optimizer = False
 load_scheduler = False
 n_hidden_layers = 5
 n_neurons_per_hidden_layer = 75
 activation_function = torch.nn.Tanh()
-model_dtype = torch.float32
+model_dtype = torch.float64
 complex_polar = False
 model_ab = True # Otherwise phi is modelled directly
 
@@ -29,9 +29,9 @@ max_time = None
 min_loss = 100e-6
 report_each = 50
 Optimizer = torch.optim.Adam
-optimizer_kwargs = {'lr': 1e-5}
+optimizer_kwargs = {'lr': 5e-4}
 Scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau
-scheduler_kwargs = {'factor': 0.2, 'cooldown': 12, 'min_lr': 1e-6, 'eps': 0, 'verbose': True}
+scheduler_kwargs = {'factor': 0.5, 'patience': 5, 'cooldown': 10, 'min_lr': 1e-6, 'eps': 0, 'verbose': True}
 loss_function = mathematics.complex_abs2
 fd_first_derivatives = True
 fd_second_derivatives = True
@@ -39,7 +39,7 @@ fd_second_derivatives = True
 continuous_training = loaded_parameters_index is None
 
 # Resolution
-N_x_training = 500
-N_x_validation = 500
-batch_size_x = 500
-dx = 1e-9 * 1e-2
+N_x = 100
+N_x_training = N_x
+N_x_validation = N_x
+batch_size_x = N_x
