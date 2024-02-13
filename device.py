@@ -16,6 +16,10 @@ import physics
 import loss
 
 
+
+gaussian = lambda x, sigma: torch.exp(-x**2 / (2 * sigma**2))
+
+
 class Device:
     def __init__(
             self,
@@ -144,25 +148,12 @@ class Device:
                 physics.k_function(q['m_eff'+str(i)], q['E']-q['V'+str(i)])
             self.models['k'+str(i)] = FunctionModel(k_function)
 
-            # The minimum gradient would lead to nans in the backpropagation
-            def no_grad_minimum(a, b):
-                with torch.no_grad():
-                    return torch.minimum(a, b)
-            # bump_function: Implemented using torch.minimum s.t.
-            # it will return -inf for |x|>=1 -> exp is zero.
-            # An implementation using
-            # a heaviside function outside of the exp could result
-            # in +inf * 0 = nan at |x| >~ 1
-            bump_function = lambda x: \
-                torch.exp(1 - 1 / (1 - no_grad_minimum(x**2, torch.ones_like(x))))
-            smoother_function = lambda x: x * (1 - bump_function(x))
-            scaled_smoother_function = lambda x, smoothing_range: \
-                smoothing_range * smoother_function(x / smoothing_range)
-            smoothing_range = 0.1 * physics.EV
-            smooth_k_function = lambda q, i=i, smoothing_range=smoothing_range: \
+            smoother_function = lambda x: \
+                x * (1 - gaussian(x, physics.smoothing_range))
+            smooth_k_function = lambda q, i=i: \
                 physics.k_function(
                     q['m_eff'+str(i)],
-                    scaled_smoother_function(q['E']-q['V'+str(i)], smoothing_range),
+                    smoother_function(q['E']-q['V'+str(i)]),
                 )
             # smooth_k: Fixing the non-smoothness of k in V at E=V
             self.models['smooth_k'+str(i)] = FunctionModel(smooth_k_function)

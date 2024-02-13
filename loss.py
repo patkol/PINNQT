@@ -48,8 +48,8 @@ def get_cc_loss(q, *, with_grad, i, N):
     else:
         phi_dx_left = q['phi_dx'+left_index]
     if i==N: # Rightmost boundary
-        b_r = q['phi'+left_index] - physics.A_R
-        phi_dx_right = 1j * q['k'+right_index] * (b_r - physics.A_R)
+        a_r = q['phi'+left_index] - physics.B_R
+        phi_dx_right = 1j * q['k'+right_index] * (a_r - physics.B_R)
     else:
         phi_dx_right = q['phi_dx'+right_index]
     residual = phi_dx_left / q['m_eff'+left_index] - phi_dx_right / q['m_eff'+right_index]

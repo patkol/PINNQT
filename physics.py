@@ -16,10 +16,12 @@ NM = 1e-9
 
 E_MIN = 0.2 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.60001 * EV
+E_MAX = 0.20001 * EV
 
-A_L = 1 # Amplitude of the wave incoming from the left
-A_R = 0 # Amplitude of the wave incoming from the right
+A_L = 0 # Amplitude of the wave incoming from the left
+B_R = 1 # Amplitude of the wave incoming from the right
+
+smoothing_range = 0.05 * EV
 
 
 # Devices
@@ -136,5 +138,3 @@ PROBABILITY_CURRENT_OOM = H_BAR / M_EFF_OOM  * K_OOM
 
 
 quantities_factory = QuantitiesFactory()
-
-

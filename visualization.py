@@ -182,59 +182,109 @@ def visualize(device):
         / q_right['m_eff'+right_contact_index]
     ))
     v_ratio_values = abs_group_velocity_right_contact.values / abs_group_velocity_left_contact.values
-    v_ratio = Quantity(v_ratio_values, q_right.grid)
 
     b_l = q_left['phi'+left_layer_index] - physics.A_L
-    b_r = q_right['phi'+right_layer_index] - physics.A_R
+    a_r = q_right['phi'+right_layer_index] - physics.B_R
 
 
     fig, ax = plt.subplots()
-    add_lineplot(
-        ax,
-        complex_abs2(b_l),
-        'Reflection probability',
-        'E',
-        x_unit=physics.EV,
-        marker = 'D',
-        linewidth = 0,
-        c='blue',
-    )
-    add_lineplot(
-        ax,
-        v_ratio * complex_abs2(b_r),
-        'Transmission probability',
-        'E',
-        x_unit=physics.EV,
-        marker = 'D',
-        linewidth = 0,
-        c='orange',
-    )
-
-    try:
-        energies_matlab = np.loadtxt(
-            f'matlab_results/E_{params.simulated_device_name}.txt',
-            delimiter=',',
-        )
-        b_r_2_left_matlab = np.loadtxt(
-            f'matlab_results/TEL_{params.simulated_device_name}.txt',
-            delimiter=',',
-        )
-        ax.plot(
-            energies_matlab,
-            b_r_2_left_matlab,
-            label='MATLAB Transmission',
-            linestyle='dashed',
-            c='orange',
-        )
-        ax.plot(
-            energies_matlab,
-            1 - b_r_2_left_matlab,
-            label='1 - MATLAB Transmission',
-            linestyle='dashed',
+    if physics.A_L == 1:
+        add_lineplot(
+            ax,
+            complex_abs2(b_l),
+            'Reflection probability',
+            'E',
+            x_unit=physics.EV,
+            marker = 'D',
+            linewidth = 0,
             c='blue',
         )
-    except:
-        pass
+        v_ratio = Quantity(v_ratio_values, q_right.grid)
+        add_lineplot(
+            ax,
+            v_ratio * complex_abs2(a_r),
+            'Transmission probability',
+            'E',
+            x_unit=physics.EV,
+            marker = 'D',
+            linewidth = 0,
+            c='orange',
+        )
+
+        try:
+            energies_matlab = np.loadtxt(
+                f'matlab_results/E_{params.simulated_device_name}.txt',
+                delimiter=',',
+            )
+            a_r_2_left_matlab = np.loadtxt(
+                f'matlab_results/TEL_{params.simulated_device_name}.txt',
+                delimiter=',',
+            )
+            ax.plot(
+                energies_matlab,
+                a_r_2_left_matlab,
+                label='MATLAB Transmission',
+                linestyle='dashed',
+                c='orange',
+            )
+            ax.plot(
+                energies_matlab,
+                1 - a_r_2_left_matlab,
+                label='1 - MATLAB Transmission',
+                linestyle='dashed',
+                c='blue',
+            )
+        except:
+            pass
+
+    if physics.B_R == 1:
+        add_lineplot(
+            ax,
+            complex_abs2(a_r),
+            'Reflection probability',
+            'E',
+            x_unit=physics.EV,
+            marker = 'D',
+            linewidth = 0,
+            c='blue',
+        )
+        v_ratio = Quantity(1/v_ratio_values, q_left.grid)
+        add_lineplot(
+            ax,
+            v_ratio * complex_abs2(b_l),
+            'Transmission probability',
+            'E',
+            x_unit=physics.EV,
+            marker = 'D',
+            linewidth = 0,
+            c='orange',
+        )
+
+        try:
+            energies_matlab = np.loadtxt(
+                f'matlab_results/E_{params.simulated_device_name}.txt',
+                delimiter=',',
+            )
+            b_l_2_right_matlab = np.loadtxt(
+                f'matlab_results/TER_{params.simulated_device_name}.txt',
+                delimiter=',',
+            )
+            ax.plot(
+                energies_matlab,
+                b_l_2_right_matlab,
+                label='MATLAB Transmission',
+                linestyle='dashed',
+                c='orange',
+            )
+            ax.plot(
+                energies_matlab,
+                1 - b_l_2_right_matlab,
+                label='1 - MATLAB Transmission',
+                linestyle='dashed',
+                c='blue',
+            )
+        except:
+            pass
 
     ax.set_xlabel('E [eV]')
     ax.set_ylim(bottom=-0.1, top=1.1)
@@ -246,8 +296,8 @@ def visualize(device):
     fig, ax = plt.subplots()
     add_lineplot(ax, torch.real(b_l), 'Re(b_l)', 'E', x_unit=physics.EV)
     add_lineplot(ax, torch.imag(b_l), 'Im(b_l)', 'E', x_unit=physics.EV)
-    add_lineplot(ax, torch.real(b_r), 'Re(b_r)', 'E', x_unit=physics.EV)
-    add_lineplot(ax, torch.imag(b_r), 'Im(b_r)', 'E', x_unit=physics.EV)
+    add_lineplot(ax, torch.real(a_r), 'Re(a_r)', 'E', x_unit=physics.EV)
+    add_lineplot(ax, torch.imag(a_r), 'Im(a_r)', 'E', x_unit=physics.EV)
     ax.set_xlabel('E [eV]')
     ax.set_ylim(bottom=-1.1, top=1.1)
     ax.grid(visible=True)
