@@ -14,6 +14,7 @@ from device import Device
 from visualization import visualize
 
 
+
 # Setup
 
 random.seed(params.seed)

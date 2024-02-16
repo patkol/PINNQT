@@ -3,9 +3,10 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from kolpinn import mathematics
 from kolpinn import io
 from kolpinn import grid_quantities
-from kolpinn.grid_quantities import Grid, Quantity, get_quantity
+from kolpinn.grid_quantities import Grid, get_fd_derivative
 from kolpinn.batching import Batcher
 from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, \
                           TransformedModel, get_model, get_extended_q_batchwise
@@ -95,10 +96,10 @@ class Device:
                 'const_j'+str(i): const_j_loss_function,
             }
             self.models['phi_dx_fd' + str(i)] = FunctionModel(
-                lambda q, i=i, **kwargs: q['phi'+str(i)].get_fd_derivative('x'),
+                lambda q, i=i, **kwargs: get_fd_derivative('x', q['phi'+str(i)], q.grid),
             )
             self.models['phi_dx' + str(i)] = FunctionModel(
-                lambda q, i=i, **kwargs: q['phi'+str(i)].get_grad(q['x'], **kwargs),
+                lambda q, i=i, **kwargs: mathematics.grad(q['phi'+str(i)], q['x'], **kwargs),
                 retain_graph = True,
                 create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
             )
@@ -210,9 +211,8 @@ class Device:
                         },
                         models_require_grad = False,
                     )
-                    mean = lambda x: torch.mean(x if torch.is_tensor(x) else x.values)
-                    avg_V = mean(q['V'])
-                    avg_m_eff = mean(q['m_eff'])
+                    avg_V = torch.mean(q['V'])
+                    avg_m_eff = torch.mean(q['m_eff'])
                     avg_k = physics.k_function(avg_m_eff, energy - avg_V)
                     estimated_phase_change = torch.real(avg_k * (x_right - x_left)).to(params.si_real_dtype)
                     print(f'Estimated phase change in Layer {i}: {estimated_phase_change}')

@@ -1,9 +1,11 @@
 import numpy as np
 import torch
 
+from kolpinn import mathematics
 from kolpinn.grid_quantities import QuantitiesFactory
 
 import parameters as params
+
 
 
 # Constants
@@ -14,9 +16,11 @@ EV = Q_E
 M_E = 9.1093837e-31
 NM = 1e-9
 
-E_MIN = 0.2 * EV
+E_MIN = -0.2 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.20001 * EV
+E_MAX = 0.6 * EV
+E_MIN += 1e-6 * EV # Avoiding problems at E == V (sqrt(E-V)' not defined)
+E_MAX += 2e-6 * EV # Making sure that E_MAX is used
 
 A_L = 0 # Amplitude of the wave incoming from the left
 B_R = 1 # Amplitude of the wave incoming from the right
@@ -120,10 +124,7 @@ device_kwargs = device_kwargs_dict[params.simulated_device_name]
 
 def k_function(m, E):
     k_squared = 2 * m * E / H_BAR**2
-    if torch.is_tensor(k_squared):
-        k_squared = k_squared.to(params.si_complex_dtype)
-    else:
-        k_squared = k_squared.set_dtype(params.si_complex_dtype)
+    k_squared = k_squared.to(params.si_complex_dtype)
 
     return torch.sqrt(k_squared)
 

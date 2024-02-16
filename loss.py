@@ -1,6 +1,7 @@
 import torch
 
-from kolpinn.mathematics import complex_abs2
+from kolpinn.mathematics import complex_abs2, grad
+from kolpinn.grid_quantities import get_fd_second_derivative, mean_dimension
 
 import parameters as params
 import physics
@@ -17,14 +18,16 @@ def get_SE_loss(q, *, with_grad, i):
 
     if params.fd_second_derivatives:
         #hbar_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_fd_derivative('x')
-        phi_dx_dx = q[f'phi{i}'].get_fd_second_derivative('x')
+        phi_dx_dx = get_fd_second_derivative('x', q[f'phi{i}'], q.grid)
         hbar_phi_dx_over_m_dx = phi_dx_dx * (physics.H_BAR / q['m_eff'+str(i)])
     else:
-        hbar_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_grad(
+        hbar_phi_dx_over_m_dx = grad(
+            hbar_phi_dx_over_m,
             q['x'],
             retain_graph=True,
             create_graph=with_grad,
         )
+        #DEBUG hbar_phi_dx_over_m_dx = torch.where(torch.isfinite(hbar_phi_dx_over_m_dx), hbar_phi_dx_over_m_dx, torch.zeros_like(hbar_phi_dx_over_m_dx))
     residual = (-0.5 * physics.H_BAR * hbar_phi_dx_over_m_dx
                 + (q['V'+str(i)] - q['E']) * q['phi'+str(i)])
     residual /= physics.V_OOM
@@ -61,7 +64,7 @@ def get_const_j_loss(q, *, with_grad, i):
     phi = q['phi'+str(i)]
     prob_current = torch.imag(physics.H_BAR * torch.conj(phi)
                               * q['phi_dx'+str(i)] / q['m_eff'+str(i)])
-    residual = prob_current - prob_current.mean_dimension('x')
+    residual = prob_current - mean_dimension('x', prob_current, q.grid)
     residual /= physics.PROBABILITY_CURRENT_OOM
     # (j - j_mean) / j_mean
     #residual = prob_current / prob_current.mean_dimension('x') - 1

@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import torch
 
 from kolpinn.mathematics import complex_abs2
-from kolpinn.grid_quantities import Quantity
 from kolpinn.model import get_extended_q, get_extended_q_batchwise
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
@@ -49,6 +48,7 @@ def visualize(device):
         phi_i = q['phi'+str(i)]
         save_lineplot(
             complex_abs2(phi_i),
+            q.grid,
             f'|phi{i}|^2',
             'x',
             'E',
@@ -60,6 +60,7 @@ def visualize(device):
         )
         save_lineplot(
             torch.real(phi_i),
+            q.grid,
             f'Re(phi{i})',
             'x',
             'E',
@@ -71,6 +72,7 @@ def visualize(device):
         )
         save_lineplot(
             torch.imag(phi_i),
+            q.grid,
             f'Im(phi{i})',
             'x',
             'E',
@@ -82,6 +84,7 @@ def visualize(device):
         )
         visualization.save_complex_polar_plot(
             phi_i,
+            q.grid,
             f'phi{i}',
             'x',
             'E',
@@ -95,6 +98,7 @@ def visualize(device):
         if params.model_ab:
             visualization.save_complex_polar_plot(
                 q[f'a{i}'],
+                q.grid,
                 f'a{i}',
                 'x',
                 'E',
@@ -104,6 +108,7 @@ def visualize(device):
             )
             visualization.save_complex_polar_plot(
                 q[f'b{i}'],
+                q.grid,
                 f'b{i}',
                 'x',
                 'E',
@@ -119,6 +124,7 @@ def visualize(device):
                                   * q['phi_dx'+str(i)] / q['m_eff'+str(i)])
         save_lineplot(
             prob_current,
+            q.grid,
             f"prob_current{i}",
             'x',
             'E',
@@ -132,10 +138,16 @@ def visualize(device):
         )
 
         ## DOS
-        dos = 1/(2*np.pi) * complex_abs2(phi_i) / dE_dk_left.values
+        dos = 1/(2*np.pi) * complex_abs2(phi_i) / dE_dk_left
         save_heatmap(
-            dos, 'DOS'+str(i), 'x', 'E',
-            quantity_unit = 1/physics.NM/physics.EV, quantity_unit_name = '1/nm/eV',
+            dos,
+            q.grid,
+            'DOS'+str(i),
+            'x',
+            'E',
+            q.grid,
+            quantity_unit = 1/physics.NM/physics.EV,
+            quantity_unit_name = '1/nm/eV',
             x_unit = physics.NM, x_unit_name = 'nm',
             y_unit = physics.EV, y_unit_name = 'eV',
             path_prefix=path_prefix,
@@ -144,6 +156,7 @@ def visualize(device):
         ## Losses
         save_lineplot(
             q['SE'+str(i)],
+            q.grid,
             f'SE{i}',
             'x',
             'E',
@@ -160,6 +173,7 @@ def visualize(device):
         for label in ('x_transformed', 'nn_output0', 'nn_output1'):
             save_lineplot(
                 q[label],
+                q.grid,
                 f'{label}_layer{i}',
                 'x',
                 'E',
@@ -181,7 +195,7 @@ def visualize(device):
         2*(q_right['E']-q_right['V'+right_contact_index])
         / q_right['m_eff'+right_contact_index]
     ))
-    v_ratio_values = abs_group_velocity_right_contact.values / abs_group_velocity_left_contact.values
+    v_ratio = abs_group_velocity_right_contact / abs_group_velocity_left_contact
 
     b_l = q_left['phi'+left_layer_index] - physics.A_L
     a_r = q_right['phi'+right_layer_index] - physics.B_R
@@ -192,6 +206,7 @@ def visualize(device):
         add_lineplot(
             ax,
             complex_abs2(b_l),
+            q_left.grid,
             'Reflection probability',
             'E',
             x_unit=physics.EV,
@@ -199,10 +214,10 @@ def visualize(device):
             linewidth = 0,
             c='blue',
         )
-        v_ratio = Quantity(v_ratio_values, q_right.grid)
         add_lineplot(
             ax,
             v_ratio * complex_abs2(a_r),
+            q_right.grid,
             'Transmission probability',
             'E',
             x_unit=physics.EV,
@@ -241,6 +256,7 @@ def visualize(device):
         add_lineplot(
             ax,
             complex_abs2(a_r),
+            q_right.grid,
             'Reflection probability',
             'E',
             x_unit=physics.EV,
@@ -248,10 +264,10 @@ def visualize(device):
             linewidth = 0,
             c='blue',
         )
-        v_ratio = Quantity(1/v_ratio_values, q_left.grid)
         add_lineplot(
             ax,
-            v_ratio * complex_abs2(b_l),
+            complex_abs2(b_l) / v_ratio,
+            q_left.grid,
             'Transmission probability',
             'E',
             x_unit=physics.EV,
@@ -294,10 +310,10 @@ def visualize(device):
     plt.close(fig)
 
     fig, ax = plt.subplots()
-    add_lineplot(ax, torch.real(b_l), 'Re(b_l)', 'E', x_unit=physics.EV)
-    add_lineplot(ax, torch.imag(b_l), 'Im(b_l)', 'E', x_unit=physics.EV)
-    add_lineplot(ax, torch.real(a_r), 'Re(a_r)', 'E', x_unit=physics.EV)
-    add_lineplot(ax, torch.imag(a_r), 'Im(a_r)', 'E', x_unit=physics.EV)
+    add_lineplot(ax, torch.real(b_l), q_left.grid, 'Re(b_l)', 'E', x_unit=physics.EV)
+    add_lineplot(ax, torch.imag(b_l), q_left.grid, 'Im(b_l)', 'E', x_unit=physics.EV)
+    add_lineplot(ax, torch.real(a_r), q_right.grid, 'Re(a_r)', 'E', x_unit=physics.EV)
+    add_lineplot(ax, torch.imag(a_r), q_right.grid, 'Im(a_r)', 'E', x_unit=physics.EV)
     ax.set_xlabel('E [eV]')
     ax.set_ylim(bottom=-1.1, top=1.1)
     ax.grid(visible=True)
