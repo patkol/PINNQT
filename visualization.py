@@ -117,6 +117,53 @@ def visualize(device):
                 path_prefix = path_prefix,
             )
 
+            fig, ax = plt.subplots()
+            add_lineplot(
+                ax,
+                torch.real(q[f'a_output{i}']),
+                q.grid,
+                f'Re(a_output{i})',
+                'x',
+                'E',
+                x_unit = physics.NM,
+                c = 'blue',
+            )
+            add_lineplot(
+                ax,
+                torch.imag(q[f'a_output{i}']),
+                q.grid,
+                f'Im(a_output{i})',
+                'x',
+                'E',
+                x_unit = physics.NM,
+                c = 'blue',
+                linestyle = 'dashed',
+            )
+            add_lineplot(
+                ax,
+                torch.real(q[f'b_output{i}']),
+                q.grid,
+                f'Re(b_output{i})',
+                'x',
+                'E',
+                x_unit = physics.NM,
+                c = 'red',
+            )
+            add_lineplot(
+                ax,
+                torch.imag(q[f'b_output{i}']),
+                q.grid,
+                f'Im(b_output{i})',
+                'x',
+                'E',
+                x_unit = physics.NM,
+                c = 'red',
+                linestyle = 'dashed',
+            )
+            ax.set_xlabel('x [nm]')
+            ax.grid(visible=True)
+            fig.savefig(path_prefix + f'coefficients{i}.pdf')
+            plt.close(fig)
 
 
         ## Probability current
@@ -125,7 +172,7 @@ def visualize(device):
         save_lineplot(
             prob_current,
             q.grid,
-            f"prob_current{i}",
+            f'prob_current{i}',
             'x',
             'E',
             x_unit = physics.NM,
@@ -169,21 +216,6 @@ def visualize(device):
             path_prefix = path_prefix,
         )
 
-        # NN inputs and outputs
-        for label in ('x_transformed', 'nn_output0', 'nn_output1'):
-            save_lineplot(
-                q[label],
-                q.grid,
-                f'{label}_layer{i}',
-                'x',
-                'E',
-                x_unit = physics.NM,
-                x_unit_name = 'nm',
-                lines_unit = physics.EV,
-                lines_unit_name = 'eV',
-                path_prefix = path_prefix,
-            )
-
 
     # Transmission and reflection probabilities
 
@@ -210,7 +242,7 @@ def visualize(device):
             'Reflection probability',
             'E',
             x_unit=physics.EV,
-            marker = 'D',
+            marker = 'x',
             linewidth = 0,
             c='blue',
         )
@@ -221,7 +253,7 @@ def visualize(device):
             'Transmission probability',
             'E',
             x_unit=physics.EV,
-            marker = 'D',
+            marker = 'x',
             linewidth = 0,
             c='orange',
         )
@@ -260,7 +292,7 @@ def visualize(device):
             'Reflection probability',
             'E',
             x_unit=physics.EV,
-            marker = 'D',
+            marker = 'x',
             linewidth = 0,
             c='blue',
         )
@@ -271,7 +303,7 @@ def visualize(device):
             'Transmission probability',
             'E',
             x_unit=physics.EV,
-            marker = 'D',
+            marker = 'x',
             linewidth = 0,
             c='orange',
         )

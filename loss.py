@@ -27,7 +27,6 @@ def get_SE_loss(q, *, with_grad, i):
             retain_graph=True,
             create_graph=with_grad,
         )
-        #DEBUG hbar_phi_dx_over_m_dx = torch.where(torch.isfinite(hbar_phi_dx_over_m_dx), hbar_phi_dx_over_m_dx, torch.zeros_like(hbar_phi_dx_over_m_dx))
     residual = (-0.5 * physics.H_BAR * hbar_phi_dx_over_m_dx
                 + (q['V'+str(i)] - q['E']) * q['phi'+str(i)])
     residual /= physics.V_OOM

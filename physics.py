@@ -16,16 +16,17 @@ EV = Q_E
 M_E = 9.1093837e-31
 NM = 1e-9
 
-E_MIN = -0.2 * EV
+E_MIN = 0.4 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.6 * EV
+E_MAX = 0.4 * EV
 E_MIN += 1e-6 * EV # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += 2e-6 * EV # Making sure that E_MAX is used
 
-A_L = 0 # Amplitude of the wave incoming from the left
-B_R = 1 # Amplitude of the wave incoming from the right
+A_L = 1 # Amplitude of the wave incoming from the left
+B_R = 0 # Amplitude of the wave incoming from the right
 
 smoothing_range = 0.05 * EV
+transition_distance = 0.5 * NM
 
 
 # Devices

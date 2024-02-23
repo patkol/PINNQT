@@ -1,14 +1,21 @@
+# IDEA: properly seperate self.models & trainer_models
+
+
+from typing import Optional
+import copy
 import os
 from pathlib import Path
+import itertools
 import numpy as np
 import torch
 
 from kolpinn import mathematics
 from kolpinn import io
 from kolpinn import grid_quantities
-from kolpinn.grid_quantities import Grid, get_fd_derivative
+from kolpinn.grid_quantities import Grid, Subgrid, QuantityDict, \
+                                    restrict_quantities, get_fd_derivative
 from kolpinn.batching import Batcher
-from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, \
+from kolpinn.model import Model, SimpleNNModel, ConstModel, FunctionModel, \
                           TransformedModel, get_model, get_extended_q_batchwise
 from kolpinn.training import Trainer
 
@@ -18,7 +25,131 @@ import loss
 
 
 
+def get_values_at(
+        dimensions_to_replace: dict[str,torch.Tensor],
+        model: Model,
+        q: QuantityDict,
+        passed_quantity_labels: Optional[list[str]] = None,
+    ) -> torch.Tensor:
+    """Values in a modified grid"""
+
+    if passed_quantity_labels is None:
+        passed_quantity_labels = []
+
+    dimensions = copy.copy(q.grid.dimensions)
+    dimensions.update(dimensions_to_replace)
+    grid = Grid(dimensions)
+    new_q = physics.quantities_factory(grid)
+
+    # Provide the quantities that certainly do not depend on the replaced
+    # dimensions to the model.
+    # The `passed_quantity_labels` are provided even if they might depend on
+    # replaced dimension.
+    for label, quantity in q.items():
+        skip = False
+        for replaced_dim_label in dimensions_to_replace:
+            if grid_quantities.might_depend_on(replaced_dim_label, quantity, q.grid):
+                skip = True
+                break
+        if label in new_q:
+            skip = True
+        if label in passed_quantity_labels:
+            skip = False
+        if skip:
+            continue
+
+        new_q[label] = quantity
+
+    return model.apply(new_q)[0]
+
+def get_model_at(
+        dimensions_to_replace: dict[str,torch.Tensor],
+        model: Model,
+        *,
+        passed_quantity_labels: Optional[list[str]] = None,
+    ) -> FunctionModel:
+    """
+    Get a new model that corresponds to `model` but is evaluated on
+    a modified grid.
+    """
+    return FunctionModel(
+        lambda q, *, dimensions_to_replace, model, passed_quantity_labels: \
+            get_values_at(dimensions_to_replace, model, q, passed_quantity_labels),
+        dimensions_to_replace = dimensions_to_replace,
+        model = model,
+        passed_quantity_labels = passed_quantity_labels,
+    )
+
 gaussian = lambda x, sigma: torch.exp(-x**2 / (2 * sigma**2))
+
+smoother_function = lambda x: \
+    x * (1 - gaussian(x, physics.smoothing_range))
+
+smooth_k_left_function = lambda q, i: \
+    physics.k_function(
+        q[f'm_eff{i}_left'],
+        smoother_function(q['E']-q[f'V{i}_left']),
+    )
+
+smooth_k_right_function = lambda q, i: \
+    physics.k_function(
+        q[f'm_eff{i}_right'],
+        smoother_function(q['E']-q[f'V{i}_right']),
+    )
+
+def transition_function(a, b, x):
+    """Smoothly transition from a at x=0 to b at x->inf."""
+    exp = torch.exp(-x / physics.transition_distance)
+    return exp * a + (1-exp) * b
+
+def get_a_left(q, i):
+    if i==1:
+        return q[f'a_output{i}_left']
+
+    m_L = q[f'm_eff{i-1}_right']
+    m_R = q[f'm_eff{i}_left']
+    k_L = smooth_k_right_function(q, i-1)
+    k_R = smooth_k_left_function(q, i)
+    z_a = 1j * k_R + q[f'a_output_dx{i}_left']
+    z_b = 1j * k_R - q[f'b_output_dx{i}_left']
+    a_L = q[f'a{i-1}_right_propagated']
+    b_L = q[f'b{i-1}_right_propagated']
+    a_dx_L = q[f'a_dx{i-1}_right_propagated']
+    b_dx_L = q[f'b_dx{i-1}_right_propagated']
+
+    return ((a_L + b_L
+             + m_R / m_L / z_b * (a_dx_L + b_dx_L + 1j * k_L * (a_L - b_L)))
+            / (1 + z_a / z_b))
+
+def get_b_left(q, i):
+    if i==1:
+        return q[f'b_output{i}_left']
+
+    return q[f'a{i-1}_right_propagated'] + q[f'b{i-1}_right_propagated'] - q[f'a{i}_left']
+
+def get_derivative_at(
+        dimensions_to_replace,
+        quantity_label,
+        dim_label,
+        q,
+        **kwargs,
+    ):
+    """Derive by a replaced dimension"""
+
+    grad = mathematics.grad(
+        q[quantity_label],
+        dimensions_to_replace[dim_label],
+        **kwargs,
+    )
+    dimensions = copy.copy(q.grid.dimensions)
+    dimensions.update(dimensions_to_replace)
+    grad = grid_quantities.unsqueeze_to(
+        Grid(dimensions),
+        grad,
+        [dim_label],
+    )
+
+    return grad
 
 
 class Device:
@@ -95,13 +226,23 @@ class Device:
                 'SE'+str(i): se_loss_function,
                 'const_j'+str(i): const_j_loss_function,
             }
-            self.models['phi_dx_fd' + str(i)] = FunctionModel(
-                lambda q, i=i, **kwargs: get_fd_derivative('x', q['phi'+str(i)], q.grid),
+            self.models[f'phi_dx_fd{i}'] = FunctionModel(
+                lambda q, i=i, **kwargs: get_fd_derivative('x', q[f'phi{i}'], q.grid),
             )
-            self.models['phi_dx' + str(i)] = FunctionModel(
-                lambda q, i=i, **kwargs: mathematics.grad(q['phi'+str(i)], q['x'], **kwargs),
+            self.models[f'phi_dx{i}'] = FunctionModel(
+                lambda q, i=i, **kwargs: mathematics.grad(q[f'phi{i}'], q['x'], **kwargs),
                 retain_graph = True,
                 create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
+            )
+            self.models[f'a_dx{i}'] = FunctionModel(
+                lambda q, i=i, **kwargs: mathematics.grad(q[f'a{i}'], q['x'], **kwargs),
+                retain_graph = True,
+                create_graph = True,
+            )
+            self.models[f'b_dx{i}'] = FunctionModel(
+                lambda q, i=i, **kwargs: mathematics.grad(q[f'b{i}'], q['x'], **kwargs),
+                retain_graph = True,
+                create_graph = True,
             )
 
         ## Boundaries
@@ -123,15 +264,16 @@ class Device:
             })
 
             self.loss_functions[name] = {}
-            if not i in (0,N):
+            if not i in (0,N) and not params.model_ab:
                 # The wave function is continuous on the left and right
                 # by construction
                 wc_loss_function = lambda q, with_grad, i=i: \
                     loss.get_wc_loss(q, with_grad=with_grad, i=i)
                 self.loss_functions[name]['wc'+str(i)] = wc_loss_function
-            cc_loss_function = lambda q, with_grad, i=i, N=N: \
-                loss.get_cc_loss(q, with_grad=with_grad, i=i, N=N)
-            self.loss_functions[name]['cc'+str(i)] = cc_loss_function
+            if i==0 or i==N or not params.model_ab:
+                cc_loss_function = lambda q, with_grad, i=i, N=N: \
+                    loss.get_cc_loss(q, with_grad=with_grad, i=i, N=N)
+                self.loss_functions[name]['cc'+str(i)] = cc_loss_function
 
         ## Layers and contacts
         for i in range(0,N+2):
@@ -149,14 +291,12 @@ class Device:
                 physics.k_function(q['m_eff'+str(i)], q['E']-q['V'+str(i)])
             self.models['k'+str(i)] = FunctionModel(k_function)
 
-            smoother_function = lambda x: \
-                x * (1 - gaussian(x, physics.smoothing_range))
+            # smooth_k: Fixing the non-smoothness of k in V at E=V
             smooth_k_function = lambda q, i=i: \
                 physics.k_function(
                     q['m_eff'+str(i)],
                     smoother_function(q['E']-q['V'+str(i)]),
                 )
-            # smooth_k: Fixing the non-smoothness of k in V at E=V
             self.models['smooth_k'+str(i)] = FunctionModel(smooth_k_function)
 
 
@@ -182,6 +322,9 @@ class Device:
             trainer_models = {}
             models_dict = {}
             trained_models_labels = []
+
+            trainer_models['m_eff0_right'] = self.models['m_eff0']
+            trainer_models['V0_right'] = self.models['V0']
 
             ## Layers
             for i in range(1,N+1):
@@ -249,22 +392,158 @@ class Device:
                         complex_polar = params.complex_polar,
                         phi_transformation = phi_transformation,
                     )
-                    trainer_models[f'a{i}'] = TransformedModel(
+
+                    # OPTIM: require_grad only in training passes
+                    left_dimensions = {
+                        'x': torch.tensor([x_left], dtype=params.si_real_dtype, requires_grad=True),
+                    }
+                    right_dimensions = {
+                        'x': torch.tensor([x_right], dtype=params.si_real_dtype, requires_grad=True),
+                    }
+                    trainer_models[f'm_eff{i}_left'] = get_model_at(
+                        left_dimensions,
+                        self.models[f'm_eff{i}'],
+                    )
+                    trainer_models[f'm_eff{i}_right'] = get_model_at(
+                        right_dimensions,
+                        self.models[f'm_eff{i}'],
+                    )
+                    trainer_models[f'V{i}_left'] = get_model_at(
+                        left_dimensions,
+                        self.models[f'V{i}'],
+                    )
+                    trainer_models[f'V{i}_right'] = get_model_at(
+                        right_dimensions,
+                        self.models[f'V{i}'],
+                    )
+
+                    if i == 1:
+                        output_transformation = lambda o, q: o
+                    else:
+                        output_transformation = lambda o, q, x_left=x_left: \
+                            transition_function(1, o, q['x']-x_left)
+                    trainer_models[f'a_output{i}'] = TransformedModel(
                         nn_model,
                         input_transformations = x_scaling_transformations,
+                        output_transformation = output_transformation,
                     )
-                    trained_models_labels.append(f'a{i}')
-                    trainer_models[f'b{i}'] = TransformedModel(
+                    trained_models_labels.append(f'a_output{i}')
+                    trainer_models[f'b_output{i}'] = TransformedModel(
                         nn_model2,
                         input_transformations = x_scaling_transformations,
+                        output_transformation = output_transformation,
                     )
-                    trained_models_labels.append(f'b{i}')
+                    trained_models_labels.append(f'b_output{i}')
+                    trainer_models[f'a_output{i}_left'] = get_model_at(
+                        left_dimensions,
+                        trainer_models[f'a_output{i}'],
+                    )
+                    trainer_models[f'b_output{i}_left'] = get_model_at(
+                        left_dimensions,
+                        trainer_models[f'b_output{i}'],
+                    )
+                    trainer_models[f'a_output{i}_right'] = get_model_at(
+                        right_dimensions,
+                        trainer_models[f'a_output{i}'],
+                    )
+                    trainer_models[f'b_output{i}_right'] = get_model_at(
+                        right_dimensions,
+                        trainer_models[f'b_output{i}'],
+                    )
+
+                    trainer_models[f'a_output_dx{i}_left'] = FunctionModel(
+                        lambda q, i=i, left_dimensions=left_dimensions, **kwargs:
+                            get_derivative_at(
+                                left_dimensions,
+                                f'a_output{i}_left',
+                                'x',
+                                q,
+                                **kwargs,
+                            ),
+                        retain_graph = True,
+                        create_graph = True,
+                    )
+                    trainer_models[f'b_output_dx{i}_left'] = FunctionModel(
+                        lambda q, i=i, left_dimensions=left_dimensions, **kwargs:
+                            get_derivative_at(
+                                left_dimensions,
+                                f'b_output{i}_left',
+                                'x',
+                                q,
+                                **kwargs,
+                            ),
+                        retain_graph = True,
+                        create_graph = True,
+                    )
+
+                    trainer_models[f'a{i}_left'] = FunctionModel(
+                        lambda q, i=i: get_a_left(q, i),
+                        output_dtype = params.si_complex_dtype,
+                    )
+                    trainer_models[f'b{i}_left'] = FunctionModel(
+                        lambda q, i=i: get_b_left(q, i),
+                        output_dtype = params.si_complex_dtype,
+                    )
+
+                    if i == 1:
+                        trainer_models[f'a{i}'] = trainer_models[f'a_output{i}']
+                        trainer_models[f'b{i}'] = trainer_models[f'b_output{i}']
+                        trainer_models[f'a{i}_right'] = trainer_models[f'a_output{i}_right']
+                        trainer_models[f'b{i}_right'] = trainer_models[f'b_output{i}_right']
+                    else:
+                        trainer_models[f'a{i}'] = FunctionModel(
+                            lambda q, i=i: q[f'a_output{i}'] * q[f'a{i}_left'], # Duplicated in a_right_propagated below
+                        )
+                        trainer_models[f'b{i}'] = FunctionModel(
+                            lambda q, i=i: q[f'b_output{i}'] * q[f'b{i}_left'],
+                        )
+                        trainer_models[f'a{i}_right'] = FunctionModel(
+                            lambda q, i=i: q[f'a_output{i}_right'] * q[f'a{i}_left'],
+                        )
+                        trainer_models[f'b{i}_right'] = FunctionModel(
+                            lambda q, i=i: q[f'b_output{i}_right'] * q[f'b{i}_left'],
+                        )
+
+                    trainer_models[f'a{i}_right_propagated'] = FunctionModel(
+                        lambda q, i=i, x_left=x_left, x_right=x_right:
+                            (q[f'a{i}_right']
+                             * torch.exp(1j * smooth_k_right_function(q, i) * (x_right - x_left))),
+                    )
+                    trainer_models[f'b{i}_right_propagated'] = FunctionModel(
+                        lambda q, i=i, x_left=x_left, x_right=x_right:
+                            (q[f'b{i}_right']
+                             * torch.exp(-1j * smooth_k_right_function(q, i) * (x_right - x_left))),
+                    )
+                    trainer_models[f'a_dx{i}_right_propagated'] = FunctionModel(
+                        lambda q, i=i, right_dimensions=right_dimensions, **kwargs:
+                            get_derivative_at(
+                                right_dimensions,
+                                f'a{i}_right_propagated',
+                                'x',
+                                q,
+                                **kwargs,
+                            ),
+                        retain_graph = True,
+                        create_graph = True,
+                    )
+                    trainer_models[f'b_dx{i}_right_propagated'] = FunctionModel(
+                        lambda q, i=i, right_dimensions=right_dimensions, **kwargs:
+                            get_derivative_at(
+                                right_dimensions,
+                                f'b{i}_right_propagated',
+                                'x',
+                                q,
+                                **kwargs,
+                            ),
+                        retain_graph = True,
+                        create_graph = True,
+                    )
                     # The shifts by x_left/x_right are important for
                     # energies smaller than V, it keeps them from exploding.
                     trainer_models[f'phi{i}'] = FunctionModel(
                         lambda q, i=i, x_left=x_left, x_right=x_right: (
                             q[f'a{i}'] * torch.exp(1j * q[f'smooth_k{i}'] * (q['x'] - x_left))
-                            + q[f'b{i}'] * torch.exp(-1j * q[f'smooth_k{i}'] * (q['x'] - x_right))
+                            + q[f'b{i}'] * torch.exp(-1j * q[f'smooth_k{i}'] * (q['x'] - x_left)) # Explodes for large layers
                         ),
                         output_dtype = params.si_complex_dtype,
                     )
@@ -280,9 +559,31 @@ class Device:
                     f'm_eff{i}': self.models[f'm_eff{i}'],
                 }
                 if params.model_ab:
-                    models_dict[name][f'smooth_k{i}'] = self.models[f'smooth_k{i}']
+                    for j in range(1,i+1):
+                        models_dict[name][f'm_eff{j-1}_right'] = trainer_models[f'm_eff{j-1}_right']
+                        models_dict[name][f'm_eff{j}_left'] = trainer_models[f'm_eff{j}_left']
+                        models_dict[name][f'V{j-1}_right'] = trainer_models[f'V{j-1}_right']
+                        models_dict[name][f'V{j}_left'] = trainer_models[f'V{j}_left']
+                        if j > 1:
+                            models_dict[name][f'a_output{j-1}_right'] = trainer_models[f'a_output{j-1}_right']
+                            models_dict[name][f'b_output{j-1}_right'] = trainer_models[f'b_output{j-1}_right']
+                            models_dict[name][f'a{j-1}_right'] = trainer_models[f'a{j-1}_right']
+                            models_dict[name][f'b{j-1}_right'] = trainer_models[f'b{j-1}_right']
+                            models_dict[name][f'a{j-1}_right_propagated'] = trainer_models[f'a{j-1}_right_propagated']
+                            models_dict[name][f'b{j-1}_right_propagated'] = trainer_models[f'b{j-1}_right_propagated']
+                            models_dict[name][f'a_dx{j-1}_right_propagated'] = trainer_models[f'a_dx{j-1}_right_propagated']
+                            models_dict[name][f'b_dx{j-1}_right_propagated'] = trainer_models[f'b_dx{j-1}_right_propagated']
+                        models_dict[name][f'a_output{j}'] = trainer_models[f'a_output{j}']
+                        models_dict[name][f'b_output{j}'] = trainer_models[f'b_output{j}']
+                        models_dict[name][f'a_output{j}_left'] = trainer_models[f'a_output{j}_left']
+                        models_dict[name][f'b_output{j}_left'] = trainer_models[f'b_output{j}_left']
+                        models_dict[name][f'a_output_dx{j}_left'] = trainer_models[f'a_output_dx{j}_left']
+                        models_dict[name][f'b_output_dx{j}_left'] = trainer_models[f'b_output_dx{j}_left']
+                        models_dict[name][f'a{j}_left'] = trainer_models[f'a{j}_left']
+                        models_dict[name][f'b{j}_left'] = trainer_models[f'b{j}_left']
                     models_dict[name][f'a{i}'] = trainer_models[f'a{i}']
                     models_dict[name][f'b{i}'] = trainer_models[f'b{i}']
+                    models_dict[name][f'smooth_k{i}'] = self.models[f'smooth_k{i}']
                 # Can depend on a, b, k
                 models_dict[name][f'phi{i}'] = trainer_models[f'phi{i}']
                 if params.fd_first_derivatives:
@@ -311,25 +612,44 @@ class Device:
                     'm_eff' + str(i): self.models['m_eff' + str(i)],
                     'm_eff' + str(i+1): self.models['m_eff' + str(i+1)],
                 }
+
+                neighbour_layers = [i, i+1]
                 if i == 0:
                     models_dict[name]['k' + str(i)] = self.models['k' + str(i)]
-                if i != 0:
-                    if params.model_ab:
-                        models_dict[name][f'a{i}'] = trainer_models[f'a{i}']
-                        models_dict[name][f'b{i}'] = trainer_models[f'b{i}']
-                        models_dict[name]['smooth_k' + str(i)] = self.models['smooth_k' + str(i)]
-                    models_dict[name]['phi' + str(i)] = trainer_models['phi' + str(i)]
-                    # Always using the exact derivatives on the boundaries
-                    models_dict[name][f'phi_dx{i}'] = self.models[f'phi_dx{i}']
+                    neighbour_layers.remove(0)
                 if i == N:
                     models_dict[name]['k' + str(i+1)] = self.models['k' + str(i+1)]
-                if i != N:
+                    neighbour_layers.remove(N+1)
+                for n in neighbour_layers:
                     if params.model_ab:
-                        models_dict[name][f'a{i+1}'] = trainer_models[f'a{i+1}']
-                        models_dict[name][f'b{i+1}'] = trainer_models[f'b{i+1}']
-                        models_dict[name]['smooth_k' + str(i+1)] = self.models['smooth_k' + str(i+1)]
-                    models_dict[name]['phi' + str(i+1)] = trainer_models['phi' + str(i+1)]
-                    models_dict[name]['phi_dx' + str(i+1)] = self.models['phi_dx' + str(i+1)]
+                        for j in range(1,n+1):
+                            models_dict[name][f'm_eff{j-1}_right'] = trainer_models[f'm_eff{j-1}_right']
+                            models_dict[name][f'm_eff{j}_left'] = trainer_models[f'm_eff{j}_left']
+                            models_dict[name][f'V{j-1}_right'] = trainer_models[f'V{j-1}_right']
+                            models_dict[name][f'V{j}_left'] = trainer_models[f'V{j}_left']
+                            if j > 1:
+                                models_dict[name][f'a_output{j-1}_right'] = trainer_models[f'a_output{j-1}_right']
+                                models_dict[name][f'b_output{j-1}_right'] = trainer_models[f'b_output{j-1}_right']
+                                models_dict[name][f'a{j-1}_right'] = trainer_models[f'a{j-1}_right']
+                                models_dict[name][f'b{j-1}_right'] = trainer_models[f'b{j-1}_right']
+                                models_dict[name][f'a{j-1}_right_propagated'] = trainer_models[f'a{j-1}_right_propagated']
+                                models_dict[name][f'b{j-1}_right_propagated'] = trainer_models[f'b{j-1}_right_propagated']
+                                models_dict[name][f'a_dx{j-1}_right_propagated'] = trainer_models[f'a_dx{j-1}_right_propagated']
+                                models_dict[name][f'b_dx{j-1}_right_propagated'] = trainer_models[f'b_dx{j-1}_right_propagated']
+                            models_dict[name][f'a_output{j}'] = trainer_models[f'a_output{j}']
+                            models_dict[name][f'b_output{j}'] = trainer_models[f'b_output{j}']
+                            models_dict[name][f'a_output{j}_left'] = trainer_models[f'a_output{j}_left']
+                            models_dict[name][f'b_output{j}_left'] = trainer_models[f'b_output{j}_left']
+                            models_dict[name][f'a_output_dx{j}_left'] = trainer_models[f'a_output_dx{j}_left']
+                            models_dict[name][f'b_output_dx{j}_left'] = trainer_models[f'b_output_dx{j}_left']
+                            models_dict[name][f'a{j}_left'] = trainer_models[f'a{j}_left']
+                            models_dict[name][f'b{j}_left'] = trainer_models[f'b{j}_left']
+                        models_dict[name][f'a{n}'] = trainer_models[f'a{n}']
+                        models_dict[name][f'b{n}'] = trainer_models[f'b{n}']
+                        models_dict[name][f'smooth_k{n}'] = self.models[f'smooth_k{n}']
+                    models_dict[name][f'phi{n}'] = trainer_models[f'phi{n}']
+                    # Always using the exact derivatives on the boundaries
+                    models_dict[name][f'phi_dx{n}'] = self.models[f'phi_dx{n}']
 
 
             # Add the loss models
