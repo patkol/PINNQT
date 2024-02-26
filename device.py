@@ -1,4 +1,5 @@
 # IDEA: properly seperate self.models & trainer_models
+# OPTIM: set create_graph = False where possible
 
 
 from typing import Optional
@@ -186,19 +187,18 @@ class Device:
         saved_parameters_index = io.get_next_parameters_index()
         print('saved_parameters_index =', saved_parameters_index)
 
-        if params.loaded_parameters_index is not None:
+        energies = torch.arange(
+            physics.E_MIN,
+            physics.E_MAX,
+            physics.E_STEP,
+            dtype=params.si_real_dtype,
+        )
+
+        if params.loaded_parameters_index is not None and not params.continuous_energy:
             parameters_path = io.get_parameters_path(params.loaded_parameters_index)
             saved_energies = sorted([float(Path(s).stem[2:]) * physics.EV
                                      for s in os.listdir(parameters_path)])
             energies = torch.tensor(saved_energies, dtype=params.si_real_dtype)
-
-        else:
-            energies = torch.arange(
-                physics.E_MIN,
-                physics.E_MAX,
-                physics.E_STEP,
-                dtype=params.si_real_dtype,
-            )
 
 
         # Models, Grids
@@ -302,18 +302,31 @@ class Device:
 
         # Trainers
 
-        for energy in energies.cpu().numpy():
-            energy_string = f'E={energy/physics.EV:.16e}'
-            energy_subgrids_training = dict(
-                (label, grid.get_subgrid({'E': lambda E: E == energy},
-                                         copy_all = True))
-                for label, grid in self.grids_training.items()
-            )
-            energy_subgrids_validation = dict(
-                (label, grid.get_subgrid({'E': lambda E: E == energy},
-                                         copy_all = True))
-                for label, grid in self.grids_validation.items()
-            )
+        if params.continuous_energy:
+            #energy_strings = [f'{energies[0]/physics.EV:.16e}_to_{energies[.1]/physics.EV:.16e}']
+            energy_strings = [f'all_energies']
+            energy_subgrids_training_list = [self.grids_training]
+            energy_subgrids_validation_list = [self.grids_validation]
+        else:
+            energy_strings = []
+            energy_subgrids_training_list = []
+            energy_subgrids_validation_list = []
+
+            for energy in energies.cpu().numpy():
+                energy_strings.append(f'E={energy/physics.EV:.16e}')
+                energy_subgrids_training_list.append(dict(
+                    (label, grid.get_subgrid({'E': lambda E: E == energy},
+                                             copy_all = True))
+                    for label, grid in self.grids_training.items()
+                ))
+                energy_subgrids_validation_list.append(dict(
+                    (label, grid.get_subgrid({'E': lambda E: E == energy},
+                                             copy_all = True))
+                    for label, grid in self.grids_validation.items()
+                ))
+
+        for energy_string, energy_subgrids_training, energy_subgrids_validation \
+                in zip(energy_strings, energy_subgrids_training_list, energy_subgrids_validation_list):
             qs_training = physics.quantities_factory.get_quantities_dict(energy_subgrids_training)
             qs_validation = physics.quantities_factory.get_quantities_dict(energy_subgrids_validation)
 
@@ -345,52 +358,32 @@ class Device:
                     [params.batch_size_x],
                 )
 
-                if params.complex_polar:
-                    q = get_extended_q_batchwise(
-                        batchers_validation[name],
-                        models = {
-                            'V': self.models['V'+str(i)],
-                            'm_eff': self.models['m_eff'+str(i)],
-                        },
-                        models_require_grad = False,
-                    )
-                    avg_V = torch.mean(q['V'])
-                    avg_m_eff = torch.mean(q['m_eff'])
-                    avg_k = physics.k_function(avg_m_eff, energy - avg_V)
-                    estimated_phase_change = torch.real(avg_k * (x_right - x_left)).to(params.si_real_dtype)
-                    print(f'Estimated phase change in Layer {i}: {estimated_phase_change}')
-                    phase_multiplier = max(1, estimated_phase_change / (2 * np.pi))
-                    phi_transformation = lambda x, phase_multiplier=phase_multiplier: \
-                        x * phase_multiplier
-                else:
-                    phi_transformation = None
-
+                inputs_labels = ['x']
+                if params.continuous_energy:
+                    inputs_labels.append('E')
                 nn_model = SimpleNNModel(
-                    ['x'],
+                    inputs_labels,
                     params.activation_function,
                     n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
                     n_hidden_layers = params.n_hidden_layers,
                     model_dtype = params.model_dtype,
                     output_dtype = params.si_complex_dtype,
                     device = params.device,
-                    complex_polar = params.complex_polar,
-                    phi_transformation = phi_transformation,
                 )
-                x_scaling_transformations = {
+                model_transformations = {
                     'x': lambda x, q, x_left=x_left, x_right=x_right:
                              (x - x_left) / (x_right - x_left),
+                    'E': lambda E, q: E / physics.EV,
                 }
                 if params.model_ab:
                     nn_model2 = SimpleNNModel(
-                        ['x'],
+                        inputs_labels,
                         params.activation_function,
                         n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
                         n_hidden_layers = params.n_hidden_layers,
                         model_dtype = params.model_dtype,
                         output_dtype = params.si_complex_dtype,
                         device = params.device,
-                        complex_polar = params.complex_polar,
-                        phi_transformation = phi_transformation,
                     )
 
                     # OPTIM: require_grad only in training passes
@@ -424,13 +417,13 @@ class Device:
                             transition_function(1, o, q['x']-x_left)
                     trainer_models[f'a_output{i}'] = TransformedModel(
                         nn_model,
-                        input_transformations = x_scaling_transformations,
+                        input_transformations = model_transformations,
                         output_transformation = output_transformation,
                     )
                     trained_models_labels.append(f'a_output{i}')
                     trainer_models[f'b_output{i}'] = TransformedModel(
                         nn_model2,
-                        input_transformations = x_scaling_transformations,
+                        input_transformations = model_transformations,
                         output_transformation = output_transformation,
                     )
                     trained_models_labels.append(f'b_output{i}')
@@ -550,7 +543,7 @@ class Device:
                 else:
                     trainer_models['phi' + str(i)] = TransformedModel(
                         nn_model,
-                        input_transformations = x_scaling_transformations,
+                        input_transformations = model_transformations,
                     )
                     trained_models_labels.append('phi' + str(i))
 
