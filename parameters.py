@@ -12,20 +12,20 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 433
+loaded_parameters_index = None
 # Whether to use the state of the saved optimizer (possibly overwriting optimizer_kwargs)
 load_optimizer = False
 load_scheduler = False
-n_hidden_layers = 5
-n_neurons_per_hidden_layer = 75
+n_hidden_layers = 9
+n_neurons_per_hidden_layer = 100
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float64
 model_ab = True # Otherwise phi is modelled directly
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = None
-min_loss = 50e-6
+min_loss = 100e-6
 report_each = 10
 Optimizer = torch.optim.Adam
 optimizer_kwargs = {'lr': 1e-4}

@@ -31,7 +31,7 @@ if __name__ == "__main__":
     previous_trainer = None
     for energy_string, trainer in device.trainers.items():
         if params.continuous_training and not previous_trainer is None:
-            trainer.load_models(previous_trainer.models_dict)
+            trainer.load_models(previous_trainer.models)
 
         trainer.train(
             report_each = params.report_each,

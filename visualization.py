@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import torch
 
 from kolpinn.mathematics import complex_abs2
-from kolpinn.model import get_extended_q, get_extended_q_batchwise
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
 
@@ -120,9 +119,9 @@ def visualize(device):
             fig, ax = plt.subplots()
             add_lineplot(
                 ax,
-                torch.real(q[f'a_output{i}']),
+                torch.real(q[f'a_output_untransformed{i}']),
                 q.grid,
-                f'Re(a_output{i})',
+                f'Re(a_output_untransformed{i})',
                 'x',
                 'E',
                 x_unit = physics.NM,
@@ -130,9 +129,9 @@ def visualize(device):
             )
             add_lineplot(
                 ax,
-                torch.imag(q[f'a_output{i}']),
+                torch.imag(q[f'a_output_untransformed{i}']),
                 q.grid,
-                f'Im(a_output{i})',
+                f'Im(a_output_untransformed{i})',
                 'x',
                 'E',
                 x_unit = physics.NM,
@@ -141,9 +140,9 @@ def visualize(device):
             )
             add_lineplot(
                 ax,
-                torch.real(q[f'b_output{i}']),
+                torch.real(q[f'b_output_untransformed{i}']),
                 q.grid,
-                f'Re(b_output{i})',
+                f'Re(b_output_untransformed{i})',
                 'x',
                 'E',
                 x_unit = physics.NM,
@@ -151,9 +150,9 @@ def visualize(device):
             )
             add_lineplot(
                 ax,
-                torch.imag(q[f'b_output{i}']),
+                torch.imag(q[f'b_output_untransformed{i}']),
                 q.grid,
-                f'Im(b_output{i})',
+                f'Im(b_output_untransformed{i})',
                 'x',
                 'E',
                 x_unit = physics.NM,
@@ -162,7 +161,7 @@ def visualize(device):
             )
             ax.set_xlabel('x [nm]')
             ax.grid(visible=True)
-            fig.savefig(path_prefix + f'coefficients{i}.pdf')
+            fig.savefig(path_prefix + f'untransformed_outputs{i}.pdf')
             plt.close(fig)
 
 
