@@ -2,7 +2,6 @@ import numpy as np
 import torch
 
 from kolpinn import mathematics
-from kolpinn.grid_quantities import QuantitiesFactory
 
 import parameters as params
 
@@ -18,7 +17,7 @@ NM = 1e-9
 
 E_MIN = 0.2 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.55 * EV
+E_MAX = 0.25 * EV
 E_MIN += 1e-6 * EV # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += 2e-6 * EV # Making sure that E_MAX is used
 
@@ -138,6 +137,3 @@ M_EFF_OOM = 0.1 * M_E  #abs(max(device_kwargs['m_effs'], key=abs))
 K_OOM = np.sqrt(2 * M_EFF_OOM * V_OOM / H_BAR**2)
 CURRENT_CONTINUITY_OOM = K_OOM / M_EFF_OOM
 PROBABILITY_CURRENT_OOM = H_BAR / M_EFF_OOM  * K_OOM
-
-
-quantities_factory = QuantitiesFactory()

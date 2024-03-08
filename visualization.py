@@ -201,9 +201,9 @@ def visualize(device):
 
         ## Losses
         save_lineplot(
-            q['SE'+str(i)],
+            q[f'SE_loss{i}'],
             q.grid,
-            f'SE{i}',
+            f'SE_loss{i}',
             'x',
             'E',
             x_unit = physics.NM,
