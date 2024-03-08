@@ -1,6 +1,3 @@
-# OPTIM: set create_graph = False where possible
-
-
 from typing import Optional
 import copy
 import os
@@ -25,6 +22,8 @@ import physics
 import loss
 
 
+dx_strings = ['', '_pdx', '_mdx']
+dx_shifts = [0, physics.dx, -physics.dx]
 
 k_function = lambda q, i: \
     physics.k_function(q[f'm_eff{i}'], q['E']-q[f'V{i}'])
@@ -46,6 +45,38 @@ def transition_function(a, b, x):
     exp = torch.exp(-x / physics.transition_distance)
     return exp * a + (1-exp) * b
 
+def get_dx_model(mode, quantity_name, grid_name):
+    name = quantity_name + '_dx'
+    if mode == 'exact':
+        def dx_qs_trafo(qs):
+            q = qs[grid_name]
+            q[name] = mathematics.grad(
+                qs[grid_name][quantity_name],
+                q['x'],
+                retain_graph=True,  # OPTIM: not always necessary
+                create_graph=True,  # OPTIM: not always necessary
+            )
+            return qs
+
+    elif mode == 'multigrid':
+        def dx_qs_trafo(qs):
+            quantity_right = qs[grid_name + '_pdx'][quantity_name]
+            quantity_left = qs[grid_name + '_mdx'][quantity_name]
+            qs[grid_name][name] = \
+                (quantity_right - quantity_left) / (2 * physics.dx)
+            return qs
+
+    elif mode == 'singlegrid':
+        def dx_qs_trafo(qs):
+            q = qs[grid_name]
+            q[name] = get_fd_derivative('x', q[quantity_name], q.grid)
+            return qs
+
+    else:
+        raise Exception('Unknown dx mode:', mode)
+
+    return MultiModel(dx_qs_trafo, name)
+
 def get_a_left(q, i):
     """ Return a at 'boundary{i-1}' """
 
@@ -54,14 +85,14 @@ def get_a_left(q, i):
 
     m_L = q[f'm_eff{i-1}']
     m_R = q[f'm_eff{i}']
-    k_L = smooth_k_function(q, i-1)
-    k_R = smooth_k_function(q, i)
-    z_a = 1j * k_R + q[f'a_output_dx{i}']
-    z_b = 1j * k_R - q[f'b_output_dx{i}']
+    k_L = q[f'smooth_k{i-1}']
+    k_R = q[f'smooth_k{i}']
+    z_a = 1j * k_R + q[f'a_output{i}_dx']
+    z_b = 1j * k_R - q[f'b_output{i}_dx']
     a_L = q[f'a{i-1}_propagated']
     b_L = q[f'b{i-1}_propagated']
-    a_dx_L = q[f'a_dx{i-1}_propagated']
-    b_dx_L = q[f'b_dx{i-1}_propagated']
+    a_dx_L = q[f'a{i-1}_propagated_dx']
+    b_dx_L = q[f'b{i-1}_propagated_dx']
 
     a_R = ((a_L + b_L
             + m_R / m_L / z_b * (a_dx_L + b_dx_L + 1j * k_L * (a_L - b_L)))
@@ -174,14 +205,6 @@ class Device:
                 f'SE{i}': se_loss_function,
                 f'const_j{i}': const_j_loss_function,
             }
-            self.shared_models[f'phi_dx_fd{i}'] = FunctionModel(
-                lambda q, i=i, **kwargs: get_fd_derivative('x', q[f'phi{i}'], q.grid),
-            )
-            self.shared_models[f'phi_dx{i}'] = FunctionModel(
-                lambda q, i=i, **kwargs: mathematics.grad(q[f'phi{i}'], q['x'], **kwargs),
-                retain_graph = True,
-                create_graph = True, # OPTIM: Set to false at boundary while validating (together with with_grad)
-            )
 
             if params.model_ab:
                 if i == 1:
@@ -208,18 +231,6 @@ class Device:
                                 q['x']-x_left
                             )
                     )
-                self.shared_models[f'a_output_dx{i}'] = FunctionModel(
-                    lambda q, i=i, **kwargs: \
-                        mathematics.grad(q[f'a_output{i}'], q['x'], **kwargs),
-                    retain_graph = True,
-                    create_graph = True,
-                )
-                self.shared_models[f'b_output_dx{i}'] = FunctionModel(
-                    lambda q, i=i, **kwargs: \
-                        mathematics.grad(q[f'b_output{i}'], q['x'], **kwargs),
-                    retain_graph = True,
-                    create_graph = True,
-                )
                 self.shared_models[f'a{i}_left'] = FunctionModel(
                     lambda q, i=i: get_a_left(q, i),
                 )
@@ -230,24 +241,12 @@ class Device:
                 self.shared_models[f'a{i}_propagated'] = FunctionModel(
                     lambda q, i=i, x_left=x_left, x_right=x_right:
                         (q[f'a{i}']
-                         * torch.exp(1j * smooth_k_function(q, i) * (x_right - x_left))),
+                         * torch.exp(1j * q[f'smooth_k{i}'] * (x_right - x_left))),
                 )
                 self.shared_models[f'b{i}_propagated'] = FunctionModel(
                     lambda q, i=i, x_left=x_left, x_right=x_right:
                         (q[f'b{i}']
-                         * torch.exp(-1j * smooth_k_function(q, i) * (x_right - x_left))),
-                )
-                self.shared_models[f'a_dx{i}_propagated'] = FunctionModel(
-                    lambda q, i=i, **kwargs: \
-                        mathematics.grad(q[f'a{i}_propagated'], q['x'], **kwargs),
-                    retain_graph = True,
-                    create_graph = True,
-                )
-                self.shared_models[f'b_dx{i}_propagated'] = FunctionModel(
-                    lambda q, i=i, **kwargs: \
-                        mathematics.grad(q[f'b{i}_propagated'], q['x'], **kwargs),
-                    retain_graph = True,
-                    create_graph = True,
+                         * torch.exp(-1j * q[f'smooth_k{i}'] * (x_right - x_left))),
                 )
                 # The shifts by x_left/x_right are important for
                 # energies smaller than V, it keeps them from exploding.
@@ -262,30 +261,32 @@ class Device:
         ## Boundaries
         for i in range(0,N+1):
             grid_name = f'boundary{i}'
-            self.grids_training[grid_name] = Grid({
-                'E': energies,
-                'x': torch.tensor(
-                         [self.boundaries[i]],
-                         dtype=params.si_real_dtype,
-                     ),
-            })
-            self.grids_validation[grid_name] = Grid({
-                'E': energies,
-                'x': torch.tensor(
-                         [self.boundaries[i]],
-                         dtype=params.si_real_dtype,
-                     ),
-            })
+            for dx_string, dx_shift in zip(dx_strings, dx_shifts):
+                self.grids_training[grid_name + dx_string] = Grid({
+                    'E': energies,
+                    'x': torch.tensor(
+                             [self.boundaries[i] + dx_shift],
+                             dtype=params.si_real_dtype,
+                         ),
+                })
+                self.grids_validation[grid_name + dx_string] = Grid({
+                    'E': energies,
+                    'x': torch.tensor(
+                             [self.boundaries[i] + dx_shift],
+                             dtype=params.si_real_dtype,
+                         ),
+                })
 
-            self.loss_functions[grid_name] = {}
+                self.loss_functions[grid_name + dx_string] = {}
+
             if not i in (0,N) and not params.model_ab:
                 # The wave function is continuous on the left and right
                 # by construction
-                wc_loss_function = lambda q, with_grad, i=i: \
+                wc_loss_function = lambda q, *, with_grad, i=i: \
                     loss.get_wc_loss(q, with_grad=with_grad, i=i)
                 self.loss_functions[grid_name][f'wc{i}'] = wc_loss_function
             if i==0 or i==N or not params.model_ab:
-                cc_loss_function = lambda q, with_grad, i=i, N=N: \
+                cc_loss_function = lambda q, *, with_grad, i=i, N=N: \
                     loss.get_cc_loss(q, with_grad=with_grad, i=i, N=N)
                 self.loss_functions[grid_name][f'cc{i}'] = cc_loss_function
 
@@ -416,43 +417,49 @@ class Device:
 
             # Boundaries
             for i in range(0,N+1):
-                grid_name = 'boundary' + str(i)
-                batchers_training[grid_name] = Batcher(
-                    qs_training[grid_name],
-                    energy_subgrids_training[grid_name],
-                    [],
-                    [],
-                )
-                batchers_validation[grid_name] = Batcher(
-                    qs_validation[grid_name],
-                    energy_subgrids_validation[grid_name],
-                    [],
-                    [],
-                )
+                for grid_name in [f'boundary{i}', f'boundary{i}_pdx', f'boundary{i}_mdx']:
+                    batchers_training[grid_name] = Batcher(
+                        qs_training[grid_name],
+                        energy_subgrids_training[grid_name],
+                        [],
+                        [],
+                    )
+                    batchers_validation[grid_name] = Batcher(
+                        qs_validation[grid_name],
+                        energy_subgrids_validation[grid_name],
+                        [],
+                        [],
+                    )
 
 
-            models += get_multi_models(
-                self.shared_models,
-                'boundary0',
-                used_models_names = [
-                    'V0', 'm_eff0', 'k0',
-                ],
-            )
-            models += get_multi_models(
-                self.shared_models,
-                f'boundary{N}',
-                used_models_names = [
-                    f'V{N+1}', f'm_eff{N+1}', f'k{N+1}',
-                ],
-            )
+            for dx_string in dx_strings:
+                models += get_multi_models(
+                    self.shared_models,
+                    'boundary0' + dx_string,
+                    used_models_names = [
+                        'V0', 'm_eff0', 'k0',
+                    ],
+                )
+                models += get_multi_models(
+                    self.shared_models,
+                    f'boundary{N}' + dx_string,
+                    used_models_names = [
+                        f'V{N+1}', f'm_eff{N+1}', f'k{N+1}',
+                    ],
+                )
 
             # Compose `models` layer by layer
             for i in range(1,N+1):
                 left_boundary_name = f'boundary{i-1}'
+                left_boundary_names = [left_boundary_name + dx_string
+                                       for dx_string in dx_strings]
                 bulk_name = f'bulk{i}'
+                bulk_names = [bulk_name]
                 right_boundary_name = f'boundary{i}'
+                right_boundary_names = [right_boundary_name + dx_string
+                                        for dx_string in dx_strings]
 
-                for grid_name in [left_boundary_name, bulk_name, right_boundary_name]:
+                for grid_name in left_boundary_names + bulk_names + right_boundary_names:
                     models += get_multi_models(
                         self.shared_models,
                         grid_name,
@@ -462,7 +469,7 @@ class Device:
                     )
 
                 if params.model_ab:
-                    for grid_name in [left_boundary_name, bulk_name, right_boundary_name]:
+                    for grid_name in left_boundary_names + bulk_names + right_boundary_names:
                         models += get_multi_models(
                             trainer_models,
                             grid_name,
@@ -478,41 +485,41 @@ class Device:
                             ],
                         )
 
-                    models += get_multi_models(
-                        self.shared_models,
-                        left_boundary_name,
-                        used_models_names = [
-                            f'a_output_dx{i}', f'b_output_dx{i}',
-                        ],
-                    )
+                    models.append(get_dx_model('multigrid', f'a_output{i}', left_boundary_name))
+                    models.append(get_dx_model('multigrid', f'b_output{i}', left_boundary_name))
                     models.append(get_multi_model(
                         self.shared_models[f'a{i}_left'],
                         f'a{i}',
                         left_boundary_name,
+                        multi_model_name = f'a{i}_left',
                     ))
                     models.append(get_multi_model(
                         self.shared_models[f'b{i}_left'],
                         f'b{i}',
                         left_boundary_name,
+                        multi_model_name = f'b{i}_left',
                     ))
 
-                    for grid_name in [bulk_name, right_boundary_name]:
+                    for grid_name in ([left_boundary_name + '_pdx', left_boundary_name + '_mdx']
+                                       + bulk_names + right_boundary_names):
                         models.append(MultiModel(
                             lambda qs, grid_name=grid_name, i=i:
                                 add_coeffs(qs, grid_name, i),
                             f'coeffs{i}',
                         ))
 
-                    models += get_multi_models(
-                        self.shared_models,
-                        right_boundary_name,
-                        used_models_names = [
-                            f'a{i}_propagated', f'b{i}_propagated',
-                            f'a_dx{i}_propagated', f'b_dx{i}_propagated',
-                        ],
-                    )
+                    for grid_name in right_boundary_names:
+                        models += get_multi_models(
+                            self.shared_models,
+                            grid_name,
+                            used_models_names = [
+                                f'a{i}_propagated', f'b{i}_propagated',
+                            ],
+                        )
+                    models.append(get_dx_model('multigrid', f'a{i}_propagated', right_boundary_name))
+                    models.append(get_dx_model('multigrid', f'b{i}_propagated', right_boundary_name))
 
-                for grid_name in [left_boundary_name, bulk_name, right_boundary_name]:
+                for grid_name in left_boundary_names + bulk_names + right_boundary_names:
                     models += get_multi_models(
                         self.shared_models if params.model_ab else trainer_models,
                         grid_name,
@@ -521,16 +528,10 @@ class Device:
                         ],
                     )
 
-                    # Always using the exact derivatives on the boundaries
-                    fd_string = ('_fd'
-                                 if params.fd_first_derivatives
-                                    and grid_name == bulk_name
-                                 else '')
-                    models.append(get_multi_model(
-                        self.shared_models[f'phi_dx{fd_string}{i}'],
-                        f'phi_dx{i}',
-                        grid_name,
-                    ))
+                models.append(get_dx_model('singlegrid', f'phi{i}', bulk_name))
+
+            models.append(get_dx_model('multigrid', 'phi1', 'boundary0'))
+            models.append(get_dx_model('multigrid', f'phi{N}', f'boundary{N}'))
 
 
             # Add the loss models
@@ -538,8 +539,9 @@ class Device:
             used_losses = {}
             quantities_requiring_grad_dict = {}
             for grid_name, loss_functions_dict in self.loss_functions.items():
-                # OPTIM: Use fd on boundary and require no grad
-                quantities_requiring_grad_dict[grid_name] = ['x']
+                quantities_requiring_grad_dict[grid_name] = []
+                if not params.fd_first_derivatives or not params.fd_second_derivatives:
+                    quantities_requiring_grad_dict[grid_name].append('x')
                 used_losses[grid_name] = []
                 for loss_name, loss_function in loss_functions_dict.items():
                     loss_model = FunctionModel(loss_function, with_grad = True)

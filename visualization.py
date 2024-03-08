@@ -167,7 +167,7 @@ def visualize(device):
 
         ## Probability current
         prob_current = torch.imag(physics.H_BAR * torch.conj(phi_i)
-                                  * q['phi_dx'+str(i)] / q['m_eff'+str(i)])
+                                  * q[f'phi{i}_dx'] / q[f'm_eff{i}'])
         save_lineplot(
             prob_current,
             q.grid,
@@ -188,7 +188,7 @@ def visualize(device):
         save_heatmap(
             dos,
             q.grid,
-            'DOS'+str(i),
+            f'DOS{i}',
             'x',
             'E',
             q.grid,

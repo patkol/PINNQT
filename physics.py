@@ -27,6 +27,7 @@ B_R = 0 # Amplitude of the wave incoming from the right
 
 smoothing_range = 0.05 * EV
 transition_distance = 0.5 * NM
+dx = 0.01 * NM  # Used for derivatives
 
 
 # Devices
