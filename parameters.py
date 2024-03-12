@@ -12,14 +12,14 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 482
+loaded_parameters_index = 525
 # Whether to use the state of the saved optimizer (possibly overwriting optimizer_kwargs)
 load_optimizer = False
 load_scheduler = False
 n_hidden_layers = 9
 n_neurons_per_hidden_layer = 100
 activation_function = torch.nn.Tanh()
-model_dtype = torch.float64
+model_dtype = torch.float32
 model_ab = True # Otherwise phi is modelled directly
 
 # Training
@@ -28,7 +28,7 @@ max_time = None
 min_loss = 1000e-6
 report_each = 10
 Optimizer = torch.optim.Adam
-optimizer_kwargs = {'lr': 1e-5}
+optimizer_kwargs = {'lr': 1e-4}
 Scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau
 scheduler_kwargs = {'factor': 0.5, 'patience': 5, 'cooldown': 5, 'min_lr': 1e-6, 'eps': 0}
 loss_function = mathematics.complex_abs2

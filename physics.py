@@ -17,7 +17,7 @@ NM = 1e-9
 
 E_MIN = 0.2 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.25 * EV
+E_MAX = 0.55 * EV
 E_MIN += 1e-6 * EV # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += 2e-6 * EV # Making sure that E_MAX is used
 

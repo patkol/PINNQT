@@ -1,13 +1,13 @@
 import torch
 
 from kolpinn.mathematics import complex_abs2, grad
-from kolpinn.grid_quantities import get_fd_second_derivative, mean_dimension
+from kolpinn.grid_quantities import get_fd_second_derivative, mean_dimension, restrict
 
 import parameters as params
 import physics
 
 
-def get_SE_loss(q, *, with_grad, i):
+def get_SE_loss(q, *, q_full, with_grad, i):
     """
     i: layer index in [1,N]
     For a constant effective mass only if fd_second_derivatives!
@@ -21,12 +21,13 @@ def get_SE_loss(q, *, with_grad, i):
         phi_dx_dx = get_fd_second_derivative('x', q[f'phi{i}'], q.grid)
         hbar_phi_dx_over_m_dx = phi_dx_dx * (physics.H_BAR / q[f'm_eff{i}'])
     else:
-        hbar_phi_dx_over_m_dx = grad(
+        hbar_phi_dx_over_m_dx_full = grad(
             hbar_phi_dx_over_m,
-            q['x'],
+            q_full['x'],
             retain_graph=True,
             create_graph=with_grad,
         )
+        hbar_phi_dx_over_m_dx = restrict(hbar_phi_dx_over_m_dx_full, q.grid)
     residual = (-0.5 * physics.H_BAR * hbar_phi_dx_over_m_dx
                 + (q[f'V{i}'] - q['E']) * q[f'phi{i}'])
     residual /= physics.V_OOM

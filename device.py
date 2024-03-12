@@ -23,8 +23,11 @@ import physics
 import loss
 
 
-dx_strings = ['', '_pdx', '_mdx']
-dx_shifts = [0, physics.dx, -physics.dx]
+dx_strings = ['']
+dx_shifts = [0]
+if params.fd_first_derivatives:
+    dx_strings += ['_pdx', '_mdx']
+    dx_shifts += [physics.dx, -physics.dx]
 
 k_function = lambda q, i: \
     physics.k_function(q[f'm_eff{i}'], q['E']-q[f'V{i}'])
@@ -41,25 +44,30 @@ smooth_k_function = lambda q, i: \
         smoother_function(q['E']-q[f'V{i}']),
     )
 
-def transition_function(a, b, x):
-    """Smoothly transition from a at x=0 to b at x->inf."""
-    exp = torch.exp(-x / physics.transition_distance)
-    return exp * a + (1-exp) * b
+def transition_function(a, b, transition_exp):
+    """
+    Smoothly transition from a at x=0 to b at x->inf.
+    transition_exp(x) = torch.exp(-(x-x_left) / transition_distance)
+    """
+    return transition_exp * a + (1-transition_exp) * b
 
 def get_dx_model(mode, quantity_name, grid_name):
     name = quantity_name + '_dx'
     if mode == 'exact':
-        def dx_qs_trafo(qs):
-            q = qs[grid_name]
-            q[name] = mathematics.grad(
-                qs[grid_name][quantity_name],
-                q['x'],
+        dx_model_single = FunctionModel(
+            lambda q, *, q_full, with_grad: mathematics.grad(
+                q[quantity_name],
+                q_full['x'],
                 retain_graph=True,  # OPTIM: not always necessary
                 create_graph=True,  # OPTIM: not always necessary
-            )
-            return qs
+            ),
+            q_full = None,
+            with_grad = True,
+        )
 
-    elif mode == 'multigrid':
+        return get_multi_model(dx_model_single, name, grid_name)
+
+    if mode == 'multigrid':
         def dx_qs_trafo(qs):
             quantity_right = qs[grid_name + '_pdx'][quantity_name]
             quantity_left = qs[grid_name + '_mdx'][quantity_name]
@@ -243,6 +251,33 @@ class Device:
                 lambda q, i=i: smooth_k_function(q, i),
             )
 
+        ## Layers
+        for i in range(1,N+1):
+            x_left = self.boundaries[i-1]
+            x_right = self.boundaries[i]
+            models_dict = const_models_dict[i]
+            models_dict[f'a_phase{i}'] = FunctionModel(
+                lambda q, i=i, x_left=x_left:
+                    torch.exp(1j * q[f'smooth_k{i}'] * (q['x'] - x_left)),
+            )
+            # b_phase explodes for large layers and imaginary smooth_k
+            models_dict[f'b_phase{i}'] = FunctionModel(
+                lambda q, i=i, x_left=x_left:
+                    torch.exp(-1j * q[f'smooth_k{i}'] * (q['x'] - x_left)),
+            )
+            models_dict[f'a_phase{i}_propagated'] = FunctionModel(
+                lambda q, i=i, x_left=x_left, x_right=x_right:
+                    torch.exp(1j * q[f'smooth_k{i}'] * (x_right - x_left)),
+            )
+            models_dict[f'b_phase{i}_propagated'] = FunctionModel(
+                lambda q, i=i, x_left=x_left, x_right=x_right:
+                    torch.exp(-1j * q[f'smooth_k{i}'] * (x_right - x_left)),
+            )
+            models_dict[f'transition_exp{i}'] = FunctionModel(
+                lambda q, x_left=x_left:
+                    torch.exp(-(q['x'] - x_left) / physics.transition_distance),
+            )
+
         const_models = []
 
         ## Layers
@@ -286,7 +321,7 @@ class Device:
                             transition_function(
                                 1,
                                 q[f'a_output_untransformed{i}'],
-                                q['x']-x_left
+                                q[f'transition_exp{i}']
                             )
                     )
                     shared_models_dict[f'b_output{i}'] = FunctionModel(
@@ -294,7 +329,7 @@ class Device:
                             transition_function(
                                 1,
                                 q[f'b_output_untransformed{i}'],
-                                q['x']-x_left
+                                q[f'transition_exp{i}']
                             )
                     )
                 shared_models_dict[f'a{i}_left'] = FunctionModel(
@@ -306,31 +341,31 @@ class Device:
 
                 shared_models_dict[f'a{i}_propagated'] = FunctionModel(
                     lambda q, i=i, x_left=x_left, x_right=x_right:
-                        (q[f'a{i}']
-                         * torch.exp(1j * q[f'smooth_k{i}'] * (x_right - x_left))),
+                        q[f'a{i}'] * q[f'a_phase{i}_propagated']
                 )
                 shared_models_dict[f'b{i}_propagated'] = FunctionModel(
                     lambda q, i=i, x_left=x_left, x_right=x_right:
-                        (q[f'b{i}']
-                         * torch.exp(-1j * q[f'smooth_k{i}'] * (x_right - x_left))),
+                        q[f'b{i}'] * q[f'b_phase{i}_propagated']
                 )
                 # The shifts by x_left/x_right are important for
                 # energies smaller than V, it keeps them from exploding.
                 shared_models_dict[f'phi{i}'] = FunctionModel(
                     lambda q, i=i, x_left=x_left, x_right=x_right: (
-                        q[f'a{i}'] * torch.exp(1j * q[f'smooth_k{i}'] * (q['x'] - x_left))
-                        + q[f'b{i}'] * torch.exp(-1j * q[f'smooth_k{i}'] * (q['x'] - x_left)) # Explodes for large layers
+                        q[f'a{i}'] * q[f'a_phase{i}'] + q[f'b{i}'] * q[f'b_phase{i}']
                     ),
                     output_dtype = params.si_complex_dtype,
                 )
 
                 shared_models_dict[f'SE_loss{i}'] = FunctionModel(
-                    lambda q, with_grad, i=i: \
-                        loss.get_SE_loss(q, with_grad=with_grad, i=i),
+                    lambda q, *, q_full, with_grad, i=i: \
+                        loss.get_SE_loss(q, q_full=q_full, with_grad=with_grad, i=i),
+                    q_full = None,
+                    with_grad = True,
                 )
                 shared_models_dict[f'const_j_loss{i}'] = FunctionModel(
                     lambda q, with_grad, i=i: \
                         loss.get_const_j_loss(q, with_grad=with_grad, i=i),
+                    with_grad = True,
                 )
 
         # Boundaries
@@ -338,10 +373,12 @@ class Device:
             shared_models_dict[f'wc_loss{i}'] = FunctionModel(
                 lambda q, *, with_grad, i=i: \
                     loss.get_wc_loss(q, with_grad=with_grad, i=i),
+                with_grad = True,
             )
             shared_models_dict[f'cc_loss{i}'] = FunctionModel(
                 lambda q, *, with_grad, i=i, N=N: \
                     loss.get_cc_loss(q, with_grad=with_grad, i=i, N=N),
+                with_grad = True,
             )
 
         shared_models = []
@@ -368,24 +405,28 @@ class Device:
                         ],
                     )
 
-                shared_models.append(get_dx_model('multigrid', f'a_output{i}', left_boundary_name))
-                shared_models.append(get_dx_model('multigrid', f'b_output{i}', left_boundary_name))
+                for c in ['a', 'b']:
+                    shared_models.append(get_dx_model(
+                        'multigrid' if params.fd_first_derivatives else 'exact',
+                        f'{c}_output{i}',
+                        left_boundary_name,
+                    ))
 
-                shared_models.append(get_multi_model(
-                    shared_models_dict[f'a{i}_left'],
-                    f'a{i}',
-                    left_boundary_name,
-                    multi_model_name = f'a{i}_left',
-                ))
-                shared_models.append(get_multi_model(
-                    shared_models_dict[f'b{i}_left'],
-                    f'b{i}',
-                    left_boundary_name,
-                    multi_model_name = f'b{i}_left',
-                ))
+                for c in ['a', 'b']:
+                    shared_models.append(get_multi_model(
+                        shared_models_dict[f'{c}{i}_left'],
+                        f'{c}{i}',
+                        left_boundary_name,
+                        multi_model_name = f'{c}{i}_left',
+                    ))
 
-                for grid_name in ([left_boundary_name + '_pdx', left_boundary_name + '_mdx']
-                                  + bulk_names + right_boundary_names):
+                remaining_grids = bulk_names + right_boundary_names
+                if params.fd_first_derivatives:
+                    remaining_grids += [
+                        left_boundary_name + '_pdx',
+                        left_boundary_name + '_mdx',
+                    ]
+                for grid_name in remaining_grids:
                     shared_models.append(MultiModel(
                         lambda qs, grid_name=grid_name, i=i:
                             add_coeffs(qs, grid_name, i),
@@ -409,14 +450,26 @@ class Device:
                         ],
                     )
 
-                shared_models.append(get_dx_model('multigrid', f'a{i}_propagated', right_boundary_name))
-                shared_models.append(get_dx_model('multigrid', f'b{i}_propagated', right_boundary_name))
+                for c in ['a', 'b']:
+                    shared_models.append(get_dx_model(
+                        'multigrid' if params.fd_first_derivatives else 'exact',
+                        f'{c}{i}_propagated',
+                        right_boundary_name,
+                    ))
 
             else: # not params.model_ab
                 for grid_name in [left_boundary_name, right_boundary_name]:
-                    shared_models.append(get_dx_model('multigrid', f'phi{i}', grid_name))
+                    shared_models.append(get_dx_model(
+                        'multigrid' if params.fd_first_derivatives else 'exact',
+                        f'phi{i}',
+                        grid_name,
+                    ))
 
-            shared_models.append(get_dx_model('singlegrid', f'phi{i}', bulk_name))
+            shared_models.append(get_dx_model(
+                'singlegrid' if params.fd_first_derivatives else 'exact',
+                f'phi{i}',
+                bulk_name,
+            ))
 
             # Append the bulk losses
             used_losses[bulk_name] = []
@@ -434,8 +487,16 @@ class Device:
             used_losses[bulk_name].append(f'const_j_loss{i}')
 
         if params.model_ab: # phi_dx hasn't been calculated already
-            shared_models.append(get_dx_model('multigrid', 'phi1', 'boundary0'))
-            shared_models.append(get_dx_model('multigrid', f'phi{N}', f'boundary{N}'))
+            shared_models.append(get_dx_model(
+                'multigrid' if params.fd_first_derivatives else 'exact',
+                'phi1',
+                'boundary0',
+            ))
+            shared_models.append(get_dx_model(
+                'multigrid' if params.fd_first_derivatives else 'exact',
+                f'phi{N}',
+                f'boundary{N}',
+            ))
 
         # Append the boundary losses
         if params.model_ab:
@@ -514,7 +575,8 @@ class Device:
 
             ## Boundaries
             for i in range(0,N+1):
-                for grid_name in [f'boundary{i}', f'boundary{i}_pdx', f'boundary{i}_mdx']:
+                for grid_name in [f'boundary{i}' + dx_string
+                                  for dx_string in dx_strings]:
                     batchers_training[grid_name] = Batcher(
                         qs_training[grid_name],
                         energy_subgrids_training[grid_name],
@@ -585,15 +647,6 @@ class Device:
                         input_transformations = model_transformations,
                     )
                     trained_models_labels.append(f'phi{i}')
-
-                left_boundary_name = f'boundary{i-1}'
-                left_boundary_names = [left_boundary_name + dx_string
-                                       for dx_string in dx_strings]
-                bulk_name = f'bulk{i}'
-                bulk_names = [bulk_name]
-                right_boundary_name = f'boundary{i}'
-                right_boundary_names = [right_boundary_name + dx_string
-                                        for dx_string in dx_strings]
 
             models = []
 
