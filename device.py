@@ -15,7 +15,7 @@ from kolpinn.batching import Batcher
 from kolpinn.model import Model, SimpleNNModel, ConstModel, FunctionModel, \
                           TransformedModel, get_model, \
                           MultiModel, get_multi_model, get_multi_models, \
-                          get_qs
+                          get_combined_multi_model, get_qs
 from kolpinn.training import Trainer
 
 import parameters as params
@@ -593,13 +593,19 @@ class Device:
 
             # Trainer-specific models
 
-            # trainer_models_dict[i][name] = model
-            trainer_models_dict = dict((i,{}) for i in range(1,N+1))
+            models = []
             trained_models_labels = []
 
             ## Layers
             for i in range(1,N+1):
-                models_dict = trainer_models_dict[i]
+                left_boundary_name = f'boundary{i-1}'
+                left_boundary_names = [left_boundary_name + dx_string
+                                       for dx_string in dx_strings]
+                bulk_name = f'bulk{i}'
+                bulk_names = [bulk_name]
+                right_boundary_name = f'boundary{i}'
+                right_boundary_names = [right_boundary_name + dx_string
+                                        for dx_string in dx_strings]
 
                 inputs_labels = ['x']
                 if params.continuous_energy:
@@ -630,46 +636,34 @@ class Device:
                         device = params.device,
                     )
 
-                    models_dict[f'a_output_untransformed{i}'] = TransformedModel(
-                        nn_model,
-                        input_transformations = model_transformations,
-                    )
-                    trained_models_labels.append(f'a_output_untransformed{i}')
-                    models_dict[f'b_output_untransformed{i}'] = TransformedModel(
-                        nn_model2,
-                        input_transformations = model_transformations,
-                    )
-                    trained_models_labels.append(f'b_output_untransformed{i}')
+                    for c in ['a', 'b']:
+                        c_model = TransformedModel(
+                            nn_model if c=='a' else nn_model2,
+                            input_transformations = model_transformations,
+                        )
+                        models.append(get_combined_multi_model(
+                            c_model,
+                            f'{c}_output_untransformed{i}',
+                            left_boundary_names + bulk_names + right_boundary_names,
+                            combined_dimension_name = 'x',
+                            required_quantities_labels = ['x', 'E'],
+                        ))
+                        trained_models_labels.append(f'{c}_output_untransformed{i}')
 
                 else:
-                    models_dict[f'phi{i}'] = TransformedModel(
+                    phi_model = TransformedModel(
                         nn_model,
                         input_transformations = model_transformations,
                     )
+                    models.append(get_combined_multi_model(
+                        phi_model,
+                        f'phi{i}',
+                        left_boundary_names + bulk_names + right_boundary_names,
+                        combined_dimension_name = 'x',
+                        required_quantities_labels = ['x'],
+                    ))
                     trained_models_labels.append(f'phi{i}')
 
-            models = []
-
-            ## Layers
-            for i in range(1,N+1):
-                grid_name = f'bulk{i}'
-                models_dict = trainer_models_dict[i]
-                for model_name, model in models_dict.items():
-                    models.append(get_multi_model(model, model_name, grid_name))
-
-            ## Boundaries
-            for i in range(0,N+1):
-                for dx_string in dx_strings:
-                    grid_name = f'boundary{i}' + dx_string
-                    js = []
-                    if i > 0:
-                        js.append(i)
-                    if i < N:
-                        js.append(i+1)
-                    for j in js:
-                        models_dict = trainer_models_dict[j]
-                        for model_name, model in models_dict.items():
-                            models.append(get_multi_model(model, model_name, grid_name))
 
             models += shared_models
 
