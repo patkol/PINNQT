@@ -156,6 +156,7 @@ class Device:
         """
 
         N = len(potentials)-2
+        device_thickness = boundaries[-1] - boundaries[0]
         assert len(m_effs) == N+2
         assert len(boundaries) == N+1
         assert sorted(boundaries) == boundaries, boundaries
@@ -177,13 +178,18 @@ class Device:
             physics.E_STEP,
             dtype=params.si_real_dtype,
         )
+        voltages = torch.arange(
+            physics.VOLTAGE_MIN,
+            physics.VOLTAGE_MAX,
+            physics.VOLTAGE_STEP,
+            dtype=params.si_real_dtype,
+        )
 
         if params.loaded_parameters_index is not None and not params.continuous_energy:
             parameters_path = io.get_parameters_path(params.loaded_parameters_index)
             saved_energies = sorted([float(Path(s).stem[2:]) * physics.EV
                                      for s in os.listdir(parameters_path)])
             energies = torch.tensor(saved_energies, dtype=params.si_real_dtype)
-
 
 
         # Grids
@@ -198,10 +204,12 @@ class Device:
             x_right = self.boundaries[i]
 
             self.grids_training[grid_name] = Grid({
+                'voltage': voltages,
                 'E': energies,
                 'x': torch.linspace(x_left, x_right, params.N_x_training),
             })
             self.grids_validation[grid_name] = Grid({
+                'voltage': voltages,
                 'E': energies,
                 'x': torch.linspace(x_left, x_right, params.N_x_validation),
             })
@@ -212,10 +220,12 @@ class Device:
                 grid_name = f'boundary{i}' + dx_string
                 x = self.boundaries[i] + dx_shift
                 self.grids_training[grid_name] = Grid({
+                    'voltage': voltages,
                     'E': energies,
                     'x': torch.tensor([x], dtype=params.si_real_dtype),
                 })
                 self.grids_validation[grid_name] = Grid({
+                    'voltage': voltages,
                     'E': energies,
                     'x': torch.tensor([x], dtype=params.si_real_dtype),
                 })
@@ -234,10 +244,15 @@ class Device:
 
         ## Layers and contacts
         for i, models_dict in const_models_dict.items():
-            models_dict[f'V{i}'] = get_model(
+            models_dict[f'V_no_voltage{i}'] = get_model(
                 potentials[i],
                 model_dtype = params.si_real_dtype,
                 output_dtype = params.si_real_dtype,
+            )
+            models_dict[f'V{i}'] = FunctionModel(
+                lambda q, i=i: (q[f'V_no_voltage{i}']
+                                - q['voltage'] * physics.EV * q['x']
+                                  / device_thickness),
             )
             models_dict[f'm_eff{i}'] = get_model(
                 m_effs[i],
@@ -522,33 +537,43 @@ class Device:
 
         # Trainers
 
-        if params.continuous_energy:
-            #energy_strings = [f'{energies[0]/physics.EV:.16e}_to_{energies[.1]/physics.EV:.16e}']
-            energy_strings = [f'all_energies']
-            energy_subgrids_training_list = [self.grids_training]
-            energy_subgrids_validation_list = [self.grids_validation]
-        else:
-            energy_strings = []
-            energy_subgrids_training_list = []
-            energy_subgrids_validation_list = []
+        trainer_voltages = ['all']
+        trainer_energies = ['all']
+        if not params.continuous_voltage:
+            trainer_voltages = voltages.cpu().numpy()
+        if not params.continuous_energy:
+            trainer_energies = energies.cpu().numpy()
 
-            for energy in energies.cpu().numpy():
-                energy_strings.append(f'E={energy/physics.EV:.16e}')
-                energy_subgrids_training_list.append(dict(
-                    (label, grid.get_subgrid({'E': lambda E: E == energy},
-                                             copy_all = True))
-                    for label, grid in self.grids_training.items()
-                ))
-                energy_subgrids_validation_list.append(dict(
-                    (label, grid.get_subgrid({'E': lambda E: E == energy},
-                                             copy_all = True))
-                    for label, grid in self.grids_validation.items()
-                ))
+        trainer_names = []
+        trainer_subgrids_training_list = []
+        trainer_subgrids_validation_list = []
 
-        for energy_string, energy_subgrids_training, energy_subgrids_validation \
-                in zip(energy_strings, energy_subgrids_training_list, energy_subgrids_validation_list):
-            qs_training = get_qs(energy_subgrids_training, const_models, quantities_requiring_grad)
-            qs_validation = get_qs(energy_subgrids_validation, const_models, quantities_requiring_grad)
+        for voltage, energy in itertools.product(trainer_voltages, trainer_energies):
+            subgrid_dict = {}
+            if voltage == 'all':
+                voltage_string = 'all'
+            else:
+                voltage_string = f'{voltage:.16e}'
+                subgrid_dict['voltage'] = lambda x, voltage=voltage: x == voltage
+            if energy == 'all':
+                energy_string = 'all'
+            else:
+                energy_string = f'{energy:.16e}'
+                subgrid_dict['E'] = lambda x, energy=energy: x == energy
+            trainer_names.append(f'voltage={voltage_string}_energy={energy_string}')
+            trainer_subgrids_training_list.append(dict(
+                (label, grid.get_subgrid(subgrid_dict, copy_all = True))
+                for label, grid in self.grids_training.items()
+            ))
+            trainer_subgrids_validation_list.append(dict(
+                (label, grid.get_subgrid(subgrid_dict, copy_all = True))
+                for label, grid in self.grids_validation.items()
+            ))
+
+        for trainer_name, trainer_subgrids_training, trainer_subgrids_validation \
+                in zip(trainer_names, trainer_subgrids_training_list, trainer_subgrids_validation_list):
+            qs_training = get_qs(trainer_subgrids_training, const_models, quantities_requiring_grad)
+            qs_validation = get_qs(trainer_subgrids_validation, const_models, quantities_requiring_grad)
 
 
             # Batchers
@@ -562,13 +587,13 @@ class Device:
 
                 batchers_training[grid_name] = Batcher(
                     qs_training[grid_name],
-                    energy_subgrids_training[grid_name],
+                    trainer_subgrids_training[grid_name],
                     ['x'],
                     [params.batch_size_x],
                 )
                 batchers_validation[grid_name] = Batcher(
                     qs_validation[grid_name],
-                    energy_subgrids_validation[grid_name],
+                    trainer_subgrids_validation[grid_name],
                     ['x'],
                     [params.batch_size_x],
                 )
@@ -579,13 +604,13 @@ class Device:
                                   for dx_string in dx_strings]:
                     batchers_training[grid_name] = Batcher(
                         qs_training[grid_name],
-                        energy_subgrids_training[grid_name],
+                        trainer_subgrids_training[grid_name],
                         [],
                         [],
                     )
                     batchers_validation[grid_name] = Batcher(
                         qs_validation[grid_name],
-                        energy_subgrids_validation[grid_name],
+                        trainer_subgrids_validation[grid_name],
                         [],
                         [],
                     )
@@ -607,9 +632,12 @@ class Device:
                 right_boundary_names = [right_boundary_name + dx_string
                                         for dx_string in dx_strings]
 
-                inputs_labels = ['x']
+                inputs_labels = []
+                if params.continuous_voltage:
+                    inputs_labels.append('voltage')
                 if params.continuous_energy:
                     inputs_labels.append('E')
+                inputs_labels.append('x')
                 nn_model = SimpleNNModel(
                     inputs_labels,
                     params.activation_function,
@@ -646,7 +674,7 @@ class Device:
                             f'{c}_output_untransformed{i}',
                             left_boundary_names + bulk_names + right_boundary_names,
                             combined_dimension_name = 'x',
-                            required_quantities_labels = ['x', 'E'],
+                            required_quantities_labels = ['voltage', 'E', 'x'],
                         ))
                         trained_models_labels.append(f'{c}_output_untransformed{i}')
 
@@ -660,7 +688,7 @@ class Device:
                         f'phi{i}',
                         left_boundary_names + bulk_names + right_boundary_names,
                         combined_dimension_name = 'x',
-                        required_quantities_labels = ['x'],
+                        required_quantities_labels = ['voltage', 'E', 'x'],
                     ))
                     trained_models_labels.append(f'phi{i}')
 
@@ -668,7 +696,7 @@ class Device:
             models += shared_models
 
 
-            self.trainers[energy_string] = Trainer(
+            self.trainers[trainer_name] = Trainer(
                 models = models,
                 batchers_training = batchers_training,
                 batchers_validation = batchers_validation,
@@ -679,9 +707,9 @@ class Device:
                 Scheduler = params.Scheduler,
                 scheduler_kwargs = params.scheduler_kwargs,
                 saved_parameters_index = saved_parameters_index,
-                name = energy_string,
+                name = trainer_name,
             )
-            self.trainers[energy_string].load(
+            self.trainers[trainer_name].load(
                 params.loaded_parameters_index,
                 load_optimizer = params.load_optimizer,
                 load_scheduler = params.load_scheduler,

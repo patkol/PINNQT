@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from kolpinn.mathematics import complex_abs2
+from kolpinn.grid_quantities import Subgrid, restrict_quantities
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
 
@@ -32,322 +33,334 @@ def visualize(device):
     left_boundary_index = '0'
     right_boundary_index = str(device.n_layers)
 
-    q_left = qs['boundary'+left_boundary_index]
-    q_right = qs['boundary'+right_boundary_index]
+    voltages = next(iter(qs.values())).grid['voltage']
+    for voltage_index, voltage in enumerate(voltages):
+        voltage_path_prefix = f'{path_prefix}{voltage:.2f}V/'
+        voltage_index_dict = {'voltage': [voltage_index]}
 
-    dE_dk_left = torch.sqrt(2 * physics.H_BAR**2
-                            * (q_left['E'] - q_left['V0'])
-                            / q_left['m_eff0'])
+        q_left = qs['boundary'+left_boundary_index]
+        left_boundary_grid = Subgrid(q_left.grid, voltage_index_dict, copy_all=False)
+        q_left = restrict_quantities(q_left, left_boundary_grid)
+        q_right = qs['boundary'+right_boundary_index]
+        right_boundary_grid = Subgrid(q_right.grid, voltage_index_dict, copy_all=False)
+        q_right = restrict_quantities(q_right, right_boundary_grid)
 
-    # Layers
-    for i in range(1, device.n_layers+1):
-        q = qs['bulk' + str(i)]
+        dE_dk_left = torch.sqrt(2 * physics.H_BAR**2
+                                * (q_left['E'] - q_left['V0'])
+                                / q_left['m_eff0'])
 
-        ## Wave function
-        phi_i = q['phi'+str(i)]
-        save_lineplot(
-            complex_abs2(phi_i),
-            q.grid,
-            f'|phi{i}|^2',
-            'x',
-            'E',
-            x_unit = physics.NM,
-            x_unit_name = 'nm',
-            lines_unit = physics.EV,
-            lines_unit_name = 'eV',
-            path_prefix = path_prefix,
-        )
-        save_lineplot(
-            torch.real(phi_i),
-            q.grid,
-            f'Re(phi{i})',
-            'x',
-            'E',
-            x_unit = physics.NM,
-            x_unit_name = 'nm',
-            lines_unit = physics.EV,
-            lines_unit_name = 'eV',
-            path_prefix = path_prefix,
-        )
-        save_lineplot(
-            torch.imag(phi_i),
-            q.grid,
-            f'Im(phi{i})',
-            'x',
-            'E',
-            x_unit = physics.NM,
-            x_unit_name = 'nm',
-            lines_unit = physics.EV,
-            lines_unit_name = 'eV',
-            path_prefix = path_prefix,
-        )
-        visualization.save_complex_polar_plot(
-            phi_i,
-            q.grid,
-            f'phi{i}',
-            'x',
-            'E',
-            lines_unit = physics.EV,
-            lines_unit_name = 'eV',
-            path_prefix = path_prefix,
-        )
+        # Layers
+        for i in range(1, device.n_layers+1):
+            q = qs['bulk' + str(i)]
+            bulk_grid = Subgrid(q.grid, voltage_index_dict, copy_all=False)
+            q = restrict_quantities(q, bulk_grid)
 
-
-        ## a, b
-        if params.model_ab:
-            visualization.save_complex_polar_plot(
-                q[f'a{i}'],
+            ## Wave function
+            phi_i = q['phi'+str(i)]
+            save_lineplot(
+                complex_abs2(phi_i),
                 q.grid,
-                f'a{i}',
+                f'|phi{i}|^2',
+                'x',
+                'E',
+                x_unit = physics.NM,
+                x_unit_name = 'nm',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+            save_lineplot(
+                torch.real(phi_i),
+                q.grid,
+                f'Re(phi{i})',
+                'x',
+                'E',
+                x_unit = physics.NM,
+                x_unit_name = 'nm',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+            save_lineplot(
+                torch.imag(phi_i),
+                q.grid,
+                f'Im(phi{i})',
+                'x',
+                'E',
+                x_unit = physics.NM,
+                x_unit_name = 'nm',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+            visualization.save_complex_polar_plot(
+                phi_i,
+                q.grid,
+                f'phi{i}',
                 'x',
                 'E',
                 lines_unit = physics.EV,
                 lines_unit_name = 'eV',
-                path_prefix = path_prefix,
+                path_prefix = voltage_path_prefix,
             )
-            visualization.save_complex_polar_plot(
-                q[f'b{i}'],
+
+
+            ## a, b
+            if params.model_ab:
+                visualization.save_complex_polar_plot(
+                    q[f'a{i}'],
+                    q.grid,
+                    f'a{i}',
+                    'x',
+                    'E',
+                    lines_unit = physics.EV,
+                    lines_unit_name = 'eV',
+                    path_prefix = voltage_path_prefix,
+                )
+                visualization.save_complex_polar_plot(
+                    q[f'b{i}'],
+                    q.grid,
+                    f'b{i}',
+                    'x',
+                    'E',
+                    lines_unit = physics.EV,
+                    lines_unit_name = 'eV',
+                    path_prefix = voltage_path_prefix,
+                )
+
+                fig, ax = plt.subplots()
+                add_lineplot(
+                    ax,
+                    torch.real(q[f'a_output_untransformed{i}']),
+                    q.grid,
+                    f'Re(a_output_untransformed{i})',
+                    'x',
+                    'E',
+                    x_unit = physics.NM,
+                    c = 'blue',
+                )
+                add_lineplot(
+                    ax,
+                    torch.imag(q[f'a_output_untransformed{i}']),
+                    q.grid,
+                    f'Im(a_output_untransformed{i})',
+                    'x',
+                    'E',
+                    x_unit = physics.NM,
+                    c = 'blue',
+                    linestyle = 'dashed',
+                )
+                add_lineplot(
+                    ax,
+                    torch.real(q[f'b_output_untransformed{i}']),
+                    q.grid,
+                    f'Re(b_output_untransformed{i})',
+                    'x',
+                    'E',
+                    x_unit = physics.NM,
+                    c = 'red',
+                )
+                add_lineplot(
+                    ax,
+                    torch.imag(q[f'b_output_untransformed{i}']),
+                    q.grid,
+                    f'Im(b_output_untransformed{i})',
+                    'x',
+                    'E',
+                    x_unit = physics.NM,
+                    c = 'red',
+                    linestyle = 'dashed',
+                )
+                ax.set_xlabel('x [nm]')
+                ax.grid(visible=True)
+                fig.savefig(voltage_path_prefix + f'untransformed_outputs{i}.pdf')
+                plt.close(fig)
+
+
+            ## Probability current
+            prob_current = torch.imag(physics.H_BAR * torch.conj(phi_i)
+                                      * q[f'phi{i}_dx'] / q[f'm_eff{i}'])
+            save_lineplot(
+                prob_current,
                 q.grid,
-                f'b{i}',
+                f'prob_current{i}',
                 'x',
                 'E',
+                x_unit = physics.NM,
+                x_unit_name = 'nm',
                 lines_unit = physics.EV,
                 lines_unit_name = 'eV',
-                path_prefix = path_prefix,
+                quantity_unit = physics.H_BAR / physics.M_E / physics.NM,
+                quantity_unit_name = 'hbar/m0/nm',
+                path_prefix = voltage_path_prefix,
             )
 
-            fig, ax = plt.subplots()
-            add_lineplot(
-                ax,
-                torch.real(q[f'a_output_untransformed{i}']),
+            ## DOS
+            dos = 1/(2*np.pi) * complex_abs2(phi_i) / dE_dk_left
+            save_heatmap(
+                dos,
                 q.grid,
-                f'Re(a_output_untransformed{i})',
+                f'DOS{i}',
+                'x',
+                'E',
+                q.grid,
+                quantity_unit = 1/physics.NM/physics.EV,
+                quantity_unit_name = '1/nm/eV',
+                x_unit = physics.NM, x_unit_name = 'nm',
+                y_unit = physics.EV, y_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+
+            ## Losses
+            save_lineplot(
+                q[f'SE_loss{i}'],
+                q.grid,
+                f'SE_loss{i}',
                 'x',
                 'E',
                 x_unit = physics.NM,
-                c = 'blue',
+                x_unit_name = 'nm',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                quantity_unit = physics.H_BAR / physics.M_E / physics.NM,
+                quantity_unit_name = 'hbar/m0/nm',
+                path_prefix = voltage_path_prefix,
             )
+
+
+        # Transmission and reflection probabilities
+
+        abs_group_velocity_left_contact = torch.sqrt(torch.abs(
+            2*(q_left['E']-q_left['V'+left_contact_index])
+            / q_left['m_eff'+left_contact_index]
+        ))
+        abs_group_velocity_right_contact = torch.sqrt(torch.abs(
+            2*(q_right['E']-q_right['V'+right_contact_index])
+            / q_right['m_eff'+right_contact_index]
+        ))
+        v_ratio = abs_group_velocity_right_contact / abs_group_velocity_left_contact
+
+        b_l = q_left['phi'+left_layer_index] - physics.A_L
+        a_r = q_right['phi'+right_layer_index] - physics.B_R
+
+
+        fig, ax = plt.subplots()
+        if physics.A_L == 1:
             add_lineplot(
                 ax,
-                torch.imag(q[f'a_output_untransformed{i}']),
-                q.grid,
-                f'Im(a_output_untransformed{i})',
-                'x',
+                complex_abs2(b_l),
+                q_left.grid,
+                'Reflection probability',
                 'E',
-                x_unit = physics.NM,
-                c = 'blue',
-                linestyle = 'dashed',
-            )
-            add_lineplot(
-                ax,
-                torch.real(q[f'b_output_untransformed{i}']),
-                q.grid,
-                f'Re(b_output_untransformed{i})',
-                'x',
-                'E',
-                x_unit = physics.NM,
-                c = 'red',
-            )
-            add_lineplot(
-                ax,
-                torch.imag(q[f'b_output_untransformed{i}']),
-                q.grid,
-                f'Im(b_output_untransformed{i})',
-                'x',
-                'E',
-                x_unit = physics.NM,
-                c = 'red',
-                linestyle = 'dashed',
-            )
-            ax.set_xlabel('x [nm]')
-            ax.grid(visible=True)
-            fig.savefig(path_prefix + f'untransformed_outputs{i}.pdf')
-            plt.close(fig)
-
-
-        ## Probability current
-        prob_current = torch.imag(physics.H_BAR * torch.conj(phi_i)
-                                  * q[f'phi{i}_dx'] / q[f'm_eff{i}'])
-        save_lineplot(
-            prob_current,
-            q.grid,
-            f'prob_current{i}',
-            'x',
-            'E',
-            x_unit = physics.NM,
-            x_unit_name = 'nm',
-            lines_unit = physics.EV,
-            lines_unit_name = 'eV',
-            quantity_unit = physics.H_BAR / physics.M_E / physics.NM,
-            quantity_unit_name = 'hbar/m0/nm',
-            path_prefix = path_prefix,
-        )
-
-        ## DOS
-        dos = 1/(2*np.pi) * complex_abs2(phi_i) / dE_dk_left
-        save_heatmap(
-            dos,
-            q.grid,
-            f'DOS{i}',
-            'x',
-            'E',
-            q.grid,
-            quantity_unit = 1/physics.NM/physics.EV,
-            quantity_unit_name = '1/nm/eV',
-            x_unit = physics.NM, x_unit_name = 'nm',
-            y_unit = physics.EV, y_unit_name = 'eV',
-            path_prefix=path_prefix,
-        )
-
-        ## Losses
-        save_lineplot(
-            q[f'SE_loss{i}'],
-            q.grid,
-            f'SE_loss{i}',
-            'x',
-            'E',
-            x_unit = physics.NM,
-            x_unit_name = 'nm',
-            lines_unit = physics.EV,
-            lines_unit_name = 'eV',
-            quantity_unit = physics.H_BAR / physics.M_E / physics.NM,
-            quantity_unit_name = 'hbar/m0/nm',
-            path_prefix = path_prefix,
-        )
-
-
-    # Transmission and reflection probabilities
-
-    abs_group_velocity_left_contact = torch.sqrt(torch.abs(
-        2*(q_left['E']-q_left['V'+left_contact_index])
-        / q_left['m_eff'+left_contact_index]
-    ))
-    abs_group_velocity_right_contact = torch.sqrt(torch.abs(
-        2*(q_right['E']-q_right['V'+right_contact_index])
-        / q_right['m_eff'+right_contact_index]
-    ))
-    v_ratio = abs_group_velocity_right_contact / abs_group_velocity_left_contact
-
-    b_l = q_left['phi'+left_layer_index] - physics.A_L
-    a_r = q_right['phi'+right_layer_index] - physics.B_R
-
-
-    fig, ax = plt.subplots()
-    if physics.A_L == 1:
-        add_lineplot(
-            ax,
-            complex_abs2(b_l),
-            q_left.grid,
-            'Reflection probability',
-            'E',
-            x_unit=physics.EV,
-            marker = 'x',
-            linewidth = 0,
-            c='blue',
-        )
-        add_lineplot(
-            ax,
-            v_ratio * complex_abs2(a_r),
-            q_right.grid,
-            'Transmission probability',
-            'E',
-            x_unit=physics.EV,
-            marker = 'x',
-            linewidth = 0,
-            c='orange',
-        )
-
-        try:
-            energies_matlab = np.loadtxt(
-                f'matlab_results/E_{params.simulated_device_name}.txt',
-                delimiter=',',
-            )
-            a_r_2_left_matlab = np.loadtxt(
-                f'matlab_results/TEL_{params.simulated_device_name}.txt',
-                delimiter=',',
-            )
-            ax.plot(
-                energies_matlab,
-                a_r_2_left_matlab,
-                label='MATLAB Transmission',
-                linestyle='dashed',
-                c='orange',
-            )
-            ax.plot(
-                energies_matlab,
-                1 - a_r_2_left_matlab,
-                label='1 - MATLAB Transmission',
-                linestyle='dashed',
+                x_unit=physics.EV,
+                marker = 'x',
+                linewidth = 0,
                 c='blue',
             )
-        except:
-            pass
-
-    if physics.B_R == 1:
-        add_lineplot(
-            ax,
-            complex_abs2(a_r),
-            q_right.grid,
-            'Reflection probability',
-            'E',
-            x_unit=physics.EV,
-            marker = 'x',
-            linewidth = 0,
-            c='blue',
-        )
-        add_lineplot(
-            ax,
-            complex_abs2(b_l) / v_ratio,
-            q_left.grid,
-            'Transmission probability',
-            'E',
-            x_unit=physics.EV,
-            marker = 'x',
-            linewidth = 0,
-            c='orange',
-        )
-
-        try:
-            energies_matlab = np.loadtxt(
-                f'matlab_results/E_{params.simulated_device_name}.txt',
-                delimiter=',',
-            )
-            b_l_2_right_matlab = np.loadtxt(
-                f'matlab_results/TER_{params.simulated_device_name}.txt',
-                delimiter=',',
-            )
-            ax.plot(
-                energies_matlab,
-                b_l_2_right_matlab,
-                label='MATLAB Transmission',
-                linestyle='dashed',
+            add_lineplot(
+                ax,
+                v_ratio * complex_abs2(a_r),
+                q_right.grid,
+                'Transmission probability',
+                'E',
+                x_unit=physics.EV,
+                marker = 'x',
+                linewidth = 0,
                 c='orange',
             )
-            ax.plot(
-                energies_matlab,
-                1 - b_l_2_right_matlab,
-                label='1 - MATLAB Transmission',
-                linestyle='dashed',
+
+            try:
+                matlab_path = f'matlab_results/{voltage:.2f}V/'
+                energies_matlab = np.loadtxt(
+                        f'{matlab_path}E_{params.simulated_device_name}.txt',
+                    delimiter=',',
+                )
+                a_r_2_left_matlab = np.loadtxt(
+                    f'{matlab_path}TEL_{params.simulated_device_name}.txt',
+                    delimiter=',',
+                )
+                ax.plot(
+                    energies_matlab,
+                    a_r_2_left_matlab,
+                    label='MATLAB Transmission',
+                    linestyle='dashed',
+                    c='orange',
+                )
+                ax.plot(
+                    energies_matlab,
+                    1 - a_r_2_left_matlab,
+                    label='1 - MATLAB Transmission',
+                    linestyle='dashed',
+                    c='blue',
+                )
+            except:
+                pass
+
+        if physics.B_R == 1:
+            add_lineplot(
+                ax,
+                complex_abs2(a_r),
+                q_right.grid,
+                'Reflection probability',
+                'E',
+                x_unit=physics.EV,
+                marker = 'x',
+                linewidth = 0,
                 c='blue',
             )
-        except:
-            pass
+            add_lineplot(
+                ax,
+                complex_abs2(b_l) / v_ratio,
+                q_left.grid,
+                'Transmission probability',
+                'E',
+                x_unit=physics.EV,
+                marker = 'x',
+                linewidth = 0,
+                c='orange',
+            )
 
-    ax.set_xlabel('E [eV]')
-    ax.set_ylim(bottom=-0.1, top=1.1)
-    ax.grid(visible=True)
-    ax.legend()
-    fig.savefig(path_prefix + 'coefficients_vs_E.pdf')
-    plt.close(fig)
+            try:
+                energies_matlab = np.loadtxt(
+                    f'matlab_results/E_{params.simulated_device_name}.txt',
+                    delimiter=',',
+                )
+                b_l_2_right_matlab = np.loadtxt(
+                    f'matlab_results/TER_{params.simulated_device_name}.txt',
+                    delimiter=',',
+                )
+                ax.plot(
+                    energies_matlab,
+                    b_l_2_right_matlab,
+                    label='MATLAB Transmission',
+                    linestyle='dashed',
+                    c='orange',
+                )
+                ax.plot(
+                    energies_matlab,
+                    1 - b_l_2_right_matlab,
+                    label='1 - MATLAB Transmission',
+                    linestyle='dashed',
+                    c='blue',
+                )
+            except:
+                pass
 
-    fig, ax = plt.subplots()
-    add_lineplot(ax, torch.real(b_l), q_left.grid, 'Re(b_l)', 'E', x_unit=physics.EV)
-    add_lineplot(ax, torch.imag(b_l), q_left.grid, 'Im(b_l)', 'E', x_unit=physics.EV)
-    add_lineplot(ax, torch.real(a_r), q_right.grid, 'Re(a_r)', 'E', x_unit=physics.EV)
-    add_lineplot(ax, torch.imag(a_r), q_right.grid, 'Im(a_r)', 'E', x_unit=physics.EV)
-    ax.set_xlabel('E [eV]')
-    ax.set_ylim(bottom=-1.1, top=1.1)
-    ax.grid(visible=True)
-    ax.legend()
-    fig.savefig(path_prefix + 'coefficients_vs_E_complex.pdf')
-    plt.close(fig)
+        ax.set_xlabel('E [eV]')
+        ax.set_ylim(bottom=-0.1, top=1.1)
+        ax.grid(visible=True)
+        ax.legend()
+        fig.savefig(voltage_path_prefix + 'coefficients_vs_E.pdf')
+        plt.close(fig)
+
+        fig, ax = plt.subplots()
+        add_lineplot(ax, torch.real(b_l), q_left.grid, 'Re(b_l)', 'E', x_unit=physics.EV)
+        add_lineplot(ax, torch.imag(b_l), q_left.grid, 'Im(b_l)', 'E', x_unit=physics.EV)
+        add_lineplot(ax, torch.real(a_r), q_right.grid, 'Re(a_r)', 'E', x_unit=physics.EV)
+        add_lineplot(ax, torch.imag(a_r), q_right.grid, 'Im(a_r)', 'E', x_unit=physics.EV)
+        ax.set_xlabel('E [eV]')
+        ax.set_ylim(bottom=-1.1, top=1.1)
+        ax.grid(visible=True)
+        ax.legend()
+        fig.savefig(voltage_path_prefix + 'coefficients_vs_E_complex.pdf')
+        plt.close(fig)

@@ -17,9 +17,14 @@ NM = 1e-9
 
 E_MIN = 0.2 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.55 * EV
-E_MIN += 1e-6 * EV # Avoiding problems at E == V (sqrt(E-V)' not defined)
-E_MAX += 2e-6 * EV # Making sure that E_MAX is used
+E_MAX = 0.3 * EV
+E_MIN += 1e-6 * EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
+E_MAX += 2e-6 * EV  # Making sure that E_MAX is used
+
+VOLTAGE_MIN = 0
+VOLTAGE_STEP = 0.01
+VOLTAGE_MAX = 0.1
+VOLTAGE_MAX += 1e-6  # Making sure that VOLTAGE_MAX is used
 
 A_L = 1 # Amplitude of the wave incoming from the left
 B_R = 0 # Amplitude of the wave incoming from the right
@@ -31,60 +36,13 @@ dx = 0.01 * NM  # Used for derivatives
 
 # Devices
 
-# V_applied: Electron potential due to an applied voltage of `V` over a distance `d`
-V_applied = lambda V, d, q: -V * EV * q['x'] / d
-
 device_kwargs_dict = {
     'barrier1': {
         'boundaries': [0, 5 * NM],
         'potentials': [0, 0.3 * EV, 0],
         'm_effs': [0.065 * M_E, 0.1 * M_E, 0.065 * M_E],
     },
-    'field_barrier1': {
-        'boundaries': [0, 15 * NM, 19 * NM, 34 * NM],
-        'potentials': [
-            0,
-            lambda q: V_applied(0.1, 34 * NM, q),
-            lambda q: V_applied(0.1, 34 * NM, q) + 0.3 * EV,
-            lambda q: V_applied(0.1, 34 * NM, q),
-            -0.1 * EV,
-        ],
-        'm_effs': [
-            0.065 * M_E,
-            0.065 * M_E,
-            0.1 * M_E,
-            0.065 * M_E,
-            0.065 * M_E,
-        ],
-    },
-    # Same as 1, but using one NN only
-    'field_barrier2': {
-        'boundaries': [0, 34 * NM],
-        'potentials': [
-            0,
-            lambda q: (V_applied(0.1, 34 * NM, q)
-                       + 0.3 * EV * (q['x'] > 15*NM) * (q['x'] < 19*NM)),
-            -0.1 * EV,
-        ],
-        'm_effs': [
-            0.065 * M_E,
-            lambda q: (0.065 * M_E
-                       + 0.035 * M_E * (q['x'] > 15*NM) * (q['x'] < 19*NM)),
-            0.065 * M_E,
-        ],
-    },
-    'rtd0': {
-        'boundaries': [0 * NM, 2.6 * NM, 6.6 * NM, 9.2 * NM],
-        'potentials': [0, 0.3 * EV, 0, 0.3 * EV, 0],
-        'm_effs': [
-            0.065 * M_E,
-            0.1 * M_E,
-            0.065 * M_E,
-            0.1 * M_E,
-            0.065 * M_E,
-        ],
-    },
-    'rtd0_extended': {
+    'rtd1': {
         'boundaries': [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
         'potentials': [0 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0 * EV],
         'm_effs': [
@@ -97,24 +55,14 @@ device_kwargs_dict = {
             0.065 * M_E,
         ],
     },
-    'rtd0.1': {
-        'boundaries': [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
-        'potentials': [
-            0 * EV,
-            lambda q: V_applied(0.1, 29.2 * NM, q),
-            lambda q: V_applied(0.1, 29.2 * NM, q) + 0.3 * EV,
-            lambda q: V_applied(0.1, 29.2 * NM, q),
-            lambda q: V_applied(0.1, 29.2 * NM, q) + 0.3 * EV,
-            lambda q: V_applied(0.1, 29.2 * NM, q),
-            -0.1 * EV,
-        ],
+    'rtd1_no_tails': {
+        'boundaries': [0 * NM, 2.6 * NM, 6.6 * NM, 9.2 * NM],
+        'potentials': [0, 0.3 * EV, 0, 0.3 * EV, 0],
         'm_effs': [
             0.065 * M_E,
-            0.065 * M_E,
             0.1 * M_E,
             0.065 * M_E,
             0.1 * M_E,
-            0.065 * M_E,
             0.065 * M_E,
         ],
     },
