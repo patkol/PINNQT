@@ -33,6 +33,27 @@ def visualize(device):
     left_boundary_index = '0'
     right_boundary_index = str(device.n_layers)
 
+
+    # Loss vs. E plots
+
+    for grid_name, loss_names in device.used_losses.items():
+        q = qs[grid_name]
+        for loss_name in loss_names:
+            save_lineplot(
+                q[loss_name],
+                q.grid,
+                loss_name,
+                'E',
+                'voltage',
+                path_prefix = path_prefix,
+                x_unit = physics.EV,
+                x_unit_name = 'eV',
+                lines_unit_name = 'V',
+            )
+
+
+    # Per voltage plots
+
     voltages = next(iter(qs.values())).grid['voltage']
     for voltage_index, voltage in enumerate(voltages):
         voltage_path_prefix = f'{path_prefix}{voltage:.2f}V/'
@@ -349,7 +370,7 @@ def visualize(device):
         ax.set_xlabel('E [eV]')
         ax.set_ylim(bottom=-0.1, top=1.1)
         ax.grid(visible=True)
-        ax.legend()
+        #ax.legend()
         fig.savefig(voltage_path_prefix + 'coefficients_vs_E.pdf')
         plt.close(fig)
 
@@ -364,3 +385,12 @@ def visualize(device):
         ax.legend()
         fig.savefig(voltage_path_prefix + 'coefficients_vs_E_complex.pdf')
         plt.close(fig)
+
+
+
+
+
+
+
+
+

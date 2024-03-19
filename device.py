@@ -397,7 +397,7 @@ class Device:
             )
 
         shared_models = []
-        used_losses = {}
+        self.used_losses = {}
 
         # Compose `shared_models` layer by layer
         for i in range(1,N+1):
@@ -487,19 +487,19 @@ class Device:
             ))
 
             # Append the bulk losses
-            used_losses[bulk_name] = []
+            self.used_losses[bulk_name] = []
             shared_models.append(get_multi_model(
                 shared_models_dict[f'SE_loss{i}'],
                 f'SE_loss{i}',
                 bulk_name,
             ))
-            used_losses[bulk_name].append(f'SE_loss{i}')
+            self.used_losses[bulk_name].append(f'SE_loss{i}')
             shared_models.append(get_multi_model(
                 shared_models_dict[f'const_j_loss{i}'],
                 f'const_j_loss{i}',
                 bulk_name,
             ))
-            used_losses[bulk_name].append(f'const_j_loss{i}')
+            self.used_losses[bulk_name].append(f'const_j_loss{i}')
 
         if params.model_ab: # phi_dx hasn't been calculated already
             shared_models.append(get_dx_model(
@@ -517,21 +517,21 @@ class Device:
         if params.model_ab:
             for i in (0,N):
                 grid_name = f'boundary{i}'
-                used_losses[grid_name] = []
+                self.used_losses[grid_name] = []
                 shared_models.append(get_multi_model(
                     shared_models_dict[f'cc_loss{i}'],
                     f'cc_loss{i}',
                     grid_name,
                 ))
-                used_losses[grid_name].append(f'cc_loss{i}')
+                self.used_losses[grid_name].append(f'cc_loss{i}')
         else:
             for i in range(0,N+1):
                 grid_name = f'boundary{i}'
-                used_losses[grid_name] = [f'wc_loss{i}', f'cc_loss{i}']
+                self.used_losses[grid_name] = [f'wc_loss{i}', f'cc_loss{i}']
                 shared_models += get_multi_models(
                     shared_models_dict,
                     grid_name,
-                    used_model_names = used_losses[grid_name],
+                    used_model_names = self.used_losses[grid_name],
                 )
 
 
@@ -700,7 +700,7 @@ class Device:
                 models = models,
                 batchers_training = batchers_training,
                 batchers_validation = batchers_validation,
-                used_losses = used_losses,
+                used_losses = self.used_losses,
                 trained_models_labels = trained_models_labels,
                 Optimizer = params.Optimizer,
                 optimizer_kwargs = params.optimizer_kwargs,
