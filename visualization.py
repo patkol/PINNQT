@@ -385,12 +385,3 @@ def visualize(device):
         ax.legend()
         fig.savefig(voltage_path_prefix + 'coefficients_vs_E_complex.pdf')
         plt.close(fig)
-
-
-
-
-
-
-
-
-

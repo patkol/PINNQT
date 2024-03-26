@@ -53,4 +53,4 @@ if __name__ == "__main__":
 
         previous_trainer = trainer
 
-     visualize(device)
+    visualize(device)

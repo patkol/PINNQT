@@ -707,6 +707,8 @@ class Device:
                 Scheduler = params.Scheduler,
                 scheduler_kwargs = params.scheduler_kwargs,
                 saved_parameters_index = saved_parameters_index,
+                save_optimizer = params.save_optimizer,
+                loss_aggregate_function = params.loss_aggregate_function,
                 name = trainer_name,
             )
             self.trainers[trainer_name].load(

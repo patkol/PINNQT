@@ -19,12 +19,12 @@ E_MIN = 0.01 * EV
 E_STEP = 0.01 * EV
 E_MAX = 0.55 * EV
 E_MIN += 1e-6 * EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
-E_MAX += 2e-6 * EV  # Making sure that E_MAX is used
+E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
 VOLTAGE_MIN = 0
 VOLTAGE_STEP = 0.01
-VOLTAGE_MAX = 0.1
-VOLTAGE_MAX += 1e-6  # Making sure that VOLTAGE_MAX is used
+VOLTAGE_MAX = 0
+VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
 A_L = 1 # Amplitude of the wave incoming from the left
 B_R = 0 # Amplitude of the wave incoming from the right
