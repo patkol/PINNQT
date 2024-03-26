@@ -1,8 +1,6 @@
 import numpy as np
 import torch
 
-from kolpinn import mathematics
-
 import parameters as params
 
 

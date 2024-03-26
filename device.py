@@ -1,18 +1,14 @@
-from typing import Optional
-import copy
 import os
 from pathlib import Path
 import itertools
-import numpy as np
 import torch
 
 from kolpinn import mathematics
 from kolpinn import io
 from kolpinn import grid_quantities
-from kolpinn.grid_quantities import Grid, Subgrid, QuantityDict, \
-                                    restrict_quantities, get_fd_derivative
+from kolpinn.grid_quantities import Grid, QuantityDict, get_fd_derivative
 from kolpinn.batching import Batcher
-from kolpinn.model import Model, SimpleNNModel, ConstModel, FunctionModel, \
+from kolpinn.model import SimpleNNModel, FunctionModel, \
                           TransformedModel, get_model, \
                           MultiModel, get_multi_model, get_multi_models, \
                           get_combined_multi_model, get_qs

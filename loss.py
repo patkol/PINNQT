@@ -1,6 +1,6 @@
 import torch
 
-from kolpinn.mathematics import complex_abs2, grad
+from kolpinn.mathematics import grad
 from kolpinn.grid_quantities import get_fd_second_derivative, mean_dimension, restrict
 
 import parameters as params
