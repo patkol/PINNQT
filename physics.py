@@ -13,9 +13,9 @@ EV = Q_E
 M_E = 9.1093837e-31
 NM = 1e-9
 
-E_MIN = 0.01 * EV
+E_MIN = 0.05 * EV
 E_STEP = 0.01 * EV
-E_MAX = 0.55 * EV
+E_MAX = 0.4 * EV
 E_MIN += 1e-6 * EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
@@ -23,9 +23,6 @@ VOLTAGE_MIN = 0
 VOLTAGE_STEP = 0.01
 VOLTAGE_MAX = 0
 VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
-
-A_L = 1 # Amplitude of the wave incoming from the left
-B_R = 0 # Amplitude of the wave incoming from the right
 
 smoothing_range = 0.05 * EV
 transition_distance = 0.5 * NM
@@ -35,6 +32,11 @@ dx = 0.01 * NM  # Used for derivatives
 # Devices
 
 device_kwargs_dict = {
+    'free1': {
+        'boundaries': [0, 5 * NM],
+        'potentials': [0, 0, 0],
+        'm_effs': [M_E, M_E, M_E],
+    },
     'barrier1': {
         'boundaries': [0, 5 * NM],
         'potentials': [0, 0.3 * EV, 0],
@@ -82,4 +84,4 @@ V_OOM = 0.3 * EV  #abs(max(device_kwargs['potentials'], key=abs))
 M_EFF_OOM = 0.1 * M_E  #abs(max(device_kwargs['m_effs'], key=abs))
 K_OOM = np.sqrt(2 * M_EFF_OOM * V_OOM / H_BAR**2)
 CURRENT_CONTINUITY_OOM = K_OOM / M_EFF_OOM
-PROBABILITY_CURRENT_OOM = H_BAR / M_EFF_OOM  * K_OOM
+PROBABILITY_CURRENT_OOM = H_BAR * K_OOM / M_EFF_OOM

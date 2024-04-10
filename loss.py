@@ -1,17 +1,21 @@
 import torch
 
-from kolpinn.mathematics import grad
+from kolpinn.mathematics import complex_abs2, grad
 from kolpinn.grid_quantities import get_fd_second_derivative, mean_dimension, restrict
 
 import parameters as params
 import physics
 
 
-def get_SE_loss(q, *, q_full, with_grad, i):
+def SE_loss_trafo(qs, *, qs_full, with_grad, i, N):
     """
     i: layer index in [1,N]
     For a constant effective mass only if fd_second_derivatives!
     """
+
+    q = qs[f'bulk{i}']
+    q_full = qs_full[f'bulk{i}']
+    b_r = qs[f'boundary{N}'][f'b{N+1}']
 
     # Multiplying hbar here for numerical stability
     hbar_phi_dx_over_m = q[f'phi{i}_dx'] * (physics.H_BAR / q[f'm_eff{i}'])
@@ -30,43 +34,22 @@ def get_SE_loss(q, *, q_full, with_grad, i):
         hbar_phi_dx_over_m_dx = restrict(hbar_phi_dx_over_m_dx_full, q.grid)
     residual = (-0.5 * physics.H_BAR * hbar_phi_dx_over_m_dx
                 + (q[f'V{i}'] - q['E']) * q[f'phi{i}'])
+    residual /= b_r
     residual /= physics.V_OOM
+    q[f'SE_loss{i}'] = params.loss_function(residual)
 
-    return params.loss_function(residual)
+    return qs
 
-def get_wc_loss(q, *, with_grad, i):
-    left_index = str(i)
-    right_index = str(i+1)
-    residual = q['phi' + left_index] - q['phi' + right_index]
 
-    return params.loss_function(residual)
+def j_loss_trafo(qs, *, i, N):
+    q = qs[f'bulk{i}']
+    b_r = qs[f'boundary{N}'][f'b{N+1}']
 
-def get_cc_loss(q, *, with_grad, i, N):
-    left_index = str(i)
-    right_index = str(i+1)
-    if i==0: # Leftmost boundary
-        # OPTIM: directly calculate phi_dx_left/right at boundaries
-        b_l = q['phi'+right_index] - physics.A_L
-        phi_dx_left = 1j * q['k'+left_index] * (physics.A_L - b_l)
-    else:
-        phi_dx_left = q['phi'+left_index+'_dx']
-    if i==N: # Rightmost boundary
-        a_r = q['phi'+left_index] - physics.B_R
-        phi_dx_right = 1j * q['k'+right_index] * (a_r - physics.B_R)
-    else:
-        phi_dx_right = q['phi'+right_index+'_dx']
-    residual = phi_dx_left / q['m_eff'+left_index] - phi_dx_right / q['m_eff'+right_index]
-    residual /= physics.CURRENT_CONTINUITY_OOM
-
-    return params.loss_function(residual)
-
-def get_const_j_loss(q, *, with_grad, i):
-    phi = q['phi'+str(i)]
-    prob_current = torch.imag(physics.H_BAR * torch.conj(phi)
+    prob_current = torch.imag(physics.H_BAR * torch.conj(q[f'phi{i}'])
                               * q[f'phi{i}_dx'] / q[f'm_eff{i}'])
     residual = prob_current - mean_dimension('x', prob_current, q.grid)
+    residual /= complex_abs2(b_r)
     residual /= physics.PROBABILITY_CURRENT_OOM
-    # (j - j_mean) / j_mean
-    #residual = prob_current / prob_current.mean_dimension('x') - 1
+    q[f'j_loss{i}'] = params.loss_function(residual)
 
-    return params.loss_function(residual)
+    return qs

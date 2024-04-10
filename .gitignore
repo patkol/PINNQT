@@ -1,12 +1,14 @@
 *.swp
 *.vim
 *.lprof
-deprecated.py
+*.code-workspace
+deprecated.txt
 matlab_results/
 old/
 plots/
 parameters/
 ignored/
+.vscode
 
 
 # Below: github/gitignore/Python.gitignore

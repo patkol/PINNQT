@@ -20,10 +20,9 @@ n_hidden_layers = 9
 n_neurons_per_hidden_layer = 100
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
-model_ab = True # Otherwise phi is modelled directly
 
 # Training
-max_n_training_steps = 143
+max_n_training_steps = 50
 max_time = None
 min_loss = None
 report_each = 1
@@ -31,8 +30,10 @@ Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {'lr': 1, 'tolerance_grad': 0, 'tolerance_change': 0}
 Scheduler = None # torch.optim.lr_scheduler.ReduceLROnPlateau
 scheduler_kwargs = None # {'factor': 0.5, 'patience': 5, 'cooldown': 5, 'min_lr': 1e-6, 'eps': 0}
-loss_function = lambda x: mathematics.complex_abs2(x)**2
-loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
+#loss_function = lambda x: mathematics.complex_abs2(x)**2
+#loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
+loss_function = lambda x: mathematics.complex_abs2(x)
+loss_aggregate_function = lambda losses: sum(losses)
 fd_first_derivatives = True
 fd_second_derivatives = True
 # Whether the voltage/energy is an input to the NN
