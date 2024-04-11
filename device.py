@@ -615,6 +615,8 @@ class Device:
                 right_boundary_name = f'boundary{i}'
                 right_boundary_names = [right_boundary_name + dx_string
                                         for dx_string in dx_strings]
+                x_left = self.boundaries[i-1]
+                x_right = self.boundaries[i]
 
                 inputs_labels = []
                 if params.continuous_voltage:

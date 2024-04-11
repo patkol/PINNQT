@@ -241,7 +241,6 @@ def visualize(device):
                 f'DOS{i}',
                 'x',
                 'E',
-                q.grid,
                 quantity_unit = 1/physics.NM/physics.EV,
                 quantity_unit_name = '1/nm/eV',
                 x_unit = physics.NM, x_unit_name = 'nm',
