@@ -4,7 +4,6 @@
 Solving the 1D Schrödinger equation with open bc using PINN.
 """
 
-import pdb
 import random
 import torch
 

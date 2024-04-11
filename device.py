@@ -87,7 +87,7 @@ def get_dx_model(mode, quantity_name, grid_name):
             return qs
 
     else:
-        raise Exception('Unknown dx mode:', mode)
+        raise ValueError('Unknown dx mode:', mode)
 
     return MultiModel(dx_qs_trafo, name)
 

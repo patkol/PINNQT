@@ -22,7 +22,7 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 50
+max_n_training_steps = 2
 max_time = None
 min_loss = None
 report_each = 1

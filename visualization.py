@@ -14,7 +14,7 @@ import physics
 
 def visualize(device):
     path_prefix = None
-    for energy_string, trainer in device.trainers.items():
+    for trainer in device.trainers.values():
         trainer_path_prefix = f'plots/{trainer.saved_parameters_index:04d}/'
         if path_prefix is None:
             path_prefix = trainer_path_prefix
