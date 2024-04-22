@@ -7,7 +7,7 @@ import parameters as params
 import physics
 
 
-def SE_loss_trafo(qs, *, qs_full, with_grad, i, N):
+def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     """
     i: layer index in [1,N]
     For a constant effective mass only if fd_second_derivatives!
@@ -15,16 +15,21 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N):
 
     q = qs[f'bulk{i}']
     q_full = qs_full[f'bulk{i}']
-    b_r = qs[f'boundary{N}'][f'b{N+1}']
 
-    # Multiplying hbar here for numerical stability
-    hbar_phi_dx_over_m = q[f'phi{i}_dx'] * (physics.H_BAR / q[f'm_eff{i}'])
+    if contact == 'L':
+        amplitude_in = qs[f'boundary{0}'][f'a{0}_{contact}']
+    elif contact == 'R':
+        amplitude_in = qs[f'boundary{N}'][f'b{N+1}_{contact}']
+    else:
+        raise ValueError(f'Unknown contact: {contact}')
 
     if params.fd_second_derivatives:
         #hbar_phi_dx_over_m_dx = hbar_phi_dx_over_m.get_fd_derivative('x')
-        phi_dx_dx = get_fd_second_derivative('x', q[f'phi{i}'], q.grid)
+        phi_dx_dx = get_fd_second_derivative('x', q[f'phi{i}_{contact}'], q.grid)
         hbar_phi_dx_over_m_dx = phi_dx_dx * (physics.H_BAR / q[f'm_eff{i}'])
     else:
+        # Multiplying hbar here for numerical stability
+        hbar_phi_dx_over_m = q[f'phi{i}_{contact}_dx'] * (physics.H_BAR / q[f'm_eff{i}'])
         hbar_phi_dx_over_m_dx_full = grad(
             hbar_phi_dx_over_m,
             q_full['x'],
@@ -33,23 +38,53 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N):
         )
         hbar_phi_dx_over_m_dx = restrict(hbar_phi_dx_over_m_dx_full, q.grid)
     residual = (-0.5 * physics.H_BAR * hbar_phi_dx_over_m_dx
-                + (q[f'V{i}'] - q['E']) * q[f'phi{i}'])
-    residual /= b_r
+                + (q[f'V{i}'] - q[f'E_{contact}']) * q[f'phi{i}_{contact}'])
+    residual /= amplitude_in
     residual /= physics.V_OOM
-    q[f'SE_loss{i}'] = params.loss_function(residual)
+    q[f'SE_loss{i}_{contact}'] = params.loss_function(residual)
 
     return qs
 
 
-def j_loss_trafo(qs, *, i, N):
+def j_loss_trafo(qs, *, i, N, contact):
     q = qs[f'bulk{i}']
-    b_r = qs[f'boundary{N}'][f'b{N+1}']
 
-    prob_current = torch.imag(physics.H_BAR * torch.conj(q[f'phi{i}'])
-                              * q[f'phi{i}_dx'] / q[f'm_eff{i}'])
+    if contact == 'L':
+        amplitude_in = qs[f'boundary{0}'][f'a{0}_{contact}']
+    elif contact == 'R':
+        amplitude_in = qs[f'boundary{N}'][f'b{N+1}_{contact}']
+    else:
+        raise ValueError(f'Unknown contact: {contact}')
+
+    prob_current = torch.imag(physics.H_BAR * torch.conj(q[f'phi{i}_{contact}'])
+                              * q[f'phi{i}_{contact}_dx'] / q[f'm_eff{i}'])
     residual = prob_current - mean_dimension('x', prob_current, q.grid)
-    residual /= complex_abs2(b_r)
+    residual /= complex_abs2(amplitude_in)
     residual /= physics.PROBABILITY_CURRENT_OOM
-    q[f'j_loss{i}'] = params.loss_function(residual)
+    q[f'j_loss{i}_{contact}'] = params.loss_function(residual)
+
+    return qs
+
+
+def wc_loss_trafo(qs, *, i, contact):
+    q = qs[f'boundary{i}']
+
+    left_index = str(i)
+    right_index = str(i+1)
+    residual = q[f'phi{left_index}_{contact}'] - q[f'phi{left_index}_{contact}']
+    q[f'wc_loss{i}_{contact}'] = params.loss_function(residual)
+
+    return qs
+
+
+def cc_loss_trafo(qs, *, i, contact):
+    q = qs[f'boundary{i}']
+
+    left_index = str(i)
+    right_index = str(i+1)
+    residual = (q[f'phi{left_index}_{contact}_dx'] / q['m_eff'+left_index] 
+                - q[f'phi{right_index}_{contact}_dx'] / q['m_eff'+right_index])
+    residual /= physics.CURRENT_CONTINUITY_OOM
+    q[f'cc_loss{i}_{contact}'] = params.loss_function(residual)
 
     return qs

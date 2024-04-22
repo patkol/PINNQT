@@ -21,10 +21,10 @@ E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
 VOLTAGE_MIN = 0
 VOLTAGE_STEP = 0.01
-VOLTAGE_MAX = 0
+VOLTAGE_MAX = 0.3
 VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
-smoothing_range = 0.05 * EV
+energy_smoothing_range = 0.05 * EV
 transition_distance = 0.5 * NM
 dx = 0.01 * NM  # Used for derivatives
 
@@ -36,6 +36,11 @@ device_kwargs_dict = {
         'boundaries': [0, 5 * NM],
         'potentials': [0, 0, 0],
         'm_effs': [M_E, M_E, M_E],
+    },
+    'free2': {
+        'boundaries': [0, 5 * NM, 10 * NM],
+        'potentials': [0, 0, 0, 0],
+        'm_effs': [M_E, M_E, M_E, M_E],
     },
     'barrier1': {
         'boundaries': [0, 5 * NM],

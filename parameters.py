@@ -16,18 +16,19 @@ loaded_parameters_index = None
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 9
-n_neurons_per_hidden_layer = 100
+n_hidden_layers = 6
+n_neurons_per_hidden_layer = 50
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 2
+max_n_training_steps = None
 max_time = None
-min_loss = None
+min_loss = 200e-6
 report_each = 1
 Optimizer = torch.optim.LBFGS
-optimizer_kwargs = {'lr': 1, 'tolerance_grad': 0, 'tolerance_change': 0}
+optimizer_kwargs = {'lr': 0.5, 'tolerance_grad': 0, 'tolerance_change': 0}
+optimizer_reset_tol = 5
 Scheduler = None # torch.optim.lr_scheduler.ReduceLROnPlateau
 scheduler_kwargs = None # {'factor': 0.5, 'patience': 5, 'cooldown': 5, 'min_lr': 1e-6, 'eps': 0}
 #loss_function = lambda x: mathematics.complex_abs2(x)**2
@@ -47,3 +48,7 @@ N_x = 100
 N_x_training = N_x
 N_x_validation = N_x
 batch_size_x = N_x
+
+# Plotting
+plot_each_voltage = 5
+extra_plots = False
