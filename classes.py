@@ -32,6 +32,7 @@ class Contact:
 
         self.in_boundary_index = self.get_out_boundary_index(self.index)
         self.out_boundary_index = self.get_in_boundary_index(self.out_index)
+        self.out_boundary_name = f'boundary{self.out_boundary_index}'
 
     def __repr__(self):
         return self.name

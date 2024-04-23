@@ -75,13 +75,9 @@ def visualize(device):
             q_in = qs[contact.grid_name]
             in_boundary_grid = Subgrid(q_in.grid, voltage_index_dict, copy_all=False)
             q_in = restrict_quantities(q_in, in_boundary_grid)
-            q_out = qs[f'boundary{contact.out_boundary_index}']
+            q_out = qs[contact.out_boundary_name]
             out_boundary_grid = Subgrid(q_out.grid, voltage_index_dict, copy_all=False)
             q_out = restrict_quantities(q_out, out_boundary_grid)
-
-            incoming_coeff_in = q_in[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
-            outgoing_coeff_in = q_in[f'{contact.outgoing_coeff_in_name}{contact.index}_{contact}']
-            outgoing_coeff_out = q_out[f'{contact.outgoing_coeff_out_name}{contact.out_index}_propagated_{contact}']
 
             # Layers
             for i in range(1,N+1):
@@ -259,20 +255,10 @@ def visualize(device):
 
             # Transmission and reflection probabilities
 
-            abs_group_velocity_in_contact = torch.sqrt(torch.abs(
-                2*(q_in[f'E_{contact}']-q_in[f'V{contact.index}'])
-                / q_in[f'm_eff{contact.index}']
-            ))
-            abs_group_velocity_out_contact = torch.sqrt(torch.abs(
-                2*(q_out[f'E_{contact}']-q_out[f'V{contact.out_index}'])
-                / q_out[f'm_eff{contact.out_index}']
-            ))
-            v_ratio = abs_group_velocity_out_contact / abs_group_velocity_in_contact
-
             fig, ax = plt.subplots()
             add_lineplot(
                 ax,
-                complex_abs2(outgoing_coeff_in) / complex_abs2(incoming_coeff_in),
+                q_in[f'R_{contact}'],
                 q_in.grid,
                 'Reflection probability',
                 'DeltaE',
@@ -283,8 +269,8 @@ def visualize(device):
             )
             add_lineplot(
                 ax,
-                complex_abs2(outgoing_coeff_out) / complex_abs2(incoming_coeff_in) * v_ratio,
-                q_out.grid,
+                q_in[f'T_{contact}'],
+                q_in.grid,
                 'Transmission probability',
                 'DeltaE',
                 x_unit=physics.EV,

@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 from kolpinn import mathematics
+from kolpinn.mathematics import complex_abs2
 from kolpinn import storage
 from kolpinn import grid_quantities
 from kolpinn.grid_quantities import Grid, QuantityDict, get_fd_derivative
@@ -147,9 +148,9 @@ def dos_trafo(qs, *, i, contact, grid_name):
     q_in = qs[contact.grid_name]
     q = qs[grid_name]
     incoming_coeff_in = q_in[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
-    incoming_amplitude = mathematics.complex_abs2(incoming_coeff_in)
+    incoming_amplitude = complex_abs2(incoming_coeff_in)
     q[f'DOS{i}_{contact}'] = (1 / (2*np.pi)
-                              * mathematics.complex_abs2(q[f'phi{i}_{contact}'])
+                              * complex_abs2(q[f'phi{i}_{contact}'])
                               / q_in[f'dE_dk{contact.index}_{contact}']
                               / incoming_amplitude)
     return qs
@@ -170,16 +171,20 @@ def n_trafo(qs, *, i, grid_name):
 
     return qs
 
-# TODO
-#def T_trafo(qs, *, contact, grid_name):
-#    """ Transmission probability """
-#    q_in = qs[f'boundary{in_boundary_index}']
-#    q = qs[grid_name]
-#    incoming_coeff_in = q_in[f'{coeff_in_name}{in_contact_index}_{contact}']
-#    outgoing_coeff_out = 1
-#    incoming_amplitude = mathematics.complex_abs2(incoming_coeff_in)
-#    q[f'T_{contact}'] = 
+def TR_trafo(qs, *, contact):
+    """ Transmission probability """
+    q = qs[contact.grid_name]
+    q_out = qs[contact.out_boundary_name]
+    incoming_coeff_in = q[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
+    incoming_coeff_out = q[f'{contact.incoming_coeff_out_name}{contact.index}_{contact}']
+    outgoing_coeff_out = q_out[f'{contact.outgoing_coeff_out_name}{contact.out_index}_propagated_{contact}']
+    abs_v_in = q[f'abs_v{contact.index}_{contact}']
+    abs_v_out = q_out[f'abs_v{contact.out_index}_{contact}']
+    q[f'T_{contact}'] = (complex_abs2(outgoing_coeff_out) / complex_abs2(incoming_coeff_in)
+                         * abs_v_out / abs_v_in)
+    q[f'R_{contact}'] = complex_abs2(incoming_coeff_out) / complex_abs2(incoming_coeff_in)
 
+    return qs
 
 
 
@@ -372,6 +377,11 @@ class Device:
                 for c in ('a', 'b'):
                     const_models_dict[i][f'{c}_output{i}_{contact}'] = one_model
                     const_models_dict[i][f'{c}_output{i}_{contact}_dx'] = zero_model
+                const_models_dict[i][f'abs_v{i}_{contact}'] = FunctionModel(
+                    lambda q, i=i, contact=contact: torch.sqrt(torch.abs(
+                        2 * (q[f'E_{contact}']-q[f'V{i}']) / q[f'm_eff{i}']
+                    ))
+                )
 
         ## Output contact: Initial conditions
         const_models_dict[N+1][f'a{N+1}_L'] = one_model
@@ -501,11 +511,12 @@ class Device:
 
         # Derived quantities
         ## Input contact (includes global quantities)
-        #for (i, boundary_index, contact) in ((0, 0, 'L'), (N+1, N, 'R')):
-        #    grid_name = f'boundary{boundary_index}'
-        #    shared_models.append(MultiModel(
-        #        #TODO
-        #    ))
+        for contact in self.contacts:
+            shared_models.append(MultiModel(
+                TR_trafo,
+                f'T/R_{contact}',
+                kwargs = {'contact': contact},
+            ))
 
 
         ## Bulk
