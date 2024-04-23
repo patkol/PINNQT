@@ -11,7 +11,7 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 14
 # Whether to use the state of the saved optimizer (possibly overwriting optimizer_kwargs)
 load_optimizer = False
 load_scheduler = False
@@ -22,7 +22,7 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 0
 max_time = None
 min_loss = 200e-6
 report_each = 1
@@ -50,5 +50,5 @@ N_x_validation = N_x
 batch_size_x = N_x
 
 # Plotting
-plot_each_voltage = 5
+plot_each_voltage = 10
 extra_plots = False

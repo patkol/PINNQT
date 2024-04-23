@@ -41,10 +41,24 @@ def visualize(device):
                 'DeltaE',
                 'voltage',
                 path_prefix = path_prefix,
-                x_unit = physics.EV,
-                x_unit_name = 'eV',
-                lines_unit_name = 'V',
+                x_unit = physics.EV, x_unit_name = 'eV',
+                lines_unit = physics.VOLT, lines_unit_name = 'V',
             )
+
+    for i in range(1,N+1):
+        q = qs[f'bulk{i}']
+        save_lineplot(
+            q[f'n{i}'],
+            q.grid,
+            f'n{i}',
+            'x',
+            'voltage',
+            path_prefix = path_prefix,
+            quantity_unit = 1/physics.NM,
+            quantity_unit_name = '1/nm',
+            x_unit = physics.NM, x_unit_name = 'nm',
+            lines_unit = physics.VOLT, lines_unit_name = 'V',
+        )
 
 
     # Per voltage plots
@@ -53,6 +67,7 @@ def visualize(device):
     for voltage_index, voltage in enumerate(voltages):
         if voltage_index % params.plot_each_voltage != 0:
             continue
+
         voltage_path_prefix = f'{path_prefix}{voltage:.2f}V/'
         voltage_index_dict = {'voltage': [voltage_index]}
 
@@ -76,10 +91,6 @@ def visualize(device):
             q_out = qs[f'boundary{out_boundary_index}']
             out_boundary_grid = Subgrid(q_out.grid, voltage_index_dict, copy_all=False)
             q_out = restrict_quantities(q_out, out_boundary_grid)
-
-            dE_dk_in = torch.sqrt(2 * physics.H_BAR**2
-                                  * (q_in[f'E_{contact}'] - q_in[f'V{in_contact_index}'])
-                                  / q_in[f'm_eff{in_contact_index}'])
 
             coeff1 = 'a' if contact=='L' else 'b'
             coeff2 = 'b' if contact=='L' else 'a'
@@ -155,11 +166,8 @@ def visualize(device):
                 fig.savefig(voltage_path_prefix + f'outputs{i}_{contact}.pdf')
                 plt.close(fig)
 
-                ## Probability current
-                prob_current = torch.imag(physics.H_BAR * torch.conj(q[f'phi{i}_{contact}'])
-                                          * q[f'phi{i}_{contact}_dx'] / q[f'm_eff{i}'])
                 save_lineplot(
-                    prob_current,
+                    q[f'j{i}_{contact}'],
                     q.grid,
                     f'prob_current{i}_{contact}',
                     'x',
@@ -173,10 +181,8 @@ def visualize(device):
                     path_prefix = voltage_path_prefix,
                 )
 
-                ## DOS
-                dos = 1/(2*np.pi) * complex_abs2(q[f'phi{i}_{contact}'] / incoming_coeff_in) / dE_dk_in
                 save_heatmap(
-                    dos,
+                    q[f'DOS{i}_{contact}'],
                     q.grid,
                     f'DOS{i}_{contact}',
                     'x',

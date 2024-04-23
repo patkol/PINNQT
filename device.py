@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import itertools
+import numpy as np
 import torch
 
 from kolpinn import mathematics
@@ -10,12 +11,13 @@ from kolpinn.grid_quantities import Grid, QuantityDict, get_fd_derivative
 from kolpinn.batching import Batcher
 from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, \
                           TransformedModel, get_model, \
-                          MultiModel, get_multi_model, get_multi_models, \
+                          MultiModel, get_multi_model, \
                           get_combined_multi_model, get_qs
 from kolpinn.training import Trainer
 
 import parameters as params
 import physics
+from classes import Contact
 import loss
 
 
@@ -88,15 +90,8 @@ def factors_trafo(qs, i, contact):
     given that a and b are known in layer `i_next`
     """
 
-    if contact == 'L':
-        i_next = i+1
-        i_boundary = i
-    elif contact == 'R':
-        i_next = i-1
-        i_boundary = i-1
-    else:
-        raise ValueError(f'Unknown contact: {contact}')
-
+    i_next = contact.get_next_layer_index(i)
+    i_boundary = contact.get_out_boundary_index(i)
     q = qs[f'boundary{i_boundary}']
 
     m = q[f'm_eff{i}']
@@ -127,20 +122,12 @@ def factors_trafo(qs, i, contact):
 def add_coeff(
         c: str, 
         qs: dict[str,QuantityDict], 
-        contact: str, 
+        contact: Contact, 
         grid_name: str, 
         i: int, 
-        N: int,
     ):
 
-    if contact == 'L':
-        boundary_out_index = i
-    elif contact == 'R':
-        boundary_out_index = i-1
-    else:
-        raise ValueError(f'Unknown contact: {contact}')
-
-    boundary_q = qs[f'boundary{boundary_out_index}']
+    boundary_q = qs[f'boundary{contact.get_out_boundary_index(i)}']
     q = qs[grid_name]
 
     coeff = boundary_q[f'{c}_factor{i}_{contact}'] * q[f'{c}_output{i}_{contact}']
@@ -149,12 +136,51 @@ def add_coeff(
     return qs
 
 def add_coeffs(
-        qs: dict[str,QuantityDict], contact: str, grid_name: str, i: int, N: int,
+        qs: dict[str,QuantityDict], contact: Contact, grid_name: str, i: int,
     ):
-    for c in ['a', 'b']:
-        add_coeff(c, qs, contact, grid_name, i, N)
+    for c in ('a', 'b'):
+        add_coeff(c, qs, contact, grid_name, i)
 
     return qs
+
+def dos_trafo(qs, *, i, contact, grid_name):
+    q_in = qs[contact.grid_name]
+    q = qs[grid_name]
+    incoming_coeff_in = q_in[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
+    incoming_amplitude = mathematics.complex_abs2(incoming_coeff_in)
+    q[f'DOS{i}_{contact}'] = (1 / (2*np.pi)
+                              * mathematics.complex_abs2(q[f'phi{i}_{contact}'])
+                              / q_in[f'dE_dk{contact.index}_{contact}']
+                              / incoming_amplitude)
+    return qs
+
+def n_contact_trafo(qs, *, i, contact, grid_name):
+    """ Density from one contact only """
+    q_in = qs[contact.grid_name]
+    q = qs[grid_name]
+    integrand = q[f'DOS{i}_{contact}'] * q_in[f'fermi_integral_{contact}']
+    q[f'n{i}_{contact}'] = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
+                            * physics.E_STEP)
+    return qs
+
+def n_trafo(qs, *, i, grid_name):
+    """ Full density """
+    q = qs[grid_name]
+    q[f'n{i}'] = q[f'n{i}_L'] + q[f'n{i}_R']
+
+    return qs
+
+# TODO
+#def T_trafo(qs, *, contact, grid_name):
+#    """ Transmission probability """
+#    q_in = qs[f'boundary{in_boundary_index}']
+#    q = qs[grid_name]
+#    incoming_coeff_in = q_in[f'{coeff_in_name}{in_contact_index}_{contact}']
+#    outgoing_coeff_out = 1
+#    incoming_amplitude = mathematics.complex_abs2(incoming_coeff_in)
+#    q[f'T_{contact}'] = 
+
+
 
 
 class Device:
@@ -201,6 +227,30 @@ class Device:
             physics.VOLTAGE_STEP,
             dtype=params.si_real_dtype,
         )
+
+        self.left_contact = Contact(
+            name = 'L', 
+            index = 0, 
+            out_index = N+1,
+            grid_name = f'boundary{0}',
+            incoming_coeff_in_name = 'a',
+            get_in_boundary_index = lambda i: max(0,i-1),
+            get_out_boundary_index = lambda i: min(N,i),
+            get_previous_layer_index = lambda i: i-1,
+            get_next_layer_index = lambda i: i+1,
+        )
+        self.right_contact = Contact(
+            name = 'R', 
+            index = N+1, 
+            out_index = 0,
+            grid_name = f'boundary{N}',
+            incoming_coeff_in_name = 'b',
+            get_in_boundary_index = lambda i: min(N,i),
+            get_out_boundary_index = lambda i: max(0,i-1),
+            get_previous_layer_index = lambda i: i+1,
+            get_next_layer_index = lambda i: i-1,
+        )
+        self.contacts = [self.left_contact, self.right_contact]
 
         layer_indices_dict = {'L': range(N+1,-1,-1), 'R': range(0,N+2)}
 
@@ -265,9 +315,6 @@ class Device:
 
         ## Layers and contacts
         for i, models_dict in const_models_dict.items():
-            x_left = self.boundaries[max(0,i-1)]
-            x_right = self.boundaries[min(N,i)]
-
             models_dict[f'V_no_voltage{i}'] = get_model(
                 potentials[i],
                 model_dtype = params.si_real_dtype,
@@ -284,15 +331,9 @@ class Device:
                 output_dtype = params.si_real_dtype,
             )
 
-            for contact in ['L', 'R']:
-                if contact == 'L':
-                    x_in = x_left
-                    x_out = x_right
-                elif contact == 'R':
-                    x_in = x_right
-                    x_out = x_left
-                else:
-                    raise ValueError(f'Unknown contact: {contact}')
+            for contact in self.contacts:
+                x_in = self.boundaries[contact.get_in_boundary_index(i)]
+                x_out = self.boundaries[contact.get_out_boundary_index(i)]
 
                 models_dict[f'k{i}_{contact}'] = FunctionModel(
                     lambda q, i=i, contact=contact: k_function(q, i, contact),
@@ -325,26 +366,51 @@ class Device:
         zero_model = ConstModel(0, model_dtype=params.si_real_dtype)
         one_model = ConstModel(1, model_dtype=params.si_real_dtype)
 
-        ## Contacts
-        for contact in ['L', 'R']:
-            for i in (0,N+1):
-                for c in ['a', 'b']:
+        ## Both contacts
+        for contact in self.contacts:
+            for i in (contact.index, contact.out_index):
+                for c in ('a', 'b'):
                     const_models_dict[i][f'{c}_output{i}_{contact}'] = one_model
                     const_models_dict[i][f'{c}_output{i}_{contact}_dx'] = zero_model
 
-        ## Output contacts: Initial conditions
+        ## Output contact: Initial conditions
         const_models_dict[N+1][f'a{N+1}_L'] = one_model
         const_models_dict[N+1][f'b{N+1}_L'] = zero_model
         const_models_dict[0]['a0_R'] = zero_model
         const_models_dict[0]['b0_R'] = one_model
-
-        for (i, contact) in ((N+1, 'L'), (0, 'R')):
+        for contact in self.contacts:
+            i = contact.out_index
             for c in ('a', 'b'):
                 const_models_dict[i][f'{c}{i}_{contact}_dx'] = zero_model
                 const_models_dict[i][f'{c}{i}_propagated_{contact}'] = \
                     const_models_dict[i][f'{c}{i}_{contact}']
                 const_models_dict[i][f'{c}{i}_propagated_{contact}_dx'] = \
                     const_models_dict[i][f'{c}{i}_{contact}_dx']
+
+        ## Input contact
+        for contact in self.contacts:
+            i = contact.index
+            const_models_dict[i][f'dE_dk{i}_{contact}'] = FunctionModel(
+                lambda q, i=i, contact=contact: 
+                    torch.sqrt(2 * physics.H_BAR**2
+                               * (q[f'E_{contact}'] - q[f'V{i}']) 
+                               / q[f'm_eff{i}']),
+            )
+            const_models_dict[i][f'E_fermi_{contact}'] = FunctionModel(
+                lambda q, i=i, contact=contact:
+                    q[f'E_{contact}'] + physics.E_FERMI_OFFSET,
+            )
+            const_models_dict[i][f'fermi_integral_{contact}'] = FunctionModel(
+                lambda q, i=i, contact=contact: 
+                    (q[f'm_eff{i}'] / (np.pi * physics.H_BAR**2 * physics.BETA)
+                     * torch.log(
+                           1 + torch.exp(
+                                   physics.BETA
+                                   * (q[f'E_fermi_{contact}'] - q[f'E_{contact}'])
+                               )
+                       )
+                    ),
+            )
 
         const_models = []
 
@@ -372,36 +438,20 @@ class Device:
         shared_models = []
         self.used_losses = {}
 
-        # Compose `shared_models` layer by layer
-        for contact in ['L', 'R']:
-            for i in layer_indices_dict[contact]:
-                # The e- flow from in to out
-                # We compute from out to in
+        # Add the coeffs to `shared_models` layer by layer
+        for contact in self.contacts:
+            for i in layer_indices_dict[contact.name]:
                 bulk = f'bulk{i}'
-                boundary_left = f'boundary{i-1}'
-                boundary_right = f'boundary{i}'
-                is_left_contact = i == 0
-                is_right_contact = i == N+1
-                if contact == 'L':
-                    boundary_in = boundary_left
-                    boundary_out = boundary_right
-                    is_in_contact = is_left_contact
-                    is_out_contact = is_right_contact
-                elif contact == 'R':
-                    boundary_in = boundary_right
-                    boundary_out = boundary_left
-                    is_in_contact = is_right_contact
-                    is_out_contact = is_left_contact
-                else:
-                    raise ValueError(f'Unknown contact: {contact}')
-
+                boundary_in = f'boundary{contact.get_in_boundary_index(i)}'
+                boundary_out = f'boundary{contact.get_out_boundary_index(i)}'
+                is_in_contact = i == contact.index
+                is_out_contact = i == contact.out_index
                 is_contact = is_in_contact or is_out_contact
-
+                bulks = [] if is_contact else [bulk]
                 boundaries_in = [] if is_in_contact else [boundary_in + dx_string
                                                           for dx_string in dx_strings]
                 boundaries_out = [] if is_out_contact else [boundary_out + dx_string
                                                             for dx_string in dx_strings]
-                bulks = [] if is_contact else [bulk]
                 single_boundaries = []
                 if not is_in_contact:
                     single_boundaries.append(boundary_in)
@@ -409,7 +459,7 @@ class Device:
                     single_boundaries.append(boundary_out)
 
                 if not is_contact:
-                    for c in ['a', 'b']:
+                    for c in ('a', 'b'):
                         shared_models.append(get_dx_model(
                             'multigrid' if params.fd_first_derivatives else 'exact',
                             f'{c}_output{i}_{contact}',
@@ -417,7 +467,7 @@ class Device:
                         ))
 
                 if not is_out_contact:
-                    for c in ['a', 'b']:
+                    for c in ('a', 'b'):
                         shared_models.append(MultiModel(
                             lambda qs, i=i, contact=contact:
                                 factors_trafo(qs, i, contact),
@@ -427,38 +477,12 @@ class Device:
                     for grid_name in boundaries_in + bulks + boundaries_out:
                         shared_models.append(MultiModel(
                             lambda qs, contact=contact, grid_name=grid_name, i=i:
-                                add_coeffs(qs, contact, grid_name, i, N),
+                                add_coeffs(qs, contact, grid_name, i),
                             f'coeffs{i}',
                         ))
 
-                for grid_name in boundaries_in + bulks + boundaries_out:
-                    shared_models.append(get_multi_model(
-                        FunctionModel(
-                            lambda q, i=i, contact=contact:
-                                (q[f'a{i}_{contact}'] * q[f'a_phase{i}_{contact}'] 
-                                 + q[f'b{i}_{contact}'] * q[f'b_phase{i}_{contact}'])
-                        ),
-                        f'phi{i}_{contact}',
-                        grid_name,
-                    ))
-
-                for grid_name in bulks:
-                    shared_models.append(get_dx_model(
-                        'singlegrid' if params.fd_first_derivatives else 'exact',
-                        f'phi{i}_{contact}',
-                        grid_name,
-                    ))
-
-                # OPTIM: the following is only for cc loss
-                for grid_name in single_boundaries:
-                    shared_models.append(get_dx_model(
-                        'multigrid' if params.fd_first_derivatives else 'exact',
-                        f'phi{i}_{contact}',
-                        grid_name,
-                    ))
-
                 if not is_contact:
-                    for c in ['a', 'b']:
+                    for c in ('a', 'b'):
                         for grid_name in boundaries_in:
                             shared_models.append(get_multi_model(
                                 FunctionModel(
@@ -475,12 +499,64 @@ class Device:
                             boundary_in,
                         ))
 
-        # Losses
+        # Derived quantities
+        ## Input contact (includes global quantities)
+        #for (i, boundary_index, contact) in ((0, 0, 'L'), (N+1, N, 'R')):
+        #    grid_name = f'boundary{boundary_index}'
+        #    shared_models.append(MultiModel(
+        #        #TODO
+        #    ))
+
+
+        ## Bulk
         for i in range(1,N+1):
             bulk_name = f'bulk{i}'
             self.used_losses[bulk_name] = []
 
-            for contact in ['L', 'R']:
+            for contact in self.contacts:
+                shared_models.append(get_multi_model(
+                    FunctionModel(
+                        lambda q, i=i, contact=contact:
+                            (q[f'a{i}_{contact}'] * q[f'a_phase{i}_{contact}'] 
+                                + q[f'b{i}_{contact}'] * q[f'b_phase{i}_{contact}'])
+                    ),
+                    f'phi{i}_{contact}',
+                    bulk_name,
+                ))
+
+                shared_models.append(get_dx_model(
+                    'singlegrid' if params.fd_first_derivatives else 'exact',
+                    f'phi{i}_{contact}',
+                    bulk_name,
+                ))
+
+                shared_models.append(get_multi_model(
+                    FunctionModel(
+                        lambda q, i=i, contact=contact:
+                            torch.imag(physics.H_BAR * torch.conj(q[f'phi{i}_{contact}'])
+                                        * q[f'phi{i}_{contact}_dx'] / q[f'm_eff{i}']),
+                    ),
+                    f'j{i}_{contact}',
+                    bulk_name,
+                ))
+
+                shared_models.append(MultiModel(
+                    dos_trafo,
+                    f'DOS{i}_{contact}',
+                    kwargs = {
+                        'i': i, 'contact': contact, 'grid_name': bulk_name,
+                    },
+                ))
+
+                shared_models.append(MultiModel(
+                    n_contact_trafo,
+                    f'n{i}_{contact}',
+                    kwargs = {
+                        'i': i, 'contact': contact, 'grid_name': bulk_name,
+                    },
+                ))
+
+
                 shared_models.append(MultiModel(
                     loss.SE_loss_trafo,
                     f'SE_loss{i}_{contact}',
@@ -498,25 +574,11 @@ class Device:
                 ))
                 self.used_losses[bulk_name].append(f'j_loss{i}_{contact}')
 
-        #for i in range(0,N+1):
-        #    boundary_name = f'boundary{i}'
-        #    self.used_losses[boundary_name] = []
-
-        #    for contact in ['L', 'R']:
-        #        shared_models.append(MultiModel(
-        #            loss.wc_loss_trafo,
-        #            f'wc_loss{i}_{contact}',
-        #            kwargs = {'i': i, 'contact': contact},
-        #        ))
-        #        self.used_losses[boundary_name].append(f'wc_loss{i}_{contact}')
-
-        #        shared_models.append(MultiModel(
-        #            loss.cc_loss_trafo,
-        #            f'cc_loss{i}_{contact}',
-        #            kwargs = {'i': i, 'contact': contact},
-        #        ))
-        #        self.used_losses[boundary_name].append(f'cc_loss{i}_{contact}')
-
+            shared_models.append(MultiModel(
+                n_trafo,
+                f'n{i}',
+                kwargs = { 'i': i, 'grid_name': bulk_name},
+            ))
 
         # Trainers
 
@@ -625,8 +687,8 @@ class Device:
                     'DeltaE': lambda E, q: E / physics.EV,
                 }
 
-                for contact in ['L', 'R']:
-                    for c in ['a', 'b']:
+                for contact in self.contacts:
+                    for c in ('a', 'b'):
                         nn_model = SimpleNNModel(
                             inputs_labels,
                             params.activation_function,
