@@ -30,5 +30,8 @@ class Contact:
         self.outgoing_coeff_in_name = self.incoming_coeff_out_name
         self.outgoing_coeff_out_name = self.incoming_coeff_in_name
 
+        self.in_boundary_index = self.get_out_boundary_index(self.index)
+        self.out_boundary_index = self.get_in_boundary_index(self.out_index)
+
     def __repr__(self):
         return self.name

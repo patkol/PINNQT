@@ -71,32 +71,17 @@ def visualize(device):
         voltage_path_prefix = f'{path_prefix}{voltage:.2f}V/'
         voltage_index_dict = {'voltage': [voltage_index]}
 
-        for contact in ['L', 'R']:
-            if contact == 'L':
-                in_contact_index = 0
-                out_contact_index = N+1
-                in_boundary_index = 0
-                out_boundary_index = N
-            elif contact == 'R':
-                in_contact_index = N+1
-                out_contact_index = 0
-                in_boundary_index = N
-                out_boundary_index = 0
-            else:
-                raise ValueError(contact)
-
-            q_in = qs[f'boundary{in_boundary_index}']
+        for contact in device.contacts:
+            q_in = qs[contact.grid_name]
             in_boundary_grid = Subgrid(q_in.grid, voltage_index_dict, copy_all=False)
             q_in = restrict_quantities(q_in, in_boundary_grid)
-            q_out = qs[f'boundary{out_boundary_index}']
+            q_out = qs[f'boundary{contact.out_boundary_index}']
             out_boundary_grid = Subgrid(q_out.grid, voltage_index_dict, copy_all=False)
             q_out = restrict_quantities(q_out, out_boundary_grid)
 
-            coeff1 = 'a' if contact=='L' else 'b'
-            coeff2 = 'b' if contact=='L' else 'a'
-            incoming_coeff_in = q_in[f'{coeff1}{in_contact_index}_{contact}']
-            outgoing_coeff_in = q_in[f'{coeff2}{in_contact_index}_{contact}']
-            outgoing_coeff_out = q_out[f'{coeff1}{out_contact_index}_propagated_{contact}']
+            incoming_coeff_in = q_in[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
+            outgoing_coeff_in = q_in[f'{contact.outgoing_coeff_in_name}{contact.index}_{contact}']
+            outgoing_coeff_out = q_out[f'{contact.outgoing_coeff_out_name}{contact.out_index}_propagated_{contact}']
 
             # Layers
             for i in range(1,N+1):
@@ -275,12 +260,12 @@ def visualize(device):
             # Transmission and reflection probabilities
 
             abs_group_velocity_in_contact = torch.sqrt(torch.abs(
-                2*(q_in[f'E_{contact}']-q_in[f'V{in_contact_index}'])
-                / q_in[f'm_eff{in_contact_index}']
+                2*(q_in[f'E_{contact}']-q_in[f'V{contact.index}'])
+                / q_in[f'm_eff{contact.index}']
             ))
             abs_group_velocity_out_contact = torch.sqrt(torch.abs(
-                2*(q_out[f'E_{contact}']-q_out[f'V{out_contact_index}'])
-                / q_out[f'm_eff{out_contact_index}']
+                2*(q_out[f'E_{contact}']-q_out[f'V{contact.out_index}'])
+                / q_out[f'm_eff{contact.out_index}']
             ))
             v_ratio = abs_group_velocity_out_contact / abs_group_velocity_in_contact
 
