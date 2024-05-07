@@ -1,3 +1,6 @@
+# Copyright (c) 2024 ETH Zurich, Patrice Kolb
+
+
 import torch
 
 from kolpinn import mathematics

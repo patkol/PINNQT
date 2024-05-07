@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Copyright (c) 2024 ETH Zurich, Patrice Kolb
+
+
 """
 Solving the 1D Schrödinger equation with open bc using PINN.
 """
