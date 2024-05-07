@@ -1,3 +1,5 @@
+import torch
+
 from kolpinn.mathematics import complex_abs2, grad
 from kolpinn.grid_quantities import get_fd_second_derivative, mean_dimension, restrict
 
@@ -44,12 +46,14 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
 def j_loss_trafo(qs, *, i, N, contact):
     q = qs[f'bulk{i}']
 
-    coeff_in = qs[contact.grid_name][f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
-
     prob_current = q[f'j{i}_{contact}']
     residual = prob_current - mean_dimension('x', prob_current, q.grid)
-    residual /= complex_abs2(coeff_in)
+    #coeff_in = qs[contact.grid_name][f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
+    #residual /= complex_abs2(coeff_in)
+    residual /= mean_dimension('x', complex_abs2(q[f'phi{i}_{contact}']), q.grid)
     residual /= physics.PROBABILITY_CURRENT_OOM
+    #exact_prob_current = qs[contact.out_boundary_name][f'j_exact_{contact}']
+    #residual = torch.log(complex_abs2(prob_current / exact_prob_current))
     q[f'j_loss{i}_{contact}'] = params.loss_function(residual)
 
     return qs

@@ -85,6 +85,34 @@ def get_dx_model(mode, quantity_name, grid_name):
 
     return MultiModel(dx_qs_trafo, name)
 
+def get_E_fermi(q: QuantityDict, *, i):
+    #dos = 8*np.pi / physics.H**3 * torch.sqrt(2 * q[f'm_eff{i}']**3 * q['DeltaE'])
+
+    #best_E_f = None
+    #best_abs_remaining_charge = float('inf')
+    #E_fs = np.arange(0*physics.EV, 0.8*physics.EV, 1e-3*physics.EV)
+    #for E_f in E_fs:
+    #    fermi_dirac = 1 / (1 + torch.exp(physics.BETA * (q['DeltaE'] - E_f)))
+    #    integrand = dos * fermi_dirac
+    #    # Particle, not charge density
+    #    n = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
+    #         * physics.E_STEP)
+    #    abs_remaining_charge = torch.abs(n - q[f'doping{i}']).item()
+    #    if abs_remaining_charge < best_abs_remaining_charge:
+    #        best_abs_remaining_charge = abs_remaining_charge
+    #        best_E_f = E_f
+
+    #    E_f += 1e-3 * physics.EV
+
+    #assert best_E_f != E_fs[0] and best_E_f != E_fs[-1], E_f / physics.EV
+
+    #relative_remaining_charge = best_abs_remaining_charge / q[f'doping{i}']
+    #print(f'Best fermi energy: {best_E_f / physics.EV} eV with a relative remaining charge of {relative_remaining_charge}')
+
+    best_E_f = 0.258 * physics.EV
+
+    return best_E_f + q[f'V{i}']  #* torch.ones((1,) * q.grid.n_dim)
+
 def factors_trafo(qs, i, contact):
     """
     Use the boundary conditions to find the factors to multiply a/b_output with
@@ -178,11 +206,42 @@ def TR_trafo(qs, *, contact):
     incoming_coeff_in = q[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
     incoming_coeff_out = q[f'{contact.incoming_coeff_out_name}{contact.index}_{contact}']
     outgoing_coeff_out = q_out[f'{contact.outgoing_coeff_out_name}{contact.out_index}_propagated_{contact}']
-    abs_v_in = q[f'abs_v{contact.index}_{contact}']
-    abs_v_out = q_out[f'abs_v{contact.out_index}_{contact}']
+    real_v_in = torch.real(q[f'v{contact.index}_{contact}'])
+    real_v_out = torch.real(q_out[f'v{contact.out_index}_{contact}'])
     q[f'T_{contact}'] = (complex_abs2(outgoing_coeff_out) / complex_abs2(incoming_coeff_in)
-                         * abs_v_out / abs_v_in)
+                         * real_v_out / real_v_in)
     q[f'R_{contact}'] = complex_abs2(incoming_coeff_out) / complex_abs2(incoming_coeff_in)
+
+    return qs
+
+def I_contact_trafo(qs, *, contact):
+    q = qs[contact.grid_name]
+    integrand = q[f'T_{contact}'] * q[f'fermi_integral_{contact}']
+    integral = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
+                * physics.E_STEP)
+    sign = 1 if contact.name=='L' else -1
+    prefactor = -physics.Q_E / physics.H_BAR / (2*np.pi) * sign
+    q[f'I_spectrum_{contact}'] = prefactor * integrand
+    q[f'I_{contact}'] =  prefactor * integral
+
+    return qs
+
+def I_trafo(qs, *, contacts):
+    I = sum(qs[contact.grid_name][f'I_{contact}'] for contact in contacts)
+    for contact in contacts:
+        qs[contact.grid_name]['I'] = I
+
+    return qs
+
+def j_exact_trafo(qs, *, contact):
+    """
+    Calculate the exact current at the output contact
+    """
+    q = qs[f'boundary{contact.out_boundary_index}']
+    k = q[f'k{contact.out_index}_{contact}']
+    m_eff = q[f'm_eff{contact.out_index}']
+    sign = -1 if contact.name == 'L' else 1
+    q[f'j_exact_{contact}'] = sign * physics.H_BAR * k / m_eff
 
     return qs
 
@@ -194,6 +253,7 @@ class Device:
             boundaries,
             potentials,
             m_effs,
+            dopings,
         ):
         """
         boundaries: [x_b0, ..., x_bN] with N the number of layers
@@ -206,6 +266,7 @@ class Device:
         N = len(potentials)-2
         device_thickness = boundaries[-1] - boundaries[0]
         assert len(m_effs) == N+2
+        assert len(dopings) == N+2
         assert len(boundaries) == N+1
         assert sorted(boundaries) == boundaries, boundaries
 
@@ -213,6 +274,7 @@ class Device:
         self.boundaries = boundaries
         self.potentials = potentials
         self.m_effs = m_effs
+        self.dopings = dopings
 
         self.loss_functions = {}
         self.trainers = {}
@@ -335,6 +397,11 @@ class Device:
                 model_dtype = params.si_real_dtype,
                 output_dtype = params.si_real_dtype,
             )
+            models_dict[f'doping{i}'] = get_model(
+                dopings[i],
+                model_dtype = params.si_real_dtype,
+                output_dtype = params.si_real_dtype,
+            )
 
             for contact in self.contacts:
                 x_in = self.boundaries[contact.get_in_boundary_index(i)]
@@ -377,10 +444,10 @@ class Device:
                 for c in ('a', 'b'):
                     const_models_dict[i][f'{c}_output{i}_{contact}'] = one_model
                     const_models_dict[i][f'{c}_output{i}_{contact}_dx'] = zero_model
-                const_models_dict[i][f'abs_v{i}_{contact}'] = FunctionModel(
-                    lambda q, i=i, contact=contact: torch.sqrt(torch.abs(
-                        2 * (q[f'E_{contact}']-q[f'V{i}']) / q[f'm_eff{i}']
-                    ))
+                const_models_dict[i][f'v{i}_{contact}'] = FunctionModel(
+                    lambda q, i=i, contact=contact: torch.sqrt(
+                        (2 * (q[f'E_{contact}']-q[f'V{i}']) / q[f'm_eff{i}']).to(params.si_complex_dtype)
+                    )
                 )
 
         ## Output contact: Initial conditions
@@ -407,8 +474,7 @@ class Device:
                                / q[f'm_eff{i}']),
             )
             const_models_dict[i][f'E_fermi_{contact}'] = FunctionModel(
-                lambda q, i=i, contact=contact:
-                    q[f'E_{contact}'] + physics.E_FERMI_OFFSET,
+                lambda q, i=i: get_E_fermi(q, i=i),
             )
             const_models_dict[i][f'fermi_integral_{contact}'] = FunctionModel(
                 lambda q, i=i, contact=contact: 
@@ -441,6 +507,15 @@ class Device:
                     models_dict = const_models_dict[j]
                     for model_name, model in models_dict.items():
                         const_models.append(get_multi_model(model, model_name, grid_name))
+
+        # Constant MultiModels
+        for contact in self.contacts:
+            # OPTIM: unused
+            const_models.append(MultiModel(
+                j_exact_trafo,
+                f'j_exact_{contact}',
+                kwargs = {'contact': contact},
+            ))
 
 
         # Parameter-dependent models shared by multiple trainers
@@ -518,6 +593,17 @@ class Device:
                 kwargs = {'contact': contact},
             ))
 
+            shared_models.append(MultiModel(
+                I_contact_trafo,
+                f'I_{contact}',
+                kwargs = {'contact': contact},
+            ))
+
+        shared_models.append(MultiModel(
+            I_trafo,
+            f'I',
+            kwargs = {'contacts': self.contacts},
+        ))
 
         ## Bulk
         for i in range(1,N+1):
@@ -529,7 +615,7 @@ class Device:
                     FunctionModel(
                         lambda q, i=i, contact=contact:
                             (q[f'a{i}_{contact}'] * q[f'a_phase{i}_{contact}'] 
-                                + q[f'b{i}_{contact}'] * q[f'b_phase{i}_{contact}'])
+                             + q[f'b{i}_{contact}'] * q[f'b_phase{i}_{contact}'])
                     ),
                     f'phi{i}_{contact}',
                     bulk_name,
@@ -590,6 +676,7 @@ class Device:
                 f'n{i}',
                 kwargs = { 'i': i, 'grid_name': bulk_name},
             ))
+
 
         # Trainers
 

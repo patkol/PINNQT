@@ -60,12 +60,76 @@ def visualize(device):
             lines_unit = physics.VOLT, lines_unit_name = 'V',
         )
 
+    q = qs['boundary0']
+    fig, ax = plt.subplots()
+    add_lineplot(
+        ax,
+        q['I'],
+        q.grid,
+        'I',
+        'voltage',
+        quantity_unit = 1 / physics.CM**2,
+        quantity_unit_name = 'A/cm^2',
+        x_unit = physics.VOLT, x_unit_name = 'V',
+        marker = 'x',
+        linewidth = 0,
+        c='blue',
+    )
+    try:
+        matlab_path = 'matlab_results/'
+        voltages_matlab = np.loadtxt(
+                f'{matlab_path}Vbias_{params.simulated_device_name}.txt',
+            delimiter=',',
+        )
+        currents_matlab = np.loadtxt(
+            f'{matlab_path}Id_{params.simulated_device_name}.txt',
+            delimiter=',',
+        )
+        ax.plot(
+            voltages_matlab,
+            currents_matlab,
+            label='MATLAB',
+            linestyle='dashed',
+            c='blue',
+        )
+    except:
+        pass
+    ax.set_xlabel('U [V]')
+    ax.set_ylabel('I [A/cm^2]')
+    ax.grid(visible=True)
+    fig.savefig(path_prefix + f'I.pdf')
+    plt.close(fig)
+
+    fig, ax = plt.subplots()
+    for contact in device.contacts:
+        q = qs[contact.grid_name]
+        add_lineplot(
+            ax,
+            q[f'I_{contact}'],
+            q.grid,
+            f'I_{contact}',
+            'voltage',
+            quantity_unit = 1 / physics.CM**2,
+            x_unit = physics.VOLT, x_unit_name = 'V',
+        )
+        ax.set_xlabel('U [V]')
+        ax.set_ylabel('I [A/cm^2]')
+        ax.grid(visible=True)
+        fig.savefig(path_prefix + f'I_components.pdf')
+        plt.close(fig)
+
 
     # Per voltage plots
 
     voltages = next(iter(qs.values())).grid['voltage']
+    used_energy_indices = list(range(
+        0, 
+        qs['boundary0'].grid.dim_size['DeltaE'], 
+        params.plot_each_energy,
+    ))
+    energies_index_dict = {'DeltaE': used_energy_indices}
     for voltage_index, voltage in enumerate(voltages):
-        if voltage_index % params.plot_each_voltage != 0:
+        if params.plot_each_voltage <= 0 or voltage_index % params.plot_each_voltage != 0:
             continue
 
         voltage_path_prefix = f'{path_prefix}{voltage:.2f}V/'
@@ -75,20 +139,26 @@ def visualize(device):
             q_in = qs[contact.grid_name]
             in_boundary_grid = Subgrid(q_in.grid, voltage_index_dict, copy_all=False)
             q_in = restrict_quantities(q_in, in_boundary_grid)
+            in_boundary_grid_reduced = Subgrid(in_boundary_grid, energies_index_dict, copy_all=False)
+            q_in_reduced = restrict_quantities(q_in, in_boundary_grid_reduced)
             q_out = qs[contact.out_boundary_name]
             out_boundary_grid = Subgrid(q_out.grid, voltage_index_dict, copy_all=False)
             q_out = restrict_quantities(q_out, out_boundary_grid)
+            out_boundary_grid_reduced = Subgrid(out_boundary_grid, energies_index_dict, copy_all=False)
+            q_out_reduced = restrict_quantities(q_out, out_boundary_grid_reduced)
 
             # Layers
             for i in range(1,N+1):
                 q = qs[f'bulk{i}']
                 bulk_grid = Subgrid(q.grid, voltage_index_dict, copy_all=False)
                 q = restrict_quantities(q, bulk_grid)
+                bulk_grid_reduced = Subgrid(bulk_grid, energies_index_dict, copy_all=False)
+                q_reduced = restrict_quantities(q, bulk_grid_reduced)
 
                 ## Wave function
                 save_lineplot(
-                    complex_abs2(q[f'phi{i}_{contact}']),
-                    q.grid,
+                    complex_abs2(q_reduced[f'phi{i}_{contact}']),
+                    q_reduced.grid,
                     f'|phi{i}_{contact}|^2',
                     'x',
                     'DeltaE',
@@ -102,8 +172,8 @@ def visualize(device):
                 fig, ax = plt.subplots()
                 add_lineplot(
                     ax,
-                    torch.real(q[f'a_output{i}_{contact}']),
-                    q.grid,
+                    torch.real(q_reduced[f'a_output{i}_{contact}']),
+                    q_reduced.grid,
                     f'Re(a_output{i}_{contact})',
                     'x',
                     'DeltaE',
@@ -112,8 +182,8 @@ def visualize(device):
                 )
                 add_lineplot(
                     ax,
-                    torch.imag(q[f'a_output{i}_{contact}']),
-                    q.grid,
+                    torch.imag(q_reduced[f'a_output{i}_{contact}']),
+                    q_reduced.grid,
                     f'Im(a_output{i}_{contact})',
                     'x',
                     'DeltaE',
@@ -123,8 +193,8 @@ def visualize(device):
                 )
                 add_lineplot(
                     ax,
-                    torch.real(q[f'b_output{i}_{contact}']),
-                    q.grid,
+                    torch.real(q_reduced[f'b_output{i}_{contact}']),
+                    q_reduced.grid,
                     f'Re(b_output{i}_{contact})',
                     'x',
                     'DeltaE',
@@ -133,8 +203,8 @@ def visualize(device):
                 )
                 add_lineplot(
                     ax,
-                    torch.imag(q[f'b_output{i}_{contact}']),
-                    q.grid,
+                    torch.imag(q_reduced[f'b_output{i}_{contact}']),
+                    q_reduced.grid,
                     f'Im(b_output{i}_{contact})',
                     'x',
                     'DeltaE',
@@ -148,8 +218,8 @@ def visualize(device):
                 plt.close(fig)
 
                 save_lineplot(
-                    q[f'j{i}_{contact}'],
-                    q.grid,
+                    q_reduced[f'j{i}_{contact}'],
+                    q_reduced.grid,
                     f'prob_current{i}_{contact}',
                     'x',
                     'DeltaE',
@@ -179,8 +249,8 @@ def visualize(device):
                     continue
 
                 save_lineplot(
-                    torch.real(q[f'phi{i}_{contact}']),
-                    q.grid,
+                    torch.real(q_reduced[f'phi{i}_{contact}']),
+                    q_reduced.grid,
                     f'Re(phi{i}_{contact})',
                     'x',
                     'DeltaE',
@@ -191,8 +261,8 @@ def visualize(device):
                     path_prefix = voltage_path_prefix,
                 )
                 save_lineplot(
-                    torch.imag(q[f'phi{i}_{contact}']),
-                    q.grid,
+                    torch.imag(q_reduced[f'phi{i}_{contact}']),
+                    q_reduced.grid,
                     f'Im(phi{i}_{contact})',
                     'x',
                     'DeltaE',
@@ -203,8 +273,8 @@ def visualize(device):
                     path_prefix = voltage_path_prefix,
                 )
                 visualization.save_complex_polar_plot(
-                    q[f'phi{i}_{contact}'],
-                    q.grid,
+                    q_reduced[f'phi{i}_{contact}'],
+                    q_reduced.grid,
                     f'phi{i}_{contact}',
                     'x',
                     'DeltaE',
@@ -216,8 +286,8 @@ def visualize(device):
 
                 ## a, b
                 visualization.save_complex_polar_plot(
-                    q[f'a{i}_{contact}'],
-                    q.grid,
+                    q_reduced[f'a{i}_{contact}'],
+                    q_reduced.grid,
                     f'a{i}_{contact}',
                     'x',
                     'DeltaE',
@@ -226,8 +296,8 @@ def visualize(device):
                     path_prefix = voltage_path_prefix,
                 )
                 visualization.save_complex_polar_plot(
-                    q[f'b{i}_{contact}'],
-                    q.grid,
+                    q_reduced[f'b{i}_{contact}'],
+                    q_reduced.grid,
                     f'b{i}_{contact}',
                     'x',
                     'DeltaE',
@@ -238,8 +308,8 @@ def visualize(device):
 
                 ## Losses
                 save_lineplot(
-                    q[f'SE_loss{i}_{contact}'],
-                    q.grid,
+                    q_reduced[f'SE_loss{i}_{contact}'],
+                    q_reduced.grid,
                     f'SE_loss{i}_{contact}',
                     'x',
                     'DeltaE',
@@ -262,6 +332,7 @@ def visualize(device):
                 q_in.grid,
                 'Reflection probability',
                 'DeltaE',
+                x_quantity = q_in[f'E_{contact}'],
                 x_unit=physics.EV,
                 marker = 'x',
                 linewidth = 0,
@@ -273,6 +344,7 @@ def visualize(device):
                 q_in.grid,
                 'Transmission probability',
                 'DeltaE',
+                x_quantity = q_in[f'E_{contact}'],
                 x_unit=physics.EV,
                 marker = 'x',
                 linewidth = 0,
@@ -309,6 +381,19 @@ def visualize(device):
             ax.set_xlabel('E [eV]')
             ax.set_ylim(bottom=-0.1, top=1.1)
             ax.grid(visible=True)
-            #ax.legend()
             fig.savefig(voltage_path_prefix + f'coefficients_vs_E_{contact}.pdf')
             plt.close(fig)
+
+
+            save_lineplot(
+                q_in[f'I_spectrum_{contact}'],
+                q_in.grid,
+                f'Spectral current {contact}',
+                'DeltaE',
+                x_quantity = q_in[f'E_{contact}'],
+                x_label = 'E',
+                quantity_unit = 1 / physics.CM**2 / physics.EV,
+                quantity_unit_name = 'A/cm^2/eV',
+                x_unit = physics.EV, x_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )

@@ -11,7 +11,7 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 14
+loaded_parameters_index = None
 # Whether to use the state of the saved optimizer (possibly overwriting optimizer_kwargs)
 load_optimizer = False
 load_scheduler = False
@@ -22,19 +22,19 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = None
-min_loss = 200e-6
+min_loss = 100e-6
 report_each = 1
 Optimizer = torch.optim.LBFGS
-optimizer_kwargs = {'lr': 0.5, 'tolerance_grad': 0, 'tolerance_change': 0}
-optimizer_reset_tol = 5
+optimizer_kwargs = {'lr': 1, 'tolerance_grad': 0, 'tolerance_change': 0}
+optimizer_reset_tol = 100
 Scheduler = None # torch.optim.lr_scheduler.ReduceLROnPlateau
 scheduler_kwargs = None # {'factor': 0.5, 'patience': 5, 'cooldown': 5, 'min_lr': 1e-6, 'eps': 0}
-#loss_function = lambda x: mathematics.complex_abs2(x)**2
-#loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
 loss_function = lambda x: mathematics.complex_abs2(x)
 loss_aggregate_function = lambda losses: sum(losses)
+#loss_function = lambda x: mathematics.complex_abs2(x)**2
+#loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
 fd_first_derivatives = True
 fd_second_derivatives = True
 # Whether the voltage/energy is an input to the NN
@@ -51,4 +51,5 @@ batch_size_x = N_x
 
 # Plotting
 plot_each_voltage = 10
+plot_each_energy = 50
 extra_plots = False
