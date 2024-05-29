@@ -329,19 +329,28 @@ class Device:
 
         self.grids = {}
 
+        self.grids['full'] = Grid({
+            'voltage': voltages,
+            'DeltaE': energies,
+            'x': torch.linspace(
+                self.boundaries[0],
+                self.boundaries[-1],
+                params.N_x,
+            ),
+        })
+
+        self.n_dim = self.grids['full'].n_dim
+
         ## Layers
         for i in range(1,N+1):
             grid_name = f'bulk{i}'
             x_left = self.boundaries[i-1]
             x_right = self.boundaries[i]
 
-            self.grids[grid_name] = Grid({
-                'voltage': voltages,
-                'DeltaE': energies,
-                'x': torch.linspace(x_left, x_right, params.N_x),
-            })
-
-        self.n_dim = next(iter(self.grids.values())).n_dim
+            self.grids[grid_name] = self.grids['full'].get_subgrid(
+                {'x': lambda x: torch.logical_and(x>=x_left, x<x_right)},
+                copy_all=False, # TODO: OK?
+            )
 
         ## Boundaries
         for i in range(0,N+1):
@@ -357,8 +366,9 @@ class Device:
         quantities_requiring_grad = {}
         for grid_name in self.grids:
             quantities_requiring_grad[grid_name] = []
-            if not params.fd_first_derivatives or not params.fd_second_derivatives:
-                quantities_requiring_grad[grid_name].append('x')
+            if grid_name != 'full' and (not params.fd_first_derivatives
+                                        or not params.fd_second_derivatives):
+                quantities_requiring_grad[grid_name].append('x') # TODO: Is it fine that the grad is not propagated from full to bulk{i}?
 
 
         # Constant models
@@ -682,7 +692,8 @@ class Device:
         trainer_names = []
         trainer_subgrids_list = []
 
-        for voltage, energy in itertools.product(trainer_voltages, trainer_energies):
+        for voltage, energy in itertools.product(trainer_voltages,
+                                                 trainer_energies):
             subgrid_dict = {}
             if voltage == 'all':
                 voltage_string = 'all'
@@ -711,12 +722,14 @@ class Device:
             ## Layers
             for i in range(1,N+1):
                 grid_name = f'bulk{i}'
-
+                batch_size_x = (self.grids[grid_name].dim_size['x']
+                                if params.batch_size_x == -1
+                                else params.batch_size_x)
                 batchers[grid_name] = Batcher(
                     qs[grid_name],
                     trainer_subgrids[grid_name],
                     ['x'],
-                    [params.batch_size_x],
+                    [batch_size_x],
                 )
 
             ## Boundaries
@@ -814,6 +827,8 @@ class Device:
 
         combined_qs = {}
         for grid_name, grid in self.grids.items():
+            if grid_name == 'full':
+                continue
             q_list = [qs[grid_name] for qs in qs_list]
             combined_qs[grid_name] = grid_quantities.combine_quantities(q_list, grid)
 

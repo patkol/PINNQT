@@ -48,8 +48,8 @@ continuous_energy = True
 continuous_training = loaded_parameters_index is None
 
 # Resolution
-N_x = 100
-batch_size_x = N_x
+N_x = 500
+batch_size_x = -1  # -1 for disabling batching
 
 # Plotting
 plot_each_voltage = 10
