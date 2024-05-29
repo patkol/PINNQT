@@ -7,10 +7,9 @@ import torch
 import parameters as params
 
 
-
 # Constants
 
-H_BAR = 1.054571817e-34 # J s
+H_BAR = 1.054571817e-34  # J s
 H = H_BAR * 2*np.pi
 Q_E = 1.60217663e-19
 EV = Q_E
@@ -22,14 +21,17 @@ VOLT = 1
 CM = 1e-2
 
 E_MIN = 5e-4 * EV
-E_STEP = 5e-3 * EV
+E_STEP = 0.001 * EV
 E_MAX = 0.4 * EV
 E_MIN += 1e-6 * EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
-VOLTAGE_MIN = 0.15 * VOLT
-VOLTAGE_STEP = 0.025 * VOLT
-VOLTAGE_MAX = 0.25 * VOLT
+VOLTAGE_MIN = 0.1 * VOLT
+VOLTAGE_STEP = 0.002 * VOLT
+VOLTAGE_MAX = 0.3 * VOLT
+# VOLTAGE_MIN = 0.125 * VOLT
+# VOLTAGE_STEP = 0.05 * VOLT
+# VOLTAGE_MAX = 0.275 * VOLT
 VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
 TEMPERATURE = 300 * KELVIN
@@ -42,7 +44,7 @@ dx = 0.01 * NM  # Used for derivatives
 
 # Devices
 
-device_kwargs_dict = {
+device_kwargs_dict: dict[str,dict] = {
     'free1': {
         'boundaries': [0, 5 * NM],
         'potentials': [0, 0, 0],

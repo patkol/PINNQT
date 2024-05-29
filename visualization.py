@@ -2,7 +2,7 @@
 
 
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # type: ignore
 import torch
 
 from kolpinn.mathematics import complex_abs2
@@ -16,6 +16,8 @@ import physics
 
 
 def visualize(device):
+    plt.rcParams.update({'font.size': 22})
+
     N = device.n_layers
 
     path_prefix = None
@@ -69,19 +71,19 @@ def visualize(device):
         ax,
         q['I'],
         q.grid,
-        'I',
+        'PINN',
         'voltage',
-        quantity_unit = 1 / physics.CM**2,
-        quantity_unit_name = 'A/cm^2',
-        x_unit = physics.VOLT, x_unit_name = 'V',
-        marker = 'x',
-        linewidth = 0,
+        quantity_unit=1e6 / physics.CM**2,
+        # quantity_unit_name='10^6 A/cm^2',
+        x_unit=physics.VOLT, x_unit_name='V',
+        marker='.',
+        linewidth=0,
         c='blue',
     )
     try:
         matlab_path = 'matlab_results/'
         voltages_matlab = np.loadtxt(
-                f'{matlab_path}Vbias_{params.simulated_device_name}.txt',
+            f'{matlab_path}Vbias_{params.simulated_device_name}.txt',
             delimiter=',',
         )
         currents_matlab = np.loadtxt(
@@ -90,17 +92,18 @@ def visualize(device):
         )
         ax.plot(
             voltages_matlab,
-            currents_matlab,
-            label='MATLAB',
+            currents_matlab / 1e6,
+            label='MATLAB Reference',
             linestyle='dashed',
-            c='blue',
+            c='black',
         )
     except:
         pass
     ax.set_xlabel('U [V]')
-    ax.set_ylabel('I [A/cm^2]')
+    ax.set_ylabel('I [10^6 A/cm^2]')
     ax.grid(visible=True)
-    fig.savefig(path_prefix + f'I.pdf')
+    ax.legend()
+    fig.savefig(path_prefix + 'I.pdf', bbox_inches='tight')
     plt.close(fig)
 
     fig, ax = plt.subplots()
@@ -126,8 +129,8 @@ def visualize(device):
 
     voltages = next(iter(qs.values())).grid['voltage']
     used_energy_indices = list(range(
-        0, 
-        qs['boundary0'].grid.dim_size['DeltaE'], 
+        0,
+        qs['boundary0'].grid.dim_size['DeltaE'],
         params.plot_each_energy,
     ))
     energies_index_dict = {'DeltaE': used_energy_indices}

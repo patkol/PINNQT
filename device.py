@@ -26,7 +26,7 @@ import loss
 
 
 dx_strings = ['']
-dx_shifts = [0]
+dx_shifts = [0.]
 if params.fd_first_derivatives:
     dx_strings += ['_pdx', '_mdx']
     dx_shifts += [physics.dx, -physics.dx]
@@ -140,7 +140,7 @@ def factors_trafo(qs, i, contact):
     b_dx_next = q[f'b{i_next}_propagated_{contact}_dx']
 
     a_factor = ((a_next + b_next
-                 + m / m_next * o_b / z_b 
+                 + m / m_next * o_b / z_b
                    * (a_dx_next + b_dx_next + 1j * k_next * (a_next - b_next)))
                 / (o_a + z_a / z_b * o_b))
 
@@ -152,11 +152,11 @@ def factors_trafo(qs, i, contact):
     return qs
 
 def add_coeff(
-        c: str, 
-        qs: dict[str,QuantityDict], 
-        contact: Contact, 
-        grid_name: str, 
-        i: int, 
+        c: str,
+        qs: dict[str,QuantityDict],
+        contact: Contact,
+        grid_name: str,
+        i: int,
     ):
 
     boundary_q = qs[f'boundary{contact.get_out_boundary_index(i)}']
@@ -299,8 +299,8 @@ class Device:
         )
 
         self.left_contact = Contact(
-            name = 'L', 
-            index = 0, 
+            name = 'L',
+            index = 0,
             out_index = N+1,
             grid_name = f'boundary{0}',
             incoming_coeff_in_name = 'a',
@@ -310,8 +310,8 @@ class Device:
             get_next_layer_index = lambda i: i+1,
         )
         self.right_contact = Contact(
-            name = 'R', 
-            index = N+1, 
+            name = 'R',
+            index = N+1,
             out_index = 0,
             grid_name = f'boundary{N}',
             incoming_coeff_in_name = 'b',
@@ -471,16 +471,16 @@ class Device:
         for contact in self.contacts:
             i = contact.index
             const_models_dict[i][f'dE_dk{i}_{contact}'] = FunctionModel(
-                lambda q, i=i, contact=contact: 
+                lambda q, i=i, contact=contact:
                     torch.sqrt(2 * physics.H_BAR**2
-                               * (q[f'E_{contact}'] - q[f'V{i}']) 
+                               * (q[f'E_{contact}'] - q[f'V{i}'])
                                / q[f'm_eff{i}']),
             )
             const_models_dict[i][f'E_fermi_{contact}'] = FunctionModel(
                 lambda q, i=i: get_E_fermi(q, i=i),
             )
             const_models_dict[i][f'fermi_integral_{contact}'] = FunctionModel(
-                lambda q, i=i, contact=contact: 
+                lambda q, i=i, contact=contact:
                     (q[f'm_eff{i}'] / (np.pi * physics.H_BAR**2 * physics.BETA)
                      * torch.log(
                            1 + torch.exp(
@@ -496,7 +496,7 @@ class Device:
         ## Layers
         for i in range(1,N+1):
             grid_name = f'bulk{i}'
-            models_dict = dict(layer_indep_const_models_dict, **const_models_dict[i]) 
+            models_dict = dict(layer_indep_const_models_dict, **const_models_dict[i])
             for model_name, model in models_dict.items():
                 const_models.append(get_multi_model(model, model_name, grid_name))
 
@@ -617,7 +617,7 @@ class Device:
                 shared_models.append(get_multi_model(
                     FunctionModel(
                         lambda q, i=i, contact=contact:
-                            (q[f'a{i}_{contact}'] * q[f'a_phase{i}_{contact}'] 
+                            (q[f'a{i}_{contact}'] * q[f'a_phase{i}_{contact}']
                              + q[f'b{i}_{contact}'] * q[f'b_phase{i}_{contact}'])
                     ),
                     f'phi{i}_{contact}',

@@ -9,35 +9,36 @@ from kolpinn import mathematics
 # General
 simulated_device_name = 'rtd1'
 seed = 0
-device = 'cuda'
+device = 'cpu'
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = None
-# Whether to use the state of the saved optimizer (possibly overwriting optimizer_kwargs)
+loaded_parameters_index = 90
+# `load_optimizer`: Whether to use the state of the saved optimizer
+#                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 6
-n_neurons_per_hidden_layer = 50
+n_hidden_layers = 9
+n_neurons_per_hidden_layer = 100
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 0
 max_time = None
-min_loss = 100e-6
+min_loss = 10e-6
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {'lr': 1, 'tolerance_grad': 0, 'tolerance_change': 0}
 optimizer_reset_tol = 100
-Scheduler = None # torch.optim.lr_scheduler.ReduceLROnPlateau
-scheduler_kwargs = None # {'factor': 0.5, 'patience': 5, 'cooldown': 5, 'min_lr': 1e-6, 'eps': 0}
-loss_function = lambda x: mathematics.complex_abs2(x)
-loss_aggregate_function = lambda losses: sum(losses)
-#loss_function = lambda x: mathematics.complex_abs2(x)**2
-#loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
+Scheduler = None
+scheduler_kwargs = None
+def loss_function(x): return mathematics.complex_abs2(x)
+def loss_aggregate_function(losses): return sum(losses)
+# def loss_function(x): return mathematics.complex_abs2(x)**2
+# def loss_aggregate_function(losses): return torch.sqrt(sum(losses))
 fd_first_derivatives = True
 fd_second_derivatives = True
 # Whether the voltage/energy is an input to the NN
@@ -54,5 +55,5 @@ batch_size_x = N_x
 
 # Plotting
 plot_each_voltage = 10
-plot_each_energy = 50
+plot_each_energy = 20
 extra_plots = False

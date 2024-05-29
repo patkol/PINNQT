@@ -78,7 +78,7 @@ def cc_loss_trafo(qs, *, i, contact):
 
     left_index = str(i)
     right_index = str(i+1)
-    residual = (q[f'phi{left_index}_{contact}_dx'] / q['m_eff'+left_index] 
+    residual = (q[f'phi{left_index}_{contact}_dx'] / q['m_eff'+left_index]
                 - q[f'phi{right_index}_{contact}_dx'] / q['m_eff'+right_index])
     residual /= physics.CURRENT_CONTINUITY_OOM
     q[f'cc_loss{i}_{contact}'] = params.loss_function(residual)
