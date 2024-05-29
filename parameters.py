@@ -9,7 +9,7 @@ from kolpinn import mathematics
 # General
 simulated_device_name = 'rtd1'
 seed = 0
-device = 'cpu'
+device = 'cuda'
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
@@ -49,8 +49,6 @@ continuous_training = loaded_parameters_index is None
 
 # Resolution
 N_x = 100
-N_x_training = N_x
-N_x_validation = N_x
 batch_size_x = N_x
 
 # Plotting

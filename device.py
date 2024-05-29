@@ -327,8 +327,7 @@ class Device:
 
         # Grids
 
-        self.grids_training = {}
-        self.grids_validation = {}
+        self.grids = {}
 
         ## Layers
         for i in range(1,N+1):
@@ -336,37 +335,27 @@ class Device:
             x_left = self.boundaries[i-1]
             x_right = self.boundaries[i]
 
-            self.grids_training[grid_name] = Grid({
+            self.grids[grid_name] = Grid({
                 'voltage': voltages,
                 'DeltaE': energies,
-                'x': torch.linspace(x_left, x_right, params.N_x_training),
-            })
-            self.grids_validation[grid_name] = Grid({
-                'voltage': voltages,
-                'DeltaE': energies,
-                'x': torch.linspace(x_left, x_right, params.N_x_validation),
+                'x': torch.linspace(x_left, x_right, params.N_x),
             })
 
-        self.n_dim = next(iter(self.grids_training.values())).n_dim
+        self.n_dim = next(iter(self.grids.values())).n_dim
 
         ## Boundaries
         for i in range(0,N+1):
             for dx_string, dx_shift in zip(dx_strings, dx_shifts):
                 grid_name = f'boundary{i}' + dx_string
                 x = self.boundaries[i] + dx_shift
-                self.grids_training[grid_name] = Grid({
-                    'voltage': voltages,
-                    'DeltaE': energies,
-                    'x': torch.tensor([x], dtype=params.si_real_dtype),
-                })
-                self.grids_validation[grid_name] = Grid({
+                self.grids[grid_name] = Grid({
                     'voltage': voltages,
                     'DeltaE': energies,
                     'x': torch.tensor([x], dtype=params.si_real_dtype),
                 })
 
         quantities_requiring_grad = {}
-        for grid_name in self.grids_training:
+        for grid_name in self.grids:
             quantities_requiring_grad[grid_name] = []
             if not params.fd_first_derivatives or not params.fd_second_derivatives:
                 quantities_requiring_grad[grid_name].append('x')
@@ -691,8 +680,7 @@ class Device:
             trainer_energies = energies.cpu().numpy()
 
         trainer_names = []
-        trainer_subgrids_training_list = []
-        trainer_subgrids_validation_list = []
+        trainer_subgrids_list = []
 
         for voltage, energy in itertools.product(trainer_voltages, trainer_energies):
             subgrid_dict = {}
@@ -707,39 +695,26 @@ class Device:
                 energy_string = f'{energy:.16e}'
                 subgrid_dict['DeltaE'] = lambda x, energy=energy: x == energy
             trainer_names.append(f'voltage={voltage_string}_energy={energy_string}')
-            trainer_subgrids_training_list.append(dict(
+            trainer_subgrids_list.append(dict(
                 (label, grid.get_subgrid(subgrid_dict, copy_all = True))
-                for label, grid in self.grids_training.items()
-            ))
-            trainer_subgrids_validation_list.append(dict(
-                (label, grid.get_subgrid(subgrid_dict, copy_all = True))
-                for label, grid in self.grids_validation.items()
+                for label, grid in self.grids.items()
             ))
 
-        for trainer_name, trainer_subgrids_training, trainer_subgrids_validation \
-                in zip(trainer_names, trainer_subgrids_training_list, trainer_subgrids_validation_list):
-            qs_training = get_qs(trainer_subgrids_training, const_models, quantities_requiring_grad)
-            qs_validation = get_qs(trainer_subgrids_validation, const_models, quantities_requiring_grad)
-
+        for trainer_name, trainer_subgrids in zip(trainer_names,
+                                                  trainer_subgrids_list):
+            qs = get_qs(trainer_subgrids, const_models, quantities_requiring_grad)
 
             # Batchers
 
-            batchers_training = {}
-            batchers_validation = {}
+            batchers = {}
 
             ## Layers
             for i in range(1,N+1):
                 grid_name = f'bulk{i}'
 
-                batchers_training[grid_name] = Batcher(
-                    qs_training[grid_name],
-                    trainer_subgrids_training[grid_name],
-                    ['x'],
-                    [params.batch_size_x],
-                )
-                batchers_validation[grid_name] = Batcher(
-                    qs_validation[grid_name],
-                    trainer_subgrids_validation[grid_name],
+                batchers[grid_name] = Batcher(
+                    qs[grid_name],
+                    trainer_subgrids[grid_name],
                     ['x'],
                     [params.batch_size_x],
                 )
@@ -748,15 +723,9 @@ class Device:
             for i in range(0,N+1):
                 for grid_name in [f'boundary{i}' + dx_string
                                   for dx_string in dx_strings]:
-                    batchers_training[grid_name] = Batcher(
-                        qs_training[grid_name],
-                        trainer_subgrids_training[grid_name],
-                        [],
-                        [],
-                    )
-                    batchers_validation[grid_name] = Batcher(
-                        qs_validation[grid_name],
-                        trainer_subgrids_validation[grid_name],
+                    batchers[grid_name] = Batcher(
+                        qs[grid_name],
+                        trainer_subgrids[grid_name],
                         [],
                         [],
                     )
@@ -817,8 +786,8 @@ class Device:
 
             self.trainers[trainer_name] = Trainer(
                 models = models,
-                batchers_training = batchers_training,
-                batchers_validation = batchers_validation,
+                batchers_training = batchers,
+                batchers_validation = batchers,
                 used_losses = self.used_losses,
                 trained_models_labels = trained_models_labels,
                 Optimizer = params.Optimizer,
@@ -844,7 +813,7 @@ class Device:
             qs_list.append(trainer.get_extended_qs(for_training=False))
 
         combined_qs = {}
-        for grid_name, grid in self.grids_validation.items():
+        for grid_name, grid in self.grids.items():
             q_list = [qs[grid_name] for qs in qs_list]
             combined_qs[grid_name] = grid_quantities.combine_quantities(q_list, grid)
 

@@ -121,7 +121,7 @@ def visualize(device):
         ax.set_xlabel('U [V]')
         ax.set_ylabel('I [A/cm^2]')
         ax.grid(visible=True)
-        fig.savefig(path_prefix + f'I_components.pdf')
+        fig.savefig(path_prefix + f'I_components.pdf', bbox_inches='tight')
         plt.close(fig)
 
 
@@ -220,7 +220,10 @@ def visualize(device):
                 )
                 ax.set_xlabel('x [nm]')
                 ax.grid(visible=True)
-                fig.savefig(voltage_path_prefix + f'outputs{i}_{contact}.pdf')
+                fig.savefig(
+                    voltage_path_prefix + f'outputs{i}_{contact}.pdf',
+                    bbox_inches='tight',
+                )
                 plt.close(fig)
 
                 save_lineplot(
@@ -387,7 +390,10 @@ def visualize(device):
             ax.set_xlabel('E [eV]')
             ax.set_ylim(bottom=-0.1, top=1.1)
             ax.grid(visible=True)
-            fig.savefig(voltage_path_prefix + f'coefficients_vs_E_{contact}.pdf')
+            fig.savefig(
+                voltage_path_prefix + f'coefficients_vs_E_{contact}.pdf',
+                bbox_inches='tight',
+            )
             plt.close(fig)
 
 
