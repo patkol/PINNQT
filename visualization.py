@@ -65,7 +65,7 @@ def visualize(device):
             lines_unit = physics.VOLT, lines_unit_name = 'V',
         )
 
-    q = qs['boundary0']
+    q = qs['full']
     fig, ax = plt.subplots()
     add_lineplot(
         ax,
@@ -108,7 +108,6 @@ def visualize(device):
 
     fig, ax = plt.subplots()
     for contact in device.contacts:
-        q = qs[contact.grid_name]
         add_lineplot(
             ax,
             q[f'I_{contact}'],
@@ -142,11 +141,16 @@ def visualize(device):
         voltage_index_dict = {'voltage': [voltage_index]}
 
         for contact in device.contacts:
+            q_full = qs['full']
+            full_grid = Subgrid(q_full.grid, voltage_index_dict, copy_all=False)
+            q_full = restrict_quantities(q_full, full_grid)
+
             q_in = qs[contact.grid_name]
             in_boundary_grid = Subgrid(q_in.grid, voltage_index_dict, copy_all=False)
             q_in = restrict_quantities(q_in, in_boundary_grid)
             in_boundary_grid_reduced = Subgrid(in_boundary_grid, energies_index_dict, copy_all=False)
             q_in_reduced = restrict_quantities(q_in, in_boundary_grid_reduced)
+
             q_out = qs[contact.out_boundary_name]
             out_boundary_grid = Subgrid(q_out.grid, voltage_index_dict, copy_all=False)
             q_out = restrict_quantities(q_out, out_boundary_grid)
@@ -337,11 +341,11 @@ def visualize(device):
             fig, ax = plt.subplots()
             add_lineplot(
                 ax,
-                q_in[f'R_{contact}'],
-                q_in.grid,
+                q_full[f'R_{contact}'],
+                q_full.grid,
                 'Reflection probability',
                 'DeltaE',
-                x_quantity = q_in[f'E_{contact}'],
+                x_quantity = q_full[f'E_{contact}'],
                 x_unit=physics.EV,
                 marker = 'x',
                 linewidth = 0,
@@ -349,11 +353,11 @@ def visualize(device):
             )
             add_lineplot(
                 ax,
-                q_in[f'T_{contact}'],
-                q_in.grid,
+                q_full[f'T_{contact}'],
+                q_full.grid,
                 'Transmission probability',
                 'DeltaE',
-                x_quantity = q_in[f'E_{contact}'],
+                x_quantity = q_full[f'E_{contact}'],
                 x_unit=physics.EV,
                 marker = 'x',
                 linewidth = 0,
@@ -398,11 +402,11 @@ def visualize(device):
 
 
             save_lineplot(
-                q_in[f'I_spectrum_{contact}'],
-                q_in.grid,
+                q_full[f'I_spectrum_{contact}'],
+                q_full.grid,
                 f'Spectral current {contact}',
                 'DeltaE',
-                x_quantity = q_in[f'E_{contact}'],
+                x_quantity = q_full[f'E_{contact}'],
                 x_label = 'E',
                 quantity_unit = 1 / physics.CM**2 / physics.EV,
                 quantity_unit_name = 'A/cm^2/eV',

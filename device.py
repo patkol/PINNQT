@@ -204,12 +204,13 @@ def n_trafo(qs, *, i, grid_name):
 
 def TR_trafo(qs, *, contact):
     """ Transmission probability """
-    q = qs[contact.grid_name]
+    q = qs['full']
+    q_in = qs[contact.grid_name]
     q_out = qs[contact.out_boundary_name]
-    incoming_coeff_in = q[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
-    incoming_coeff_out = q[f'{contact.incoming_coeff_out_name}{contact.index}_{contact}']
+    incoming_coeff_in = q_in[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
+    incoming_coeff_out = q_in[f'{contact.incoming_coeff_out_name}{contact.index}_{contact}']
     outgoing_coeff_out = q_out[f'{contact.outgoing_coeff_out_name}{contact.out_index}_propagated_{contact}']
-    real_v_in = torch.real(q[f'v{contact.index}_{contact}'])
+    real_v_in = torch.real(q_in[f'v{contact.index}_{contact}'])
     real_v_out = torch.real(q_out[f'v{contact.out_index}_{contact}'])
     q[f'T_{contact}'] = (complex_abs2(outgoing_coeff_out) / complex_abs2(incoming_coeff_in)
                          * real_v_out / real_v_in)
@@ -218,8 +219,9 @@ def TR_trafo(qs, *, contact):
     return qs
 
 def I_contact_trafo(qs, *, contact):
-    q = qs[contact.grid_name]
-    integrand = q[f'T_{contact}'] * q[f'fermi_integral_{contact}']
+    q = qs['full']
+    q_in = qs[contact.grid_name]
+    integrand = q[f'T_{contact}'] * q_in[f'fermi_integral_{contact}']
     integral = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
                 * physics.E_STEP)
     sign = 1 if contact.name=='L' else -1
@@ -230,9 +232,8 @@ def I_contact_trafo(qs, *, contact):
     return qs
 
 def I_trafo(qs, *, contacts):
-    I = sum(qs[contact.grid_name][f'I_{contact}'] for contact in contacts)
-    for contact in contacts:
-        qs[contact.grid_name]['I'] = I
+    q = qs['full']
+    q['I'] = sum(q[f'I_{contact}'] for contact in contacts)
 
     return qs
 
@@ -349,7 +350,7 @@ class Device:
 
             self.grids[grid_name] = self.grids['full'].get_subgrid(
                 {'x': lambda x: torch.logical_and(x>=x_left, x<x_right)},
-                copy_all=False, # TODO: OK?
+                copy_all=False,
             )
 
         ## Boundaries
@@ -368,7 +369,8 @@ class Device:
             quantities_requiring_grad[grid_name] = []
             if grid_name != 'full' and (not params.fd_first_derivatives
                                         or not params.fd_second_derivatives):
-                quantities_requiring_grad[grid_name].append('x') # TODO: Is it fine that the grad is not propagated from full to bulk{i}?
+                # TODO: Is it fine that the grad is not propagated from full to bulk{i}?
+                quantities_requiring_grad[grid_name].append('x')
 
 
         # Constant models
@@ -491,6 +493,13 @@ class Device:
             )
 
         const_models = []
+
+        ## Full device
+        grid_name = 'full'
+        for model_name, model in layer_indep_const_models_dict.items():
+            const_models.append(
+                get_multi_model(model, model_name, grid_name),
+            )
 
         ## Layers
         for i in range(1,N+1):
@@ -719,6 +728,15 @@ class Device:
 
             batchers = {}
 
+            ## Full device
+            grid_name = 'full'
+            batchers[grid_name] = Batcher(
+                qs[grid_name],
+                trainer_subgrids[grid_name],
+                [],
+                [],
+            )
+
             ## Layers
             for i in range(1,N+1):
                 grid_name = f'bulk{i}'
@@ -827,8 +845,6 @@ class Device:
 
         combined_qs = {}
         for grid_name, grid in self.grids.items():
-            if grid_name == 'full':
-                continue
             q_list = [qs[grid_name] for qs in qs_list]
             combined_qs[grid_name] = grid_quantities.combine_quantities(q_list, grid)
 
