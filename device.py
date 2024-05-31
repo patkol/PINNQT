@@ -552,10 +552,10 @@ class Device:
 
         # Parameter-dependent but trainer-independent models
 
-        shared_models = [] # TODO: rename since there's only one trainer now
+        dependent_models = []
         self.used_losses = {}
 
-        # Add the coeffs to `shared_models` layer by layer
+        # Add the coeffs to `dependent_models` layer by layer
         for contact in self.contacts:
             for i in layer_indices_dict[contact.name]:
                 bulk = f'bulk{i}'
@@ -577,21 +577,21 @@ class Device:
 
                 if not is_contact:
                     for c in ('a', 'b'):
-                        shared_models.append(get_dx_model(
+                        dependent_models.append(get_dx_model(
                             'multigrid' if params.fd_first_derivatives else 'exact',
                             f'{c}_output{i}_{contact}',
                             boundary_out,
                         ))
 
                 if not is_out_contact:
-                    shared_models.append(MultiModel(
+                    dependent_models.append(MultiModel(
                         lambda qs, i=i, contact=contact:
                             factors_trafo(qs, i, contact),
                         f'factors{i}_{contact}',
                     ))
 
                     for grid_name in boundaries_in + bulks + boundaries_out:
-                        shared_models.append(MultiModel(
+                        dependent_models.append(MultiModel(
                             lambda qs, contact=contact, grid_name=grid_name, i=i:
                                 add_coeffs(qs, contact, grid_name, i),
                             f'coeffs{i}',
@@ -600,7 +600,7 @@ class Device:
                 if not is_contact:
                     for c in ('a', 'b'):
                         for grid_name in boundaries_in:
-                            shared_models.append(get_multi_model(
+                            dependent_models.append(get_multi_model(
                                 FunctionModel(
                                     lambda q, c=c, i=i, contact=contact:
                                         q[f'{c}{i}_{contact}'] * q[f'{c}_propagation_factor{i}_{contact}']
@@ -609,7 +609,7 @@ class Device:
                                 grid_name,
                             ))
 
-                        shared_models.append(get_dx_model(
+                        dependent_models.append(get_dx_model(
                             'multigrid' if params.fd_first_derivatives else 'exact',
                             f'{c}{i}_propagated_{contact}',
                             boundary_in,
@@ -618,19 +618,19 @@ class Device:
         # Derived quantities
         ## Input contact (includes global quantities)
         for contact in self.contacts:
-            shared_models.append(MultiModel(
+            dependent_models.append(MultiModel(
                 TR_trafo,
                 f'T/R_{contact}',
                 kwargs = {'contact': contact},
             ))
 
-            shared_models.append(MultiModel(
+            dependent_models.append(MultiModel(
                 I_contact_trafo,
                 f'I_{contact}',
                 kwargs = {'contact': contact},
             ))
 
-        shared_models.append(MultiModel(
+        dependent_models.append(MultiModel(
             I_trafo,
             f'I',
             kwargs = {'contacts': self.contacts},
@@ -642,7 +642,7 @@ class Device:
             self.used_losses[bulk_name] = []
 
             for contact in self.contacts:
-                shared_models.append(get_multi_model(
+                dependent_models.append(get_multi_model(
                     FunctionModel(
                         lambda q, i=i, contact=contact:
                             (q[f'a{i}_{contact}'] * q[f'a_phase{i}_{contact}']
@@ -652,13 +652,13 @@ class Device:
                     bulk_name,
                 ))
 
-                shared_models.append(get_dx_model(
+                dependent_models.append(get_dx_model(
                     'singlegrid' if params.fd_first_derivatives else 'exact',
                     f'phi{i}_{contact}',
                     bulk_name,
                 ))
 
-                shared_models.append(get_multi_model(
+                dependent_models.append(get_multi_model(
                     FunctionModel(
                         lambda q, i=i, contact=contact:
                             torch.imag(physics.H_BAR * torch.conj(q[f'phi{i}_{contact}'])
@@ -668,7 +668,7 @@ class Device:
                     bulk_name,
                 ))
 
-                shared_models.append(MultiModel(
+                dependent_models.append(MultiModel(
                     loss.SE_loss_trafo,
                     f'SE_loss{i}_{contact}',
                     kwargs = {
@@ -678,7 +678,7 @@ class Device:
                 ))
                 self.used_losses[bulk_name].append(f'SE_loss{i}_{contact}')
 
-                shared_models.append(MultiModel(
+                dependent_models.append(MultiModel(
                     loss.j_loss_trafo,
                     f'j_loss{i}_{contact}',
                     kwargs = {'i': i, 'N': N, 'contact': contact},
@@ -686,23 +686,23 @@ class Device:
                 self.used_losses[bulk_name].append(f'j_loss{i}_{contact}')
 
         for contact in self.contacts:
-            shared_models.append(MultiModel(
+            dependent_models.append(MultiModel(
                 full_phi_trafo,
                 f'phi_{contact}',
                 kwargs = {'N': N, 'contact': contact},
             ))
-            shared_models.append(MultiModel(
+            dependent_models.append(MultiModel(
                 dos_trafo,
                 f'DOS_{contact}',
                 kwargs = {'contact': contact},
             ))
-            shared_models.append(MultiModel(
+            dependent_models.append(MultiModel(
                 n_contact_trafo,
                 f'n_{contact}',
                 kwargs = {'contact': contact},
             ))
 
-        shared_models.append(MultiModel(
+        dependent_models.append(MultiModel(
             n_trafo,
             f'n{i}',
             kwargs = {'contacts': self.contacts},
@@ -796,7 +796,7 @@ class Device:
                     ))
                     trained_models_labels.append(f'{c}_output{i}_{contact}')
 
-        models += shared_models
+        models += dependent_models
 
 
         self.trainer = Trainer(
