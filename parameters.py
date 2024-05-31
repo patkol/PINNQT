@@ -14,7 +14,7 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 90
+loaded_parameters_index = 95
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -49,7 +49,7 @@ continuous_training = loaded_parameters_index is None
 
 # Resolution
 N_x = 500
-batch_size_x = -1  # -1 for disabling batching
+# TEMP: Batching hard disabled batch_size_x = -1 # -1 for disabling batching
 
 # Plotting
 plot_each_voltage = 10

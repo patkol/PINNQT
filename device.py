@@ -11,7 +11,8 @@ from kolpinn import mathematics
 from kolpinn.mathematics import complex_abs2
 from kolpinn import storage
 from kolpinn import grid_quantities
-from kolpinn.grid_quantities import Grid, QuantityDict, get_fd_derivative
+from kolpinn.grid_quantities import Grid, Subgrid, QuantityDict, \
+                                    get_fd_derivative, combine_quantity
 from kolpinn.batching import Batcher
 from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, \
                           TransformedModel, get_model, \
@@ -175,30 +176,46 @@ def add_coeffs(
 
     return qs
 
-def dos_trafo(qs, *, i, contact, grid_name):
-    q_in = qs[contact.grid_name]
-    q = qs[grid_name]
-    incoming_coeff_in = q_in[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
-    incoming_amplitude = complex_abs2(incoming_coeff_in)
-    q[f'DOS{i}_{contact}'] = (1 / (2*np.pi)
-                              * complex_abs2(q[f'phi{i}_{contact}'])
-                              / q_in[f'dE_dk{contact.index}_{contact}']
-                              / incoming_amplitude)
+def full_phi_trafo(qs: dict[str,QuantityDict], *, N: int, contact: Contact):
+    q = qs['full']
+    phi_list: list[torch.Tensor] = []
+    subgrid_list: list[Subgrid] = []
+    for i in range(1,N+1):
+        q_layer = qs[f'bulk{i}']
+        phi_list.append(q_layer[f'phi{i}_{contact}'])
+        assert isinstance(q_layer.grid, Subgrid)
+        subgrid_list.append(q_layer.grid)
+
+    q[f'phi_{contact}'] = combine_quantity(phi_list, subgrid_list, q.grid)
+
     return qs
 
-def n_contact_trafo(qs, *, i, contact, grid_name):
-    """ Density from one contact only """
+def dos_trafo(qs, *, contact):
+    q = qs['full']
     q_in = qs[contact.grid_name]
-    q = qs[grid_name]
-    integrand = q[f'DOS{i}_{contact}'] * q_in[f'fermi_integral_{contact}']
-    q[f'n{i}_{contact}'] = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
+
+    incoming_coeff_in = q_in[f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
+    incoming_amplitude = complex_abs2(incoming_coeff_in)
+    q[f'DOS_{contact}'] = (1 / (2*np.pi)
+                           * complex_abs2(q[f'phi_{contact}'])
+                           / q_in[f'dE_dk{contact.index}_{contact}']
+                           / incoming_amplitude)
+    return qs
+
+def n_contact_trafo(qs, *, contact):
+    """ Density from one contact only """
+    q = qs['full']
+    q_in = qs[contact.grid_name]
+
+    integrand = q[f'DOS_{contact}'] * q_in[f'fermi_integral_{contact}']
+    q[f'n_{contact}'] = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
                             * physics.E_STEP)
     return qs
 
-def n_trafo(qs, *, i, grid_name):
+def n_trafo(qs, *, contacts):
     """ Full density """
-    q = qs[grid_name]
-    q[f'n{i}'] = q[f'n{i}_L'] + q[f'n{i}_R']
+    q = qs['full']
+    q[f'n'] = sum(q[f'n_{contact}'] for contact in contacts)
 
     return qs
 
@@ -281,7 +298,6 @@ class Device:
         self.dopings = dopings
 
         self.loss_functions = {}
-        self.trainers = {}
 
         saved_parameters_index = storage.get_next_parameters_index()
         print('saved_parameters_index =', saved_parameters_index)
@@ -330,12 +346,17 @@ class Device:
 
         self.grids = {}
 
+        x_left = self.boundaries[0]
+        x_right = self.boundaries[-1]
+        # We're excluding the left- and rightmost points to avoid special cases
+        x_step = (x_right - x_left) / (params.N_x + 2 - 1)
         self.grids['full'] = Grid({
             'voltage': voltages,
             'DeltaE': energies,
             'x': torch.linspace(
-                self.boundaries[0],
-                self.boundaries[-1],
+                # Making sure all points lie in a layer
+                x_left + x_step,
+                x_right - x_step,
                 params.N_x,
             ),
         })
@@ -529,9 +550,9 @@ class Device:
             ))
 
 
-        # Parameter-dependent models shared by multiple trainers
+        # Parameter-dependent but trainer-independent models
 
-        shared_models = []
+        shared_models = [] # TODO: rename since there's only one trainer now
         self.used_losses = {}
 
         # Add the coeffs to `shared_models` layer by layer
@@ -563,12 +584,11 @@ class Device:
                         ))
 
                 if not is_out_contact:
-                    for c in ('a', 'b'):
-                        shared_models.append(MultiModel(
-                            lambda qs, i=i, contact=contact:
-                                factors_trafo(qs, i, contact),
-                            f'factors{i}_{contact}',
-                        ))
+                    shared_models.append(MultiModel(
+                        lambda qs, i=i, contact=contact:
+                            factors_trafo(qs, i, contact),
+                        f'factors{i}_{contact}',
+                    ))
 
                     for grid_name in boundaries_in + bulks + boundaries_out:
                         shared_models.append(MultiModel(
@@ -649,23 +669,6 @@ class Device:
                 ))
 
                 shared_models.append(MultiModel(
-                    dos_trafo,
-                    f'DOS{i}_{contact}',
-                    kwargs = {
-                        'i': i, 'contact': contact, 'grid_name': bulk_name,
-                    },
-                ))
-
-                shared_models.append(MultiModel(
-                    n_contact_trafo,
-                    f'n{i}_{contact}',
-                    kwargs = {
-                        'i': i, 'contact': contact, 'grid_name': bulk_name,
-                    },
-                ))
-
-
-                shared_models.append(MultiModel(
                     loss.SE_loss_trafo,
                     f'SE_loss{i}_{contact}',
                     kwargs = {
@@ -682,170 +685,142 @@ class Device:
                 ))
                 self.used_losses[bulk_name].append(f'j_loss{i}_{contact}')
 
+        for contact in self.contacts:
             shared_models.append(MultiModel(
-                n_trafo,
-                f'n{i}',
-                kwargs = { 'i': i, 'grid_name': bulk_name},
+                full_phi_trafo,
+                f'phi_{contact}',
+                kwargs = {'N': N, 'contact': contact},
+            ))
+            shared_models.append(MultiModel(
+                dos_trafo,
+                f'DOS_{contact}',
+                kwargs = {'contact': contact},
+            ))
+            shared_models.append(MultiModel(
+                n_contact_trafo,
+                f'n_{contact}',
+                kwargs = {'contact': contact},
             ))
 
+        shared_models.append(MultiModel(
+            n_trafo,
+            f'n{i}',
+            kwargs = {'contacts': self.contacts},
+        ))
 
-        # Trainers
 
-        trainer_voltages = ['all']
-        trainer_energies = ['all']
-        if not params.continuous_voltage:
-            trainer_voltages = voltages.cpu().numpy()
-        if not params.continuous_energy:
-            trainer_energies = energies.cpu().numpy()
+        qs = get_qs(self.grids, const_models, quantities_requiring_grad)
 
-        trainer_names = []
-        trainer_subgrids_list = []
+        # Batchers
 
-        for voltage, energy in itertools.product(trainer_voltages,
-                                                 trainer_energies):
-            subgrid_dict = {}
-            if voltage == 'all':
-                voltage_string = 'all'
-            else:
-                voltage_string = f'{voltage:.16e}'
-                subgrid_dict['voltage'] = lambda x, voltage=voltage: x == voltage
-            if energy == 'all':
-                energy_string = 'all'
-            else:
-                energy_string = f'{energy:.16e}'
-                subgrid_dict['DeltaE'] = lambda x, energy=energy: x == energy
-            trainer_names.append(f'voltage={voltage_string}_energy={energy_string}')
-            trainer_subgrids_list.append(dict(
-                (label, grid.get_subgrid(subgrid_dict, copy_all = True))
-                for label, grid in self.grids.items()
-            ))
+        batchers = {}
 
-        for trainer_name, trainer_subgrids in zip(trainer_names,
-                                                  trainer_subgrids_list):
-            qs = get_qs(trainer_subgrids, const_models, quantities_requiring_grad)
+        ## Full device
+        grid_name = 'full'
+        batchers[grid_name] = Batcher(
+            qs[grid_name],
+            [],
+            [],
+        )
 
-            # Batchers
-
-            batchers = {}
-
-            ## Full device
-            grid_name = 'full'
+        ## Layers
+        for i in range(1,N+1):
+            grid_name = f'bulk{i}'
+            #batch_size_x = (self.grids[grid_name].dim_size['x']
+            #                if params.batch_size_x == -1
+            #                else params.batch_size_x)
             batchers[grid_name] = Batcher(
                 qs[grid_name],
-                trainer_subgrids[grid_name],
-                [],
-                [],
+                [], #['x'],
+                [], #[batch_size_x],
             )
 
-            ## Layers
-            for i in range(1,N+1):
-                grid_name = f'bulk{i}'
-                batch_size_x = (self.grids[grid_name].dim_size['x']
-                                if params.batch_size_x == -1
-                                else params.batch_size_x)
+        ## Boundaries
+        for i in range(0,N+1):
+            for grid_name in [f'boundary{i}' + dx_string
+                              for dx_string in dx_strings]:
                 batchers[grid_name] = Batcher(
                     qs[grid_name],
-                    trainer_subgrids[grid_name],
-                    ['x'],
-                    [batch_size_x],
+                    [],
+                    [],
                 )
 
-            ## Boundaries
-            for i in range(0,N+1):
-                for grid_name in [f'boundary{i}' + dx_string
-                                  for dx_string in dx_strings]:
-                    batchers[grid_name] = Batcher(
-                        qs[grid_name],
-                        trainer_subgrids[grid_name],
-                        [],
-                        [],
+
+        # Trainer-specific models
+
+        models = []
+        trained_models_labels = []
+
+        ## Layers
+        for i in range(1,N+1):
+            grids = ([f'boundary{i-1}' + dx_string  for dx_string in dx_strings]
+                     + [f'bulk{i}']
+                     + [f'boundary{i}' + dx_string  for dx_string in dx_strings])
+            x_left = self.boundaries[i-1]
+            x_right = self.boundaries[i]
+
+            inputs_labels = []
+            if params.continuous_voltage:
+                inputs_labels.append('voltage')
+            if params.continuous_energy:
+                inputs_labels.append('DeltaE') # TODO: check whether E_L/E_R or DeltaE should be provided (required_quantities_labels would need to be changed as well)
+            inputs_labels.append('x')
+
+            model_transformations = {
+                'x': lambda x, q, x_left=x_left, x_right=x_right:
+                        (x - x_left) / (x_right - x_left),
+                'DeltaE': lambda E, q: E / physics.EV,
+            }
+
+            for contact in self.contacts:
+                for c in ('a', 'b'):
+                    nn_model = SimpleNNModel(
+                        inputs_labels,
+                        params.activation_function,
+                        n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
+                        n_hidden_layers = params.n_hidden_layers,
+                        model_dtype = params.model_dtype,
+                        output_dtype = params.si_complex_dtype,
+                        device = params.device,
                     )
+                    c_model = TransformedModel(
+                        nn_model,
+                        input_transformations = model_transformations,
+                    )
+                    models.append(get_combined_multi_model(
+                        c_model,
+                        f'{c}_output{i}_{contact}',
+                        grids,
+                        combined_dimension_name = 'x',
+                        required_quantities_labels = ['voltage', 'DeltaE', 'x'],
+                    ))
+                    trained_models_labels.append(f'{c}_output{i}_{contact}')
+
+        models += shared_models
 
 
-            # Trainer-specific models
-
-            models = []
-            trained_models_labels = []
-
-            ## Layers
-            for i in range(1,N+1):
-                grids = ([f'boundary{i-1}' + dx_string  for dx_string in dx_strings]
-                         + [f'bulk{i}']
-                         + [f'boundary{i}' + dx_string  for dx_string in dx_strings])
-                x_left = self.boundaries[i-1]
-                x_right = self.boundaries[i]
-
-                inputs_labels = []
-                if params.continuous_voltage:
-                    inputs_labels.append('voltage')
-                if params.continuous_energy:
-                    inputs_labels.append('DeltaE') # TODO: check whether E_L/E_R or DeltaE should be provided (required_quantities_labels would need to be changed as well)
-                inputs_labels.append('x')
-
-                model_transformations = {
-                    'x': lambda x, q, x_left=x_left, x_right=x_right:
-                            (x - x_left) / (x_right - x_left),
-                    'DeltaE': lambda E, q: E / physics.EV,
-                }
-
-                for contact in self.contacts:
-                    for c in ('a', 'b'):
-                        nn_model = SimpleNNModel(
-                            inputs_labels,
-                            params.activation_function,
-                            n_neurons_per_hidden_layer = params.n_neurons_per_hidden_layer,
-                            n_hidden_layers = params.n_hidden_layers,
-                            model_dtype = params.model_dtype,
-                            output_dtype = params.si_complex_dtype,
-                            device = params.device,
-                        )
-                        c_model = TransformedModel(
-                            nn_model,
-                            input_transformations = model_transformations,
-                        )
-                        models.append(get_combined_multi_model(
-                            c_model,
-                            f'{c}_output{i}_{contact}',
-                            grids,
-                            combined_dimension_name = 'x',
-                            required_quantities_labels = ['voltage', 'DeltaE', 'x'],
-                        ))
-                        trained_models_labels.append(f'{c}_output{i}_{contact}')
-
-            models += shared_models
-
-
-            self.trainers[trainer_name] = Trainer(
-                models = models,
-                batchers_training = batchers,
-                batchers_validation = batchers,
-                used_losses = self.used_losses,
-                trained_models_labels = trained_models_labels,
-                Optimizer = params.Optimizer,
-                optimizer_kwargs = params.optimizer_kwargs,
-                optimizer_reset_tol=params.optimizer_reset_tol,
-                Scheduler = params.Scheduler,
-                scheduler_kwargs = params.scheduler_kwargs,
-                saved_parameters_index = saved_parameters_index,
-                save_optimizer = params.save_optimizer,
-                loss_aggregate_function = params.loss_aggregate_function,
-                name = trainer_name,
-            )
-            self.trainers[trainer_name].load(
-                params.loaded_parameters_index,
-                load_optimizer = params.load_optimizer,
-                load_scheduler = params.load_scheduler,
-            )
+        self.trainer = Trainer(
+            models = models,
+            batchers_training = batchers,
+            batchers_validation = batchers,
+            used_losses = self.used_losses,
+            trained_models_labels = trained_models_labels,
+            Optimizer = params.Optimizer,
+            optimizer_kwargs = params.optimizer_kwargs,
+            optimizer_reset_tol = params.optimizer_reset_tol,
+            Scheduler = params.Scheduler,
+            scheduler_kwargs = params.scheduler_kwargs,
+            saved_parameters_index = saved_parameters_index,
+            save_optimizer = params.save_optimizer,
+            loss_aggregate_function = params.loss_aggregate_function,
+            name = 'all',
+        )
+        self.trainer.load(
+            params.loaded_parameters_index,
+            load_optimizer = params.load_optimizer,
+            load_scheduler = params.load_scheduler,
+        )
 
 
     def get_extended_qs(self):
-        qs_list = []
-        for trainer in self.trainers.values():
-            qs_list.append(trainer.get_extended_qs(for_training=False))
-
-        combined_qs = {}
-        for grid_name, grid in self.grids.items():
-            q_list = [qs[grid_name] for qs in qs_list]
-            combined_qs[grid_name] = grid_quantities.combine_quantities(q_list, grid)
-
-        return combined_qs
+        return self.trainer.get_extended_qs(for_training=False)

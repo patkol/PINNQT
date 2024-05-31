@@ -1,6 +1,7 @@
 # Copyright (c) 2024 ETH Zurich, Patrice Kolb
 
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt  # type: ignore
 import torch
@@ -20,15 +21,9 @@ def visualize(device):
 
     N = device.n_layers
 
-    path_prefix = None
-    for trainer in device.trainers.values():
-        trainer_path_prefix = f'plots/{trainer.saved_parameters_index:04d}/'
-        if path_prefix is None:
-            path_prefix = trainer_path_prefix
-        else:
-            assert path_prefix == trainer_path_prefix
+    path_prefix = f'plots/{device.trainer.saved_parameters_index:04d}/'
 
-        visualization.save_training_history_plot(trainer, path_prefix)
+    visualization.save_training_history_plot(device.trainer, path_prefix)
 
 
     qs = device.get_extended_qs()
@@ -50,22 +45,20 @@ def visualize(device):
                 lines_unit = physics.VOLT, lines_unit_name = 'V',
             )
 
-    for i in range(1,N+1):
-        q = qs[f'bulk{i}']
-        save_lineplot(
-            q[f'n{i}'],
-            q.grid,
-            f'n{i}',
-            'x',
-            'voltage',
-            path_prefix = path_prefix,
-            quantity_unit = 1/physics.NM,
-            quantity_unit_name = '1/nm',
-            x_unit = physics.NM, x_unit_name = 'nm',
-            lines_unit = physics.VOLT, lines_unit_name = 'V',
-        )
-
     q = qs['full']
+    save_lineplot(
+        q[f'n'],
+        q.grid,
+        f'n',
+        'x',
+        'voltage',
+        path_prefix = path_prefix,
+        quantity_unit = 1/physics.NM,
+        quantity_unit_name = '1/nm',
+        x_unit = physics.NM, x_unit_name = 'nm',
+        lines_unit = physics.VOLT, lines_unit_name = 'V',
+    )
+
     fig, ax = plt.subplots()
     add_lineplot(
         ax,
@@ -138,12 +131,15 @@ def visualize(device):
             continue
 
         voltage_path_prefix = f'{path_prefix}{voltage:.2f}V/'
+        os.makedirs(voltage_path_prefix, exist_ok=True)
         voltage_index_dict = {'voltage': [voltage_index]}
 
         for contact in device.contacts:
             q_full = qs['full']
             full_grid = Subgrid(q_full.grid, voltage_index_dict, copy_all=False)
             q_full = restrict_quantities(q_full, full_grid)
+            full_grid_reduced = Subgrid(full_grid, energies_index_dict, copy_all=False)
+            q_full_reduced = restrict_quantities(q_full, full_grid_reduced)
 
             q_in = qs[contact.grid_name]
             in_boundary_grid = Subgrid(q_in.grid, voltage_index_dict, copy_all=False)
@@ -164,20 +160,6 @@ def visualize(device):
                 q = restrict_quantities(q, bulk_grid)
                 bulk_grid_reduced = Subgrid(bulk_grid, energies_index_dict, copy_all=False)
                 q_reduced = restrict_quantities(q, bulk_grid_reduced)
-
-                ## Wave function
-                save_lineplot(
-                    complex_abs2(q_reduced[f'phi{i}_{contact}']),
-                    q_reduced.grid,
-                    f'|phi{i}_{contact}|^2',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    x_unit_name = 'nm',
-                    lines_unit = physics.EV,
-                    lines_unit_name = 'eV',
-                    path_prefix = voltage_path_prefix,
-                )
 
                 fig, ax = plt.subplots()
                 add_lineplot(
@@ -245,57 +227,8 @@ def visualize(device):
                     path_prefix = voltage_path_prefix,
                 )
 
-                save_heatmap(
-                    q[f'DOS{i}_{contact}'],
-                    q.grid,
-                    f'DOS{i}_{contact}',
-                    'x',
-                    'DeltaE',
-                    quantity_unit = 1/physics.NM/physics.EV,
-                    quantity_unit_name = '1/nm/eV',
-                    x_unit = physics.NM, x_unit_name = 'nm',
-                    y_unit = physics.EV, y_unit_name = 'eV',
-                    path_prefix = voltage_path_prefix,
-                )
-
                 if not params.extra_plots:
                     continue
-
-                save_lineplot(
-                    torch.real(q_reduced[f'phi{i}_{contact}']),
-                    q_reduced.grid,
-                    f'Re(phi{i}_{contact})',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    x_unit_name = 'nm',
-                    lines_unit = physics.EV,
-                    lines_unit_name = 'eV',
-                    path_prefix = voltage_path_prefix,
-                )
-                save_lineplot(
-                    torch.imag(q_reduced[f'phi{i}_{contact}']),
-                    q_reduced.grid,
-                    f'Im(phi{i}_{contact})',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    x_unit_name = 'nm',
-                    lines_unit = physics.EV,
-                    lines_unit_name = 'eV',
-                    path_prefix = voltage_path_prefix,
-                )
-                visualization.save_complex_polar_plot(
-                    q_reduced[f'phi{i}_{contact}'],
-                    q_reduced.grid,
-                    f'phi{i}_{contact}',
-                    'x',
-                    'DeltaE',
-                    lines_unit = physics.EV,
-                    lines_unit_name = 'eV',
-                    path_prefix = voltage_path_prefix,
-                )
-
 
                 ## a, b
                 visualization.save_complex_polar_plot(
@@ -334,6 +267,67 @@ def visualize(device):
                     quantity_unit_name = 'hbar/m0/nm',
                     path_prefix = voltage_path_prefix,
                 )
+
+
+            ## Wave function
+            save_lineplot(
+                complex_abs2(q_full_reduced[f'phi_{contact}']),
+                q_full_reduced.grid,
+                f'|phi_{contact}|^2',
+                'x',
+                'DeltaE',
+                x_unit = physics.NM,
+                x_unit_name = 'nm',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+            save_lineplot(
+                torch.real(q_full_reduced[f'phi_{contact}']),
+                q_full_reduced.grid,
+                f'Re(phi_{contact})',
+                'x',
+                'DeltaE',
+                x_unit = physics.NM,
+                x_unit_name = 'nm',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+            save_lineplot(
+                torch.imag(q_full_reduced[f'phi_{contact}']),
+                q_full_reduced.grid,
+                f'Im(phi_{contact})',
+                'x',
+                'DeltaE',
+                x_unit = physics.NM,
+                x_unit_name = 'nm',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+            visualization.save_complex_polar_plot(
+                q_full_reduced[f'phi_{contact}'],
+                q_full_reduced.grid,
+                f'phi_{contact}',
+                'x',
+                'DeltaE',
+                lines_unit = physics.EV,
+                lines_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+            save_heatmap(
+                q_full[f'DOS_{contact}'],
+                q_full.grid,
+                f'DOS_{contact}',
+                'x',
+                'DeltaE',
+                quantity_unit = 1/physics.NM/physics.EV,
+                quantity_unit_name = '1/nm/eV',
+                x_unit = physics.NM, x_unit_name = 'nm',
+                y_unit = physics.EV, y_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
 
 
             # Transmission and reflection probabilities
