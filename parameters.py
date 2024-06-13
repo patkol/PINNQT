@@ -7,14 +7,14 @@ from kolpinn import mathematics
 
 
 # General
-simulated_device_name = 'rtd1'
+simulated_device_name = 'barrier1'
 seed = 0
 device = 'cuda'
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 95
+loaded_parameters_index = 103
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -26,9 +26,9 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = None
-min_loss = 10e-6
+min_loss = 100e-6
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {'lr': 1, 'tolerance_grad': 0, 'tolerance_change': 0}
@@ -48,7 +48,7 @@ continuous_energy = True
 continuous_training = loaded_parameters_index is None
 
 # Resolution
-N_x = 500
+N_x = 200
 # TEMP: Batching hard disabled batch_size_x = -1 # -1 for disabling batching
 
 # Plotting

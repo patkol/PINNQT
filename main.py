@@ -15,6 +15,7 @@ import parameters as params
 import physics
 from device import Device
 from visualization import visualize
+from storage import save_q_full
 
 
 
@@ -49,4 +50,5 @@ if __name__ == "__main__":
     for _, model_name in zip(range(25), eval_relatives):
         print(f"{eval_relatives[model_name]:.1%} {model_name}")
 
+    # save_q_full(device, excluded_quantities_labels=['phi_L', 'phi_R'])
     visualize(device)

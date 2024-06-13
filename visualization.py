@@ -153,122 +153,6 @@ def visualize(device):
             out_boundary_grid_reduced = Subgrid(out_boundary_grid, energies_index_dict, copy_all=False)
             q_out_reduced = restrict_quantities(q_out, out_boundary_grid_reduced)
 
-            # Layers
-            for i in range(1,N+1):
-                q = qs[f'bulk{i}']
-                bulk_grid = Subgrid(q.grid, voltage_index_dict, copy_all=False)
-                q = restrict_quantities(q, bulk_grid)
-                bulk_grid_reduced = Subgrid(bulk_grid, energies_index_dict, copy_all=False)
-                q_reduced = restrict_quantities(q, bulk_grid_reduced)
-
-                fig, ax = plt.subplots()
-                add_lineplot(
-                    ax,
-                    torch.real(q_reduced[f'a_output{i}_{contact}']),
-                    q_reduced.grid,
-                    f'Re(a_output{i}_{contact})',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    c = 'blue',
-                )
-                add_lineplot(
-                    ax,
-                    torch.imag(q_reduced[f'a_output{i}_{contact}']),
-                    q_reduced.grid,
-                    f'Im(a_output{i}_{contact})',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    c = 'blue',
-                    linestyle = 'dashed',
-                )
-                add_lineplot(
-                    ax,
-                    torch.real(q_reduced[f'b_output{i}_{contact}']),
-                    q_reduced.grid,
-                    f'Re(b_output{i}_{contact})',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    c = 'red',
-                )
-                add_lineplot(
-                    ax,
-                    torch.imag(q_reduced[f'b_output{i}_{contact}']),
-                    q_reduced.grid,
-                    f'Im(b_output{i}_{contact})',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    c = 'red',
-                    linestyle = 'dashed',
-                )
-                ax.set_xlabel('x [nm]')
-                ax.grid(visible=True)
-                fig.savefig(
-                    voltage_path_prefix + f'outputs{i}_{contact}.pdf',
-                    bbox_inches='tight',
-                )
-                plt.close(fig)
-
-                save_lineplot(
-                    q_reduced[f'j{i}_{contact}'],
-                    q_reduced.grid,
-                    f'prob_current{i}_{contact}',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    x_unit_name = 'nm',
-                    lines_unit = physics.EV,
-                    lines_unit_name = 'eV',
-                    quantity_unit = physics.H_BAR / physics.M_E / physics.NM,
-                    quantity_unit_name = 'hbar/m0/nm',
-                    path_prefix = voltage_path_prefix,
-                )
-
-                if not params.extra_plots:
-                    continue
-
-                ## a, b
-                visualization.save_complex_polar_plot(
-                    q_reduced[f'a{i}_{contact}'],
-                    q_reduced.grid,
-                    f'a{i}_{contact}',
-                    'x',
-                    'DeltaE',
-                    lines_unit = physics.EV,
-                    lines_unit_name = 'eV',
-                    path_prefix = voltage_path_prefix,
-                )
-                visualization.save_complex_polar_plot(
-                    q_reduced[f'b{i}_{contact}'],
-                    q_reduced.grid,
-                    f'b{i}_{contact}',
-                    'x',
-                    'DeltaE',
-                    lines_unit = physics.EV,
-                    lines_unit_name = 'eV',
-                    path_prefix = voltage_path_prefix,
-                )
-
-                ## Losses
-                save_lineplot(
-                    q_reduced[f'SE_loss{i}_{contact}'],
-                    q_reduced.grid,
-                    f'SE_loss{i}_{contact}',
-                    'x',
-                    'DeltaE',
-                    x_unit = physics.NM,
-                    x_unit_name = 'nm',
-                    lines_unit = physics.EV,
-                    lines_unit_name = 'eV',
-                    quantity_unit = physics.H_BAR / physics.M_E / physics.NM,
-                    quantity_unit_name = 'hbar/m0/nm',
-                    path_prefix = voltage_path_prefix,
-                )
-
-
             ## Wave function
             save_lineplot(
                 complex_abs2(q_full_reduced[f'phi_{contact}']),
@@ -405,5 +289,38 @@ def visualize(device):
                 quantity_unit = 1 / physics.CM**2 / physics.EV,
                 quantity_unit_name = 'A/cm^2/eV',
                 x_unit = physics.EV, x_unit_name = 'eV',
+                path_prefix = voltage_path_prefix,
+            )
+
+            save_lineplot(
+                q_full['n'],
+                q_full.grid,
+                'n',
+                'x',
+                quantity_unit = 1/physics.CM**3,
+                quantity_unit_name = '1/cm$^3$',
+                x_unit = 1/physics.NM, x_unit_name = 'nm',
+                path_prefix = voltage_path_prefix,
+            )
+
+            save_lineplot(
+                q['doping'] - q['n'],
+                q_full.grid,
+                'Total Charge Density',
+                'x',
+                quantity_unit = 1/physics.CM**3,
+                quantity_unit_name = 'q/cm$^3$',
+                x_unit = 1/physics.NM, x_unit_name = 'nm',
+                path_prefix = voltage_path_prefix,
+            )
+
+            save_lineplot(
+                q_full['V_electrostatic'],
+                q_full.grid,
+                'V_electrostatic',
+                'x',
+                quantity_unit = physics.EV,
+                quantity_unit_name = 'eV',
+                x_unit = physics.NM, x_unit_name = 'nm',
                 path_prefix = voltage_path_prefix,
             )

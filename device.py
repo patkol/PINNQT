@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+from typing import Callable
 import itertools
 import numpy as np
 import torch
@@ -12,7 +13,8 @@ from kolpinn.mathematics import complex_abs2
 from kolpinn import storage
 from kolpinn import grid_quantities
 from kolpinn.grid_quantities import Grid, Subgrid, QuantityDict, \
-                                    get_fd_derivative, combine_quantity
+                                    get_fd_derivative, combine_quantity, \
+                                    squeeze_to
 from kolpinn.batching import Batcher
 from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, \
                           TransformedModel, get_model, \
@@ -176,17 +178,28 @@ def add_coeffs(
 
     return qs
 
-def full_phi_trafo(qs: dict[str,QuantityDict], *, N: int, contact: Contact):
+def to_full_trafo(
+    qs: dict[str,QuantityDict],
+    *,
+    N: int,
+    label_fn: Callable[[int],str],
+    quantity_label: str,
+):
+    """
+    Combine quantities in the 'bulk{i}' grids to the 'full' grid.
+    They're called 'label_fn(i)' in the bulk grids and
+    'quantity_label' in 'full'.
+    """
     q = qs['full']
-    phi_list: list[torch.Tensor] = []
+    quantity_list: list[torch.Tensor] = []
     subgrid_list: list[Subgrid] = []
     for i in range(1,N+1):
         q_layer = qs[f'bulk{i}']
-        phi_list.append(q_layer[f'phi{i}_{contact}'])
+        quantity_list.append(q_layer[label_fn(i)])
         assert isinstance(q_layer.grid, Subgrid)
         subgrid_list.append(q_layer.grid)
 
-    q[f'phi_{contact}'] = combine_quantity(phi_list, subgrid_list, q.grid)
+    q[quantity_label] = combine_quantity(quantity_list, subgrid_list, q.grid)
 
     return qs
 
@@ -215,7 +228,39 @@ def n_contact_trafo(qs, *, contact):
 def n_trafo(qs, *, contacts):
     """ Full density """
     q = qs['full']
-    q[f'n'] = sum(q[f'n_{contact}'] for contact in contacts)
+    q['n'] = sum(q[f'n_{contact}'] for contact in contacts)
+
+    return qs
+
+def V_electrostatic_trafo(qs):
+    q = qs['full']
+
+    assert q.grid.dimensions_labels[-1] == 'x'
+
+    # Construct the discretized Laplace operator M assuming an
+    # equispaced x grid
+    # OPTIM: do this only once
+    Nx = q.grid.dim_size['x']
+    dx = q.grid.dimensions['x'][1] - q.grid.dimensions['x'][0]
+    M = torch.zeros(Nx, Nx)
+    permittivity = squeeze_to(['x'], q['permittivity'], q.grid)
+    for i in range(1, Nx-1):
+        M[i,i-1] = (permittivity[i] + permittivity[i-1]) / (2 * dx**2)
+        M[i,i+1] = (permittivity[i] + permittivity[i+1]) / (2 * dx**2)
+        M[i,i] = -M[i,i-1] - M[i,i+1]
+
+    M[0,0] = -(permittivity[0] + permittivity[1]) / (2 * dx**2)
+    M[0,1] = -M[0,0]
+    M[-1,-1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
+    M[-1,-2] = -M[-1,-1]
+    # TODO: implementation that works if x is not the last coordinate,
+    #       kolpinn function
+    #       Then remove the assertion above
+    rho = physics.Q_E * (q['doping'] - q['n'])
+    # Permute: x must be the second last coordinate for torch.linalg.solve
+    rho_permuted = torch.permute(rho, (0,2,1))
+    V_electrostatic_permuted = -physics.Q_E * torch.linalg.solve(M, -rho_permuted)
+    q['V_electrostatic'] = torch.permute(V_electrostatic_permuted, (0,2,1))
 
     return qs
 
@@ -271,31 +316,36 @@ def j_exact_trafo(qs, *, contact):
 class Device:
     def __init__(
             self,
+            *,
             boundaries,
             potentials,
             m_effs,
             dopings,
+            permittivities,
         ):
         """
         boundaries: [x_b0, ..., x_bN] with N the number of layers
         potentials: [V_0, ..., V_N+1] (including contacts),
                     constants or functions of q, grid
         m_effs: [m_0, ..., m_N+1], like potentials
+        dopings & permittivities: Same
         Layer i in [1,N] has x_b(i-1) on the left and x_bi on the right.
         """
 
         N = len(potentials)-2
-        device_thickness = boundaries[-1] - boundaries[0]
         assert len(m_effs) == N+2
         assert len(dopings) == N+2
+        assert len(permittivities) == N+2
         assert len(boundaries) == N+1
         assert sorted(boundaries) == boundaries, boundaries
 
+        device_thickness = boundaries[-1] - boundaries[0]
         self.n_layers = N
         self.boundaries = boundaries
         self.potentials = potentials
         self.m_effs = m_effs
         self.dopings = dopings
+        self.permittivities = permittivities
 
         self.loss_functions = {}
 
@@ -427,6 +477,11 @@ class Device:
                 model_dtype = params.si_real_dtype,
                 output_dtype = params.si_real_dtype,
             )
+            models_dict[f'permittivity{i}'] = get_model(
+                permittivities[i],
+                model_dtype = params.si_real_dtype,
+                output_dtype = params.si_real_dtype,
+            )
 
             for contact in self.contacts:
                 x_in = self.boundaries[contact.get_in_boundary_index(i)]
@@ -548,6 +603,25 @@ class Device:
                 f'j_exact_{contact}',
                 kwargs = {'contact': contact},
             ))
+
+        const_models.append(MultiModel(
+            to_full_trafo,
+            f'doping',
+            kwargs = {
+                'N': N,
+                'label_fn': lambda i, *, contact=contact: f'doping{i}',
+                'quantity_label': 'doping',
+            },
+        ))
+        const_models.append(MultiModel(
+            to_full_trafo,
+            f'permittivity',
+            kwargs = {
+                'N': N,
+                'label_fn': lambda i, *, contact=contact: f'permittivity{i}',
+                'quantity_label': 'permittivity',
+            },
+        ))
 
 
         # Parameter-dependent but trainer-independent models
@@ -687,9 +761,13 @@ class Device:
 
         for contact in self.contacts:
             dependent_models.append(MultiModel(
-                full_phi_trafo,
+                to_full_trafo,
                 f'phi_{contact}',
-                kwargs = {'N': N, 'contact': contact},
+                kwargs = {
+                    'N': N,
+                    'label_fn': lambda i, *, contact=contact: f'phi{i}_{contact}',
+                    'quantity_label': f'phi_{contact}',
+                },
             ))
             dependent_models.append(MultiModel(
                 dos_trafo,
@@ -704,8 +782,12 @@ class Device:
 
         dependent_models.append(MultiModel(
             n_trafo,
-            f'n{i}',
+            'n',
             kwargs = {'contacts': self.contacts},
+        ))
+        dependent_models.append(MultiModel(
+            V_electrostatic_trafo,
+            'V_electrostatic',
         ))
 
 
