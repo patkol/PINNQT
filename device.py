@@ -249,8 +249,10 @@ def V_electrostatic_trafo(qs):
         M[i,i+1] = (permittivity[i] + permittivity[i+1]) / (2 * dx**2)
         M[i,i] = -M[i,i-1] - M[i,i+1]
 
-    M[0,0] = -(permittivity[0] + permittivity[1]) / (2 * dx**2)
-    M[0,1] = -M[0,0]
+    # Dirichlet on the left, Neumann on the right s.t. the potential is well-defined
+    # Assuming constant permittivity around the left boundary
+    M[0,0] = - 4 * permittivity[0] / (2 * dx**2)
+    M[0,1] = -M[0,0] / 2
     M[-1,-1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
     M[-1,-2] = -M[-1,-1]
     # TODO: implementation that works if x is not the last coordinate,
