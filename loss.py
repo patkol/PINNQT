@@ -38,7 +38,9 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
         )
         hbar_phi_dx_over_m_dx = restrict(hbar_phi_dx_over_m_dx_full, q.grid)
     residual = (-0.5 * physics.H_BAR * hbar_phi_dx_over_m_dx
-                + (q[f'V{i}'] - q[f'E_{contact}']) * q[f'phi{i}_{contact}'])
+                + (q[f'V_int{i}'] + q[f'V_el{i}'] - q[f'E_{contact}'])
+                #+ (q[f'V_int{i}'] + q[f'V_el_approx{i}'] - q[f'E_{contact}'])
+                  * q[f'phi{i}_{contact}'])
     residual /= coeff_in
     residual /= physics.V_OOM
     q[f'SE_loss{i}_{contact}'] = params.loss_function(residual)

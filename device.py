@@ -14,7 +14,7 @@ from kolpinn import storage
 from kolpinn import grid_quantities
 from kolpinn.grid_quantities import Grid, Subgrid, QuantityDict, \
                                     get_fd_derivative, combine_quantity, \
-                                    squeeze_to
+                                    squeeze_to, restrict
 from kolpinn.batching import Batcher
 from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, \
                           TransformedModel, get_model, \
@@ -35,7 +35,10 @@ if params.fd_first_derivatives:
     dx_shifts += [physics.dx, -physics.dx]
 
 k_function = lambda q, i, contact: \
-    physics.k_function(q[f'm_eff{i}'], q[f'E_{contact}']-q[f'V{i}'])
+    physics.k_function(
+        q[f'm_eff{i}'],
+        q[f'E_{contact}'] - q[f'V_int{i}'] - q[f'V_el_approx{i}'],
+    )
 
 gaussian = lambda x, sigma: torch.exp(-x**2 / (2 * sigma**2))
 
@@ -46,7 +49,10 @@ smoother_function = lambda x, smoothing_range: \
 smooth_k_function = lambda q, i, contact: \
     physics.k_function(
         q[f'm_eff{i}'],
-        smoother_function(q[f'E_{contact}']-q[f'V{i}'], physics.energy_smoothing_range),
+        smoother_function(
+            q[f'E_{contact}'] - q[f'V_int{i}'] - q[f'V_el_approx{i}'],
+            physics.energy_smoothing_range,
+        ),
     )
 
 def transition_function(a, b, transition_exp):
@@ -55,6 +61,16 @@ def transition_function(a, b, transition_exp):
     transition_exp(x) = torch.exp(-(x-x_left) / transition_distance)
     """
     return transition_exp * a + (1-transition_exp) * b
+
+def get_V_voltage(q: QuantityDict, device_start, device_end):
+    distance_factor = (q['x'] - device_start) / (device_end - device_start)
+    # Cap the factor beyond the device limits, these regions correspond to
+    # the contacts
+    distance_factor[distance_factor < 0] = 0
+    distance_factor[distance_factor > 1] = 1
+    V_voltage = -q['voltage'] * physics.EV * distance_factor
+
+    return V_voltage
 
 def get_dx_model(mode, quantity_name, grid_name):
     name = quantity_name + '_dx'
@@ -92,32 +108,33 @@ def get_dx_model(mode, quantity_name, grid_name):
     return MultiModel(dx_qs_trafo, name)
 
 def get_E_fermi(q: QuantityDict, *, i):
-    #dos = 8*np.pi / physics.H**3 * torch.sqrt(2 * q[f'm_eff{i}']**3 * q['DeltaE'])
+    dos = 8*np.pi / physics.H**3 * torch.sqrt(2 * q[f'm_eff{i}']**3 * q['DeltaE'])
 
-    #best_E_f = None
-    #best_abs_remaining_charge = float('inf')
-    #E_fs = np.arange(0*physics.EV, 0.8*physics.EV, 1e-3*physics.EV)
-    #for E_f in E_fs:
-    #    fermi_dirac = 1 / (1 + torch.exp(physics.BETA * (q['DeltaE'] - E_f)))
-    #    integrand = dos * fermi_dirac
-    #    # Particle, not charge density
-    #    n = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
-    #         * physics.E_STEP)
-    #    abs_remaining_charge = torch.abs(n - q[f'doping{i}']).item()
-    #    if abs_remaining_charge < best_abs_remaining_charge:
-    #        best_abs_remaining_charge = abs_remaining_charge
-    #        best_E_f = E_f
+    best_E_f = None
+    best_abs_remaining_charge = float('inf')
+    E_fs = np.arange(0*physics.EV, 0.8*physics.EV, 1e-3*physics.EV)
+    for E_f in E_fs:
+        fermi_dirac = 1 / (1 + torch.exp(physics.BETA * (q['DeltaE'] - E_f)))
+        integrand = dos * fermi_dirac
+        # Particle, not charge density
+        n = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
+             * physics.E_STEP)
+        abs_remaining_charge = torch.abs(n - q[f'doping{i}']).item()
+        if abs_remaining_charge < best_abs_remaining_charge:
+            best_abs_remaining_charge = abs_remaining_charge
+            best_E_f = E_f
 
-    #    E_f += 1e-3 * physics.EV
+        E_f += 1e-3 * physics.EV
 
-    #assert best_E_f != E_fs[0] and best_E_f != E_fs[-1], E_f / physics.EV
+    assert best_E_f is not None
+    assert best_E_f != E_fs[0] and best_E_f != E_fs[-1], E_f / physics.EV
 
-    #relative_remaining_charge = best_abs_remaining_charge / q[f'doping{i}']
-    #print(f'Best fermi energy: {best_E_f / physics.EV} eV with a relative remaining charge of {relative_remaining_charge}')
+    relative_remaining_charge = best_abs_remaining_charge / q[f'doping{i}']
+    print(f'Best fermi energy: {best_E_f / physics.EV} eV with a relative remaining charge of {relative_remaining_charge}')
 
-    best_E_f = 0.258 * physics.EV
+    #best_E_f = 0.258 * physics.EV # Fixed fermi level
 
-    return best_E_f + q[f'V{i}']  #* torch.ones((1,) * q.grid.n_dim)
+    return best_E_f + q[f'V_int{i}'] + q[f'V_el{i}']
 
 def factors_trafo(qs, i, contact):
     """
@@ -203,6 +220,23 @@ def to_full_trafo(
 
     return qs
 
+def to_bulks_trafo(
+    qs: dict[str,QuantityDict],
+    *,
+    N: int,
+    label_fn: Callable[[int],str],
+    quantity_label: str,
+):
+    """
+    Inverse of 'to_full_trafo'
+    """
+    full_quantity = qs['full'][quantity_label]
+    for i in range(1,N+1):
+        q_layer = qs[f'bulk{i}']
+        q_layer[label_fn(i)] = restrict(full_quantity, q_layer.grid)
+
+    return qs
+
 def dos_trafo(qs, *, contact):
     q = qs['full']
     q_in = qs[contact.grid_name]
@@ -244,25 +278,33 @@ def V_electrostatic_trafo(qs):
     dx = q.grid.dimensions['x'][1] - q.grid.dimensions['x'][0]
     M = torch.zeros(Nx, Nx)
     permittivity = squeeze_to(['x'], q['permittivity'], q.grid)
-    for i in range(1, Nx-1):
+    for i in range(1, Nx):
         M[i,i-1] = (permittivity[i] + permittivity[i-1]) / (2 * dx**2)
+    for i in range(0, Nx-1):
         M[i,i+1] = (permittivity[i] + permittivity[i+1]) / (2 * dx**2)
+    for i in range(1, Nx-1):
         M[i,i] = -M[i,i-1] - M[i,i+1]
 
-    # Dirichlet on the left, Neumann on the right s.t. the potential is well-defined
-    # Assuming constant permittivity around the left boundary
-    M[0,0] = - 4 * permittivity[0] / (2 * dx**2)
-    M[0,1] = -M[0,0] / 2
-    M[-1,-1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
-    M[-1,-2] = -M[-1,-1]
+    # Dirichlet BC
+    # Assuming constant permittivity at the outer boundaries
+    M[0,0] = -2 * permittivity[0] / dx**2
+    M[-1,-1] = -2 * permittivity[-1] / dx**2
+
     # TODO: implementation that works if x is not the last coordinate,
     #       kolpinn function
     #       Then remove the assertion above
     rho = physics.Q_E * (q['doping'] - q['n'])
+    rhs = -physics.Q_E * rho
+    # Phi[-1] = 0, Phi[Nx] = -voltage * EV
+    # S[0] = -epsilon[-1/2] / dx^2 * Phi[-1],
+    # S[Nx-1] = -epsilon[Nx-1/2] / dx^2 * Phi[Nx]
+    Phi_Nx = q['voltage'].squeeze(-1) * physics.EV
+    rhs[:,:,Nx-1] += -permittivity[-1] / dx**2 * Phi_Nx
     # Permute: x must be the second last coordinate for torch.linalg.solve
-    rho_permuted = torch.permute(rho, (0,2,1))
-    V_electrostatic_permuted = -physics.Q_E * torch.linalg.solve(M, -rho_permuted)
-    q['V_electrostatic'] = torch.permute(V_electrostatic_permuted, (0,2,1))
+    rhs_permuted = torch.permute(rhs, (0,2,1))
+    Phi_permuted = torch.linalg.solve(M, rhs_permuted)
+    Phi = torch.permute(Phi_permuted, (0,2,1))
+    q['V_el'] = -physics.Q_E * Phi
 
     return qs
 
@@ -324,6 +366,7 @@ class Device:
             m_effs,
             dopings,
             permittivities,
+            includes_contacts,
         ):
         """
         boundaries: [x_b0, ..., x_bN] with N the number of layers
@@ -341,13 +384,16 @@ class Device:
         assert len(boundaries) == N+1
         assert sorted(boundaries) == boundaries, boundaries
 
-        device_thickness = boundaries[-1] - boundaries[0]
         self.n_layers = N
         self.boundaries = boundaries
         self.potentials = potentials
         self.m_effs = m_effs
         self.dopings = dopings
         self.permittivities = permittivities
+        self.includes_contacts = includes_contacts
+
+        self.device_start = self.boundaries[1 if self.includes_contacts else 0]
+        self.device_end = self.boundaries[-2 if self.includes_contacts else -1]
 
         self.loss_functions = {}
 
@@ -459,15 +505,13 @@ class Device:
 
         ## Layers and contacts
         for i, models_dict in const_models_dict.items():
-            models_dict[f'V_no_voltage{i}'] = get_model(
+            models_dict[f'V_int{i}'] = get_model(
                 potentials[i],
                 model_dtype = params.si_real_dtype,
                 output_dtype = params.si_real_dtype,
             )
-            models_dict[f'V{i}'] = FunctionModel(
-                lambda q, i=i: (q[f'V_no_voltage{i}']
-                                - q['voltage'] * physics.EV * q['x']
-                                  / device_thickness),
+            models_dict[f'V_el_approx{i}'] = FunctionModel(
+                lambda q, i=i: get_V_voltage(q, self.device_start, self.device_end),
             )
             models_dict[f'm_eff{i}'] = get_model(
                 m_effs[i],
@@ -521,16 +565,29 @@ class Device:
         one_model = ConstModel(1, model_dtype=params.si_real_dtype)
 
         ## Both contacts
+        const_models_dict[0]['V_el0'] = ConstModel(
+            0,
+            model_dtype=params.si_real_dtype,
+        )
+        const_models_dict[N+1][f'V_el{N+1}'] = FunctionModel(
+            lambda q: -q['voltage'] * physics.EV,
+        )
+
         for contact in self.contacts:
             for i in (contact.index, contact.out_index):
                 for c in ('a', 'b'):
                     const_models_dict[i][f'{c}_output{i}_{contact}'] = one_model
                     const_models_dict[i][f'{c}_output{i}_{contact}_dx'] = zero_model
+                # V_el_approx is exact at the contacts
                 const_models_dict[i][f'v{i}_{contact}'] = FunctionModel(
                     lambda q, i=i, contact=contact: torch.sqrt(
-                        (2 * (q[f'E_{contact}']-q[f'V{i}']) / q[f'm_eff{i}']).to(params.si_complex_dtype)
+                        (2 * (q[f'E_{contact}'] - q[f'V_int{i}']
+                              - q[f'V_el{i}'])
+                         / q[f'm_eff{i}']).to(params.si_complex_dtype)
                     )
                 )
+
+
 
         ## Output contact: Initial conditions
         const_models_dict[N+1][f'a{N+1}_L'] = one_model
@@ -548,11 +605,14 @@ class Device:
 
         ## Input contact
         for contact in self.contacts:
+            # OPTIM: move to 'full' such that it does not have to be computed
+            #        for the pdx & mdx grids separately
             i = contact.index
             const_models_dict[i][f'dE_dk{i}_{contact}'] = FunctionModel(
                 lambda q, i=i, contact=contact:
                     torch.sqrt(2 * physics.H_BAR**2
-                               * (q[f'E_{contact}'] - q[f'V{i}'])
+                               * (q[f'E_{contact}'] - q[f'V_int{i}']
+                                  - q[f'V_el{i}'])
                                / q[f'm_eff{i}']),
             )
             const_models_dict[i][f'E_fermi_{contact}'] = FunctionModel(
@@ -606,6 +666,24 @@ class Device:
                 kwargs = {'contact': contact},
             ))
 
+        const_models.append(MultiModel(
+            to_full_trafo,
+            f'm_eff',
+            kwargs = {
+                'N': N,
+                'label_fn': lambda i, *, contact=contact: f'm_eff{i}',
+                'quantity_label': 'm_eff',
+            },
+        ))
+        const_models.append(MultiModel(
+            to_full_trafo,
+            'V_int',
+            kwargs = {
+                'N': N,
+                'label_fn': lambda i, *, contact=contact: f'V_int{i}',
+                'quantity_label': 'V_int',
+            },
+        ))
         const_models.append(MultiModel(
             to_full_trafo,
             f'doping',
@@ -745,16 +823,6 @@ class Device:
                 ))
 
                 dependent_models.append(MultiModel(
-                    loss.SE_loss_trafo,
-                    f'SE_loss{i}_{contact}',
-                    kwargs = {
-                        'qs_full': None, 'with_grad': True,
-                        'i': i, 'N': N, 'contact': contact,
-                    },
-                ))
-                self.used_losses[bulk_name].append(f'SE_loss{i}_{contact}')
-
-                dependent_models.append(MultiModel(
                     loss.j_loss_trafo,
                     f'j_loss{i}_{contact}',
                     kwargs = {'i': i, 'N': N, 'contact': contact},
@@ -789,8 +857,31 @@ class Device:
         ))
         dependent_models.append(MultiModel(
             V_electrostatic_trafo,
-            'V_electrostatic',
+            'V_el',
         ))
+        dependent_models.append(MultiModel(
+            to_bulks_trafo,
+            f'V_el_distribution',
+            kwargs = {
+                'N': N,
+                'label_fn': lambda i, *, contact=contact: f'V_el{i}',
+                'quantity_label': f'V_el',
+            },
+        ))
+
+        ## Bulk again
+        for i in range(1,N+1):
+            bulk_name = f'bulk{i}'
+            for contact in self.contacts:
+                dependent_models.append(MultiModel(
+                    loss.SE_loss_trafo,
+                    f'SE_loss{i}_{contact}',
+                    kwargs = {
+                        'qs_full': None, 'with_grad': True,
+                        'i': i, 'N': N, 'contact': contact,
+                    },
+                ))
+                self.used_losses[bulk_name].append(f'SE_loss{i}_{contact}')
 
 
         qs = get_qs(self.grids, const_models, quantities_requiring_grad)

@@ -46,6 +46,44 @@ def visualize(device):
             )
 
     q = qs['full']
+
+    save_lineplot(
+        q['V_int'],
+        q.grid,
+        'V_int',
+        'x',
+        path_prefix = path_prefix,
+        quantity_unit = physics.EV,
+        quantity_unit_name = 'eV',
+        x_unit = physics.NM, x_unit_name = 'nm',
+    )
+
+    save_lineplot(
+        q['V_int'] + q['V_el'],
+        q.grid,
+        'V',
+        'x',
+        'voltage',
+        path_prefix = path_prefix,
+        quantity_unit = physics.EV,
+        quantity_unit_name = 'eV',
+        x_unit = physics.NM, x_unit_name = 'nm',
+        lines_unit = physics.VOLT, lines_unit_name = 'V',
+    )
+
+    save_lineplot(
+        q[f'm_eff'],
+        q.grid,
+        f'm_eff',
+        'x',
+        'voltage',
+        path_prefix = path_prefix,
+        quantity_unit = 1/physics.NM,
+        quantity_unit_name = '1/nm',
+        x_unit = physics.NM, x_unit_name = 'nm',
+        lines_unit = physics.VOLT, lines_unit_name = 'V',
+    )
+
     save_lineplot(
         q[f'n'],
         q.grid,
@@ -315,9 +353,9 @@ def visualize(device):
             )
 
             save_lineplot(
-                q_full['V_electrostatic'],
+                q_full['V_el'],
                 q_full.grid,
-                'V_electrostatic',
+                'V_el',
                 'x',
                 quantity_unit = physics.EV,
                 quantity_unit_name = 'eV',
