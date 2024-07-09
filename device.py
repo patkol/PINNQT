@@ -11,10 +11,9 @@ import torch
 from kolpinn import mathematics
 from kolpinn.mathematics import complex_abs2
 from kolpinn import storage
-from kolpinn import grid_quantities
-from kolpinn.grid_quantities import Grid, Subgrid, QuantityDict, \
-                                    get_fd_derivative, combine_quantity, \
-                                    squeeze_to, restrict
+from kolpinn import quantities
+from kolpinn.grids import Grid, Subgrid
+from kolpinn.quantities import QuantityDict
 from kolpinn.batching import Batcher
 from kolpinn.model import SimpleNNModel, ConstModel, FunctionModel, \
                           TransformedModel, get_model, \
@@ -99,7 +98,7 @@ def get_dx_model(mode, quantity_name, grid_name):
     elif mode == 'singlegrid':
         def dx_qs_trafo(qs):
             q = qs[grid_name]
-            q[name] = get_fd_derivative('x', q[quantity_name], q.grid)
+            q[name] = quantities.get_fd_derivative('x', q[quantity_name], q.grid)
             return qs
 
     else:
@@ -117,7 +116,7 @@ def get_E_fermi(q: QuantityDict, *, i):
         fermi_dirac = 1 / (1 + torch.exp(physics.BETA * (q['DeltaE'] - E_f)))
         integrand = dos * fermi_dirac
         # Particle, not charge density
-        n = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
+        n = (quantities.sum_dimension('DeltaE', integrand, q.grid)
              * physics.E_STEP)
         abs_remaining_charge = torch.abs(n - q[f'doping{i}']).item()
         if abs_remaining_charge < best_abs_remaining_charge:
@@ -216,7 +215,11 @@ def to_full_trafo(
         assert isinstance(q_layer.grid, Subgrid)
         subgrid_list.append(q_layer.grid)
 
-    q[quantity_label] = combine_quantity(quantity_list, subgrid_list, q.grid)
+    q[quantity_label] = quantities.combine_quantity(
+        quantity_list,
+        subgrid_list,
+        q.grid,
+    )
 
     return qs
 
@@ -233,7 +236,7 @@ def to_bulks_trafo(
     full_quantity = qs['full'][quantity_label]
     for i in range(1,N+1):
         q_layer = qs[f'bulk{i}']
-        q_layer[label_fn(i)] = restrict(full_quantity, q_layer.grid)
+        q_layer[label_fn(i)] = quantities.restrict(full_quantity, q_layer.grid)
 
     return qs
 
@@ -255,8 +258,8 @@ def n_contact_trafo(qs, *, contact):
     q_in = qs[contact.grid_name]
 
     integrand = q[f'DOS_{contact}'] * q_in[f'fermi_integral_{contact}']
-    q[f'n_{contact}'] = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
-                            * physics.E_STEP)
+    q[f'n_{contact}'] = (quantities.sum_dimension('DeltaE', integrand, q.grid)
+                         * physics.E_STEP)
     return qs
 
 def n_trafo(qs, *, contacts):
@@ -277,7 +280,7 @@ def V_electrostatic_trafo(qs):
     Nx = q.grid.dim_size['x']
     dx = q.grid.dimensions['x'][1] - q.grid.dimensions['x'][0]
     M = torch.zeros(Nx, Nx)
-    permittivity = squeeze_to(['x'], q['permittivity'], q.grid)
+    permittivity = quantities.squeeze_to(['x'], q['permittivity'], q.grid)
     for i in range(1, Nx):
         M[i,i-1] = (permittivity[i] + permittivity[i-1]) / (2 * dx**2)
     for i in range(0, Nx-1):
@@ -328,7 +331,7 @@ def I_contact_trafo(qs, *, contact):
     q = qs['full']
     q_in = qs[contact.grid_name]
     integrand = q[f'T_{contact}'] * q_in[f'fermi_integral_{contact}']
-    integral = (grid_quantities.sum_dimension('DeltaE', integrand, q.grid)
+    integral = (quantities.sum_dimension('DeltaE', integrand, q.grid)
                 * physics.E_STEP)
     sign = 1 if contact.name=='L' else -1
     prefactor = -physics.Q_E / physics.H_BAR / (2*np.pi) * sign
@@ -928,9 +931,9 @@ class Device:
 
         ## Layers
         for i in range(1,N+1):
-            grids = ([f'boundary{i-1}' + dx_string  for dx_string in dx_strings]
-                     + [f'bulk{i}']
-                     + [f'boundary{i}' + dx_string  for dx_string in dx_strings])
+            layer_grids = ([f'boundary{i-1}' + dx_string  for dx_string in dx_strings]
+                           + [f'bulk{i}']
+                           + [f'boundary{i}' + dx_string  for dx_string in dx_strings])
             x_left = self.boundaries[i-1]
             x_right = self.boundaries[i]
 
@@ -965,7 +968,7 @@ class Device:
                     models.append(get_combined_multi_model(
                         c_model,
                         f'{c}_output{i}_{contact}',
-                        grids,
+                        layer_grids,
                         combined_dimension_name = 'x',
                         required_quantities_labels = ['voltage', 'DeltaE', 'x'],
                     ))

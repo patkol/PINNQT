@@ -48,7 +48,7 @@ EPSILON_0 = EPSILON_0_SI * CHARGE_SCALING / VOLTAGE_SCALING / DISTANCE_SCALING
 
 
 E_MIN = 5e-4 * EV
-E_STEP = 0.001 * EV
+E_STEP = 2e-4 * EV
 E_MAX = 0.4 * EV
 E_MIN += 1e-6 * EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used

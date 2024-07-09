@@ -1,8 +1,6 @@
 import os
 import torch
 
-from kolpinn.grid_quantities import QuantityDict, Grid
-
 from device import Device
 
 

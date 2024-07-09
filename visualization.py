@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt  # type: ignore
 import torch
 
 from kolpinn.mathematics import complex_abs2
-from kolpinn.grid_quantities import Subgrid, restrict_quantities
+from kolpinn.grids import Subgrid
+from kolpinn.quantities import restrict_quantities
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
 
