@@ -3,6 +3,7 @@
 
 from typing import Callable
 
+
 class Contact:
     def __init__(
             self,

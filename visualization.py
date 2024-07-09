@@ -16,7 +16,6 @@ import parameters as params
 import physics
 
 
-
 def visualize(device):
     plt.rcParams.update({'font.size': 22})
 

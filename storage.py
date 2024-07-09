@@ -4,7 +4,6 @@ import torch
 from device import Device
 
 
-
 def save_q_full(device: Device, *, excluded_quantities_labels=None):
     if excluded_quantities_labels is None:
         excluded_quantities_labels = []

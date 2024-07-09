@@ -18,7 +18,6 @@ from visualization import visualize
 from storage import save_q_full
 
 
-
 # Setup
 
 random.seed(params.seed)

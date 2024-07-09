@@ -11,7 +11,6 @@ from classes import Contact
 import physics
 
 
-
 def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     """
     i: layer index in [1,N]
