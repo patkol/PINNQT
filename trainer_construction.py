@@ -49,10 +49,11 @@ def get_trainer(
         dx_dict=dx_dict,
     )
 
-    # TODO: set quantities_requiring_grad if grad is used
-    quantities_requiring_grad: Dict[str, Sequence[str]] = dict(
-        (grid_name, []) for grid_name in unbatched_grids.keys()
-    )
+    x_grad_required = (not params.fd_first_derivatives
+                       or not params.fd_second_derivatives)
+    quantities_requiring_grad: Dict[str, Sequence[str]] = {}
+    for grid_name in unbatched_grids.keys():
+        quantities_requiring_grad[grid_name] = ['x'] if x_grad_required else []
 
     constant_models = get_constant_models(
         device,
