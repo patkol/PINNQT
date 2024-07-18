@@ -1,6 +1,7 @@
 # Copyright (c) 2024 ETH Zurich, Patrice Kolb
 
 
+from typing import Dict, Any
 import torch
 
 from kolpinn import mathematics
@@ -34,11 +35,11 @@ Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {'lr': 1, 'tolerance_grad': 0, 'tolerance_change': 0}
 optimizer_reset_tol = 100
 Scheduler = None
-scheduler_kwargs = None
-def loss_function(x): return mathematics.complex_abs2(x)
-def loss_aggregate_function(losses): return sum(losses)
-# def loss_function(x): return mathematics.complex_abs2(x)**2
-# def loss_aggregate_function(losses): return torch.sqrt(sum(losses))
+scheduler_kwargs: Dict[str, Any] = {}
+loss_function = mathematics.complex_abs2
+loss_aggregate_function = sum
+# loss_function = lambda x: mathematics.complex_abs2(x)**2
+# loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
 fd_first_derivatives = True
 fd_second_derivatives = True
 # Whether the voltage/energy is an input to the NN
@@ -49,7 +50,7 @@ continuous_training = loaded_parameters_index is None
 
 # Resolution
 N_x = 600
-# TEMP: Batching hard disabled batch_size_x = -1 # -1 for disabling batching
+batch_size_x = -1  # -1 for disabling batching
 
 # Plotting
 plot_each_voltage = 10

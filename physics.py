@@ -20,7 +20,7 @@ VOLT_SI = 1
 KELVIN_SI = 1
 K_B_SI = 1.38064852e-23
 H_BAR_SI = 1.054571817e-34  # J s
-H_SI = H_BAR_SI * 2*np.pi
+H_SI = H_BAR_SI * 2 * np.pi
 EPSILON_0_SI = 8.8541878128e-12
 
 NM = 1
@@ -75,7 +75,7 @@ dx = 0.01 * NM  # Used for derivatives
 # If 'includes_contacts' is True the potential drop does
 # not affect the outermost layers
 
-device_kwargs_dict: dict[str,dict] = {
+device_kwargs_dict: dict[str, dict] = {
     'free1': {
         'boundaries': [0, 5 * NM],
         'potentials': [0, 0, 0],
@@ -299,8 +299,8 @@ def k_function(m, E):
 
 # Device-dependent constants
 
-V_OOM = 0.3 * EV  #abs(max(device_kwargs['potentials'], key=abs))
-M_EFF_OOM = 0.1 * M_E  #abs(max(device_kwargs['m_effs'], key=abs))
+V_OOM = 0.3 * EV
+M_EFF_OOM = 0.1 * M_E
 K_OOM = np.sqrt(2 * M_EFF_OOM * V_OOM / H_BAR**2)
 CURRENT_CONTINUITY_OOM = K_OOM / M_EFF_OOM
 PROBABILITY_CURRENT_OOM = H_BAR * K_OOM / M_EFF_OOM

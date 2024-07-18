@@ -9,29 +9,26 @@ import torch
 from kolpinn.mathematics import complex_abs2
 from kolpinn.grids import Subgrid
 from kolpinn.quantities import restrict_quantities
+from kolpinn import training
+from kolpinn.training import Trainer
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
 
 import parameters as params
 import physics
+from classes import Device
 
 
-def visualize(device):
+def save_plots(trainer: Trainer, device: Device):
     plt.rcParams.update({'font.size': 22})
+    path_prefix = f'plots/{trainer.config.saved_parameters_index:04d}/'
 
-    N = device.n_layers
+    visualization.save_training_history_plot(trainer, path_prefix)
 
-    path_prefix = f'plots/{device.trainer.saved_parameters_index:04d}/'
-
-    visualization.save_training_history_plot(device.trainer, path_prefix)
-
-
-    qs = device.get_extended_qs()
-
+    qs = training.get_extended_qs(trainer.state)
 
     # Loss vs. E plots
-
-    for grid_name, loss_names in device.used_losses.items():
+    for grid_name, loss_names in trainer.config.loss_quantities.items():
         q = qs[grid_name]
         for loss_name in loss_names:
             save_lineplot(
@@ -40,22 +37,22 @@ def visualize(device):
                 loss_name,
                 'DeltaE',
                 'voltage',
-                path_prefix = path_prefix,
-                x_unit = physics.EV, x_unit_name = 'eV',
-                lines_unit = physics.VOLT, lines_unit_name = 'V',
+                path_prefix=path_prefix,
+                x_unit=physics.EV, x_unit_name='eV',
+                lines_unit=physics.VOLT, lines_unit_name='V',
             )
 
-    q = qs['full']
+    q = qs['bulk']
 
     save_lineplot(
         q['V_int'],
         q.grid,
         'V_int',
         'x',
-        path_prefix = path_prefix,
-        quantity_unit = physics.EV,
-        quantity_unit_name = 'eV',
-        x_unit = physics.NM, x_unit_name = 'nm',
+        path_prefix=path_prefix,
+        quantity_unit=physics.EV,
+        quantity_unit_name='eV',
+        x_unit=physics.NM, x_unit_name='nm',
     )
 
     save_lineplot(
@@ -64,37 +61,37 @@ def visualize(device):
         'V',
         'x',
         'voltage',
-        path_prefix = path_prefix,
-        quantity_unit = physics.EV,
-        quantity_unit_name = 'eV',
-        x_unit = physics.NM, x_unit_name = 'nm',
-        lines_unit = physics.VOLT, lines_unit_name = 'V',
+        path_prefix=path_prefix,
+        quantity_unit=physics.EV,
+        quantity_unit_name='eV',
+        x_unit=physics.NM, x_unit_name='nm',
+        lines_unit=physics.VOLT, lines_unit_name='V',
     )
 
     save_lineplot(
-        q[f'm_eff'],
+        q['m_eff'],
         q.grid,
-        f'm_eff',
+        'm_eff',
         'x',
         'voltage',
-        path_prefix = path_prefix,
-        quantity_unit = 1/physics.NM,
-        quantity_unit_name = '1/nm',
-        x_unit = physics.NM, x_unit_name = 'nm',
-        lines_unit = physics.VOLT, lines_unit_name = 'V',
+        path_prefix=path_prefix,
+        quantity_unit=1 / physics.NM,
+        quantity_unit_name='1/nm',
+        x_unit=physics.NM, x_unit_name='nm',
+        lines_unit=physics.VOLT, lines_unit_name='V',
     )
 
     save_lineplot(
-        q[f'n'],
+        q['n'],
         q.grid,
-        f'n',
+        'n',
         'x',
         'voltage',
-        path_prefix = path_prefix,
-        quantity_unit = 1/physics.NM,
-        quantity_unit_name = '1/nm',
-        x_unit = physics.NM, x_unit_name = 'nm',
-        lines_unit = physics.VOLT, lines_unit_name = 'V',
+        path_prefix=path_prefix,
+        quantity_unit=1 / physics.NM,
+        quantity_unit_name='1/nm',
+        x_unit=physics.NM, x_unit_name='nm',
+        lines_unit=physics.VOLT, lines_unit_name='V',
     )
 
     fig, ax = plt.subplots()
@@ -128,7 +125,7 @@ def visualize(device):
             linestyle='dashed',
             c='black',
         )
-    except:
+    except FileNotFoundError:
         pass
     ax.set_xlabel('U [V]')
     ax.set_ylabel('I [10^6 A/cm^2]')
@@ -145,18 +142,16 @@ def visualize(device):
             q.grid,
             f'I_{contact}',
             'voltage',
-            quantity_unit = 1 / physics.CM**2,
-            x_unit = physics.VOLT, x_unit_name = 'V',
+            quantity_unit=1 / physics.CM**2,
+            x_unit=physics.VOLT, x_unit_name='V',
         )
         ax.set_xlabel('U [V]')
         ax.set_ylabel('I [A/cm^2]')
         ax.grid(visible=True)
-        fig.savefig(path_prefix + f'I_components.pdf', bbox_inches='tight')
+        fig.savefig(path_prefix + 'I_components.pdf', bbox_inches='tight')
         plt.close(fig)
 
-
     # Per voltage plots
-
     voltages = next(iter(qs.values())).grid['voltage']
     used_energy_indices = list(range(
         0,
@@ -173,7 +168,7 @@ def visualize(device):
         voltage_index_dict = {'voltage': [voltage_index]}
 
         for contact in device.contacts:
-            q_full = qs['full']
+            q_full = qs['bulk']
             full_grid = Subgrid(q_full.grid, voltage_index_dict, copy_all=False)
             q_full = restrict_quantities(q_full, full_grid)
             full_grid_reduced = Subgrid(full_grid, energies_index_dict, copy_all=False)
@@ -191,18 +186,18 @@ def visualize(device):
             out_boundary_grid_reduced = Subgrid(out_boundary_grid, energies_index_dict, copy_all=False)
             q_out_reduced = restrict_quantities(q_out, out_boundary_grid_reduced)
 
-            ## Wave function
+            # Wave function
             save_lineplot(
                 complex_abs2(q_full_reduced[f'phi_{contact}']),
                 q_full_reduced.grid,
                 f'|phi_{contact}|^2',
                 'x',
                 'DeltaE',
-                x_unit = physics.NM,
-                x_unit_name = 'nm',
-                lines_unit = physics.EV,
-                lines_unit_name = 'eV',
-                path_prefix = voltage_path_prefix,
+                x_unit=physics.NM,
+                x_unit_name='nm',
+                lines_unit=physics.EV,
+                lines_unit_name='eV',
+                path_prefix=voltage_path_prefix,
             )
             save_lineplot(
                 torch.real(q_full_reduced[f'phi_{contact}']),
@@ -210,11 +205,11 @@ def visualize(device):
                 f'Re(phi_{contact})',
                 'x',
                 'DeltaE',
-                x_unit = physics.NM,
-                x_unit_name = 'nm',
-                lines_unit = physics.EV,
-                lines_unit_name = 'eV',
-                path_prefix = voltage_path_prefix,
+                x_unit=physics.NM,
+                x_unit_name='nm',
+                lines_unit=physics.EV,
+                lines_unit_name='eV',
+                path_prefix=voltage_path_prefix,
             )
             save_lineplot(
                 torch.imag(q_full_reduced[f'phi_{contact}']),
@@ -222,11 +217,11 @@ def visualize(device):
                 f'Im(phi_{contact})',
                 'x',
                 'DeltaE',
-                x_unit = physics.NM,
-                x_unit_name = 'nm',
-                lines_unit = physics.EV,
-                lines_unit_name = 'eV',
-                path_prefix = voltage_path_prefix,
+                x_unit=physics.NM,
+                x_unit_name='nm',
+                lines_unit=physics.EV,
+                lines_unit_name='eV',
+                path_prefix=voltage_path_prefix,
             )
             visualization.save_complex_polar_plot(
                 q_full_reduced[f'phi_{contact}'],
@@ -234,9 +229,9 @@ def visualize(device):
                 f'phi_{contact}',
                 'x',
                 'DeltaE',
-                lines_unit = physics.EV,
-                lines_unit_name = 'eV',
-                path_prefix = voltage_path_prefix,
+                lines_unit=physics.EV,
+                lines_unit_name='eV',
+                path_prefix=voltage_path_prefix,
             )
             save_heatmap(
                 q_full[f'DOS_{contact}'],
@@ -244,16 +239,14 @@ def visualize(device):
                 f'DOS_{contact}',
                 'x',
                 'DeltaE',
-                quantity_unit = 1/physics.NM/physics.EV,
-                quantity_unit_name = '1/nm/eV',
-                x_unit = physics.NM, x_unit_name = 'nm',
-                y_unit = physics.EV, y_unit_name = 'eV',
-                path_prefix = voltage_path_prefix,
+                quantity_unit=1 / physics.NM / physics.EV,
+                quantity_unit_name='1/nm/eV',
+                x_unit=physics.NM, x_unit_name='nm',
+                y_unit=physics.EV, y_unit_name='eV',
+                path_prefix=voltage_path_prefix,
             )
 
-
             # Transmission and reflection probabilities
-
             fig, ax = plt.subplots()
             add_lineplot(
                 ax,
@@ -261,10 +254,10 @@ def visualize(device):
                 q_full.grid,
                 'Reflection probability',
                 'DeltaE',
-                x_quantity = q_full[f'E_{contact}'],
+                x_quantity=q_full[f'E_{contact}'],
                 x_unit=physics.EV,
-                marker = 'x',
-                linewidth = 0,
+                marker='x',
+                linewidth=0,
                 c='blue',
             )
             add_lineplot(
@@ -273,17 +266,17 @@ def visualize(device):
                 q_full.grid,
                 'Transmission probability',
                 'DeltaE',
-                x_quantity = q_full[f'E_{contact}'],
+                x_quantity=q_full[f'E_{contact}'],
                 x_unit=physics.EV,
-                marker = 'x',
-                linewidth = 0,
+                marker='x',
+                linewidth=0,
                 c='orange',
             )
 
             try:
                 matlab_path = f'matlab_results/{voltage:.2f}V/'
                 energies_matlab = np.loadtxt(
-                        f'{matlab_path}E_{params.simulated_device_name}.txt',
+                    f'{matlab_path}E_{params.simulated_device_name}.txt',
                     delimiter=',',
                 )
                 a_r_2_left_matlab = np.loadtxt(
@@ -304,7 +297,7 @@ def visualize(device):
                     linestyle='dashed',
                     c='blue',
                 )
-            except:
+            except FileNotFoundError:
                 pass
 
             ax.set_xlabel('E [eV]')
@@ -316,18 +309,17 @@ def visualize(device):
             )
             plt.close(fig)
 
-
             save_lineplot(
                 q_full[f'I_spectrum_{contact}'],
                 q_full.grid,
                 f'Spectral current {contact}',
                 'DeltaE',
-                x_quantity = q_full[f'E_{contact}'],
-                x_label = 'E',
-                quantity_unit = 1 / physics.CM**2 / physics.EV,
-                quantity_unit_name = 'A/cm^2/eV',
-                x_unit = physics.EV, x_unit_name = 'eV',
-                path_prefix = voltage_path_prefix,
+                x_quantity=q_full[f'E_{contact}'],
+                x_label='E',
+                quantity_unit=1 / physics.CM**2 / physics.EV,
+                quantity_unit_name='A/cm^2/eV',
+                x_unit=physics.EV, x_unit_name='eV',
+                path_prefix=voltage_path_prefix,
             )
 
             save_lineplot(
@@ -335,10 +327,10 @@ def visualize(device):
                 q_full.grid,
                 'n',
                 'x',
-                quantity_unit = 1/physics.CM**3,
-                quantity_unit_name = '1/cm$^3$',
-                x_unit = 1/physics.NM, x_unit_name = 'nm',
-                path_prefix = voltage_path_prefix,
+                quantity_unit=1 / physics.CM**3,
+                quantity_unit_name='1/cm$^3$',
+                x_unit=1 / physics.NM, x_unit_name='nm',
+                path_prefix=voltage_path_prefix,
             )
 
             save_lineplot(
@@ -346,10 +338,10 @@ def visualize(device):
                 q_full.grid,
                 'Total Charge Density',
                 'x',
-                quantity_unit = 1/physics.CM**3,
-                quantity_unit_name = 'q/cm$^3$',
-                x_unit = 1/physics.NM, x_unit_name = 'nm',
-                path_prefix = voltage_path_prefix,
+                quantity_unit=1 / physics.CM**3,
+                quantity_unit_name='q/cm$^3$',
+                x_unit=1 / physics.NM, x_unit_name='nm',
+                path_prefix=voltage_path_prefix,
             )
 
             save_lineplot(
@@ -357,8 +349,8 @@ def visualize(device):
                 q_full.grid,
                 'V_el',
                 'x',
-                quantity_unit = physics.EV,
-                quantity_unit_name = 'eV',
-                x_unit = physics.NM, x_unit_name = 'nm',
-                path_prefix = voltage_path_prefix,
+                quantity_unit=physics.EV,
+                quantity_unit_name='eV',
+                x_unit=physics.NM, x_unit_name='nm',
+                path_prefix=voltage_path_prefix,
             )

@@ -7,15 +7,19 @@
 Solving the 1D Schrödinger equation with open bc using PINN.
 """
 
-import pdb
+from typing import Dict
 import random
 import torch
 
+from kolpinn import storage
+from kolpinn import training
+
 import parameters as params
 import physics
-from device import Device
-from visualization import visualize
-from storage import save_q_full
+from classes import Device
+import trainer_construction
+# import saving
+import plotting
 
 
 # Setup
@@ -24,21 +28,44 @@ random.seed(params.seed)
 torch.manual_seed(params.seed)
 torch.set_default_device(params.device)
 torch.set_default_dtype(params.si_real_dtype)
-#torch.autograd.set_detect_anomaly(True) # For debugging, very expensive
+# torch.autograd.set_detect_anomaly(True) # For debugging, very expensive
 
 
 device = Device(**physics.device_kwargs)
+batch_sizes: Dict[str, int] = {}
+if params.batch_size_x != -1:
+    batch_sizes['x'] = params.batch_size_x
+saved_parameters_index = storage.get_next_parameters_index()
+print('saved_parameters_index =', saved_parameters_index)
+
+trainer = trainer_construction.get_trainer(
+    device=device,
+    batch_sizes=batch_sizes,
+    loss_aggregate_function=params.loss_aggregate_function,
+    saved_parameters_index=saved_parameters_index,
+    save_optimizer=params.save_optimizer,
+    max_n_steps=params.max_n_training_steps,
+    max_time=params.max_time,
+    min_loss=params.min_loss,
+    optimizer_reset_tol=params.optimizer_reset_tol,
+    Optimizer=params.Optimizer,
+    optimizer_kwargs=params.optimizer_kwargs,
+    Scheduler=params.Scheduler,
+    scheduler_kwargs=params.scheduler_kwargs,
+)
+training.load(
+    params.loaded_parameters_index,
+    trainer,
+    load_optimizer=False,
+    load_scheduler=False,
+)
 
 
 if __name__ == "__main__":
-    device.trainer.train(
-        report_each = params.report_each,
-        max_n_steps = params.max_n_training_steps,
-        max_time = params.max_time,
-        min_loss = params.min_loss,
-    )
+    training.train(trainer, report_each=params.report_each, save_if_best=True)
+
     eval_times = dict(sorted(
-        device.trainer.evaluation_times.items(),
+        trainer.state.evaluation_times.items(),
         key=lambda item: item[1],
         reverse=True,
     ))
@@ -49,5 +76,5 @@ if __name__ == "__main__":
     for _, model_name in zip(range(25), eval_relatives):
         print(f"{eval_relatives[model_name]:.1%} {model_name}")
 
-    # save_q_full(device, excluded_quantities_labels=['phi_L', 'phi_R'])
-    visualize(device)
+    # saving.save_q_full(device, excluded_quantities_labels=['phi_L', 'phi_R'])
+    plotting.save_plots(trainer, device)

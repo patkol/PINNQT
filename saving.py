@@ -1,15 +1,19 @@
+# Copyright (c) 2024 ETH Zurich, Patrice Kolb
+
+
 import os
 import torch
 
-from device import Device
+from kolpinn import training
+from kolpinn.training import Trainer
 
 
-def save_q_full(device: Device, *, excluded_quantities_labels=None):
+def save_q_full(trainer: Trainer, *, excluded_quantities_labels=None):
     if excluded_quantities_labels is None:
         excluded_quantities_labels = []
-    path_prefix = f'data/{device.trainer.saved_parameters_index:04d}/'
+    path_prefix = f'data/{trainer.config.saved_parameters_index:04d}/'
     os.makedirs(path_prefix, exist_ok=True)
-    qs = device.get_extended_qs()
+    qs = training.get_extended_qs(trainer.state)
     q_full = qs['full']
     for excluded_quantity_label in excluded_quantities_labels:
         q_full.pop(excluded_quantity_label)
