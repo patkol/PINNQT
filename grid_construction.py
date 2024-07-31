@@ -38,7 +38,7 @@ def get_layer_subgrid(layer_index: int, parent_grid: Grid, device: Device):
     x_left = device.boundaries[layer_index - 1]
     x_right = device.boundaries[layer_index]
     layer_subgrid = parent_grid.get_subgrid(
-        {'x': lambda x: torch.logical_and(x >= x_left, x < x_right)},
+        {"x": lambda x: torch.logical_and(x >= x_left, x < x_right)},
         copy_all=False,
     )
     return layer_subgrid
@@ -47,7 +47,7 @@ def get_layer_subgrid(layer_index: int, parent_grid: Grid, device: Device):
 def get_layer_subgrids(parent_grid: Grid, device: Device):
     layer_subgrids: Dict[str, Grid] = {}
     for layer_index in range(1, device.n_layers + 1):
-        grid_name = f'bulk{layer_index}'
+        grid_name = f"bulk{layer_index}"
         layer_subgrids[grid_name] = get_layer_subgrid(
             layer_index,
             parent_grid,
@@ -58,7 +58,7 @@ def get_layer_subgrids(parent_grid: Grid, device: Device):
 
 
 def update_layer_subgrids(grids: Dict[str, Grid], device: Device) -> None:
-    grids.update(get_layer_subgrids(grids['bulk'], device))
+    grids.update(get_layer_subgrids(grids["bulk"], device))
 
 
 def get_unbatched_grids(
@@ -79,11 +79,13 @@ def get_unbatched_grids(
     grids: Dict[str, Grid] = {}
 
     # Bulk
-    grids['bulk'] = Grid({
-        'voltage': voltages,
-        'DeltaE': energies,
-        'x': xs,
-    })
+    grids["bulk"] = Grid(
+        {
+            "voltage": voltages,
+            "DeltaE": energies,
+            "x": xs,
+        }
+    )
 
     # Layers
     update_layer_subgrids(grids, device)
@@ -91,13 +93,15 @@ def get_unbatched_grids(
     # Boundaries
     for boundary_index in range(device.n_layers + 1):
         for dx_string, dx_shift in dx_dict.items():
-            grid_name = f'boundary{boundary_index}' + dx_string
+            grid_name = f"boundary{boundary_index}" + dx_string
             x = device.boundaries[boundary_index] + dx_shift
-            grids[grid_name] = Grid({
-                'voltage': voltages,
-                'DeltaE': energies,
-                'x': torch.tensor([x], dtype=params.si_real_dtype),
-            })
+            grids[grid_name] = Grid(
+                {
+                    "voltage": voltages,
+                    "DeltaE": energies,
+                    "x": torch.tensor([x], dtype=params.si_real_dtype),
+                }
+            )
 
     return grids
 
@@ -111,13 +115,13 @@ def get_batched_grids(
 ) -> Dict[str, Grid]:
     batched_grids: dict[str, Grid] = {}
     batched_indices_dict = batching.get_randomly_batched_indices_dict(
-        unbatched_grids['bulk'],
+        unbatched_grids["bulk"],
         batch_sizes,
     )
 
     # Bulk
-    batched_grids['bulk'] = Subgrid(
-        unbatched_grids['bulk'],
+    batched_grids["bulk"] = Subgrid(
+        unbatched_grids["bulk"],
         batched_indices_dict,
         copy_all=False,
     )
@@ -128,13 +132,11 @@ def get_batched_grids(
     # Boundaries
     # Not batching the boundaries in 'x'
     batched_indices_dict_excluding_x = dict(
-        (dim, indices)
-        for dim, indices in batched_indices_dict.items()
-        if dim != 'x'
+        (dim, indices) for dim, indices in batched_indices_dict.items() if dim != "x"
     )
     for boundary_index in range(device.n_layers + 1):
         for dx_string, dx_shift in dx_dict.items():
-            grid_name = f'boundary{boundary_index}' + dx_string
+            grid_name = f"boundary{boundary_index}" + dx_string
             batched_grids[grid_name] = Subgrid(
                 unbatched_grids[grid_name],
                 batched_indices_dict_excluding_x,

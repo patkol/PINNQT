@@ -32,10 +32,10 @@ def get_trainer(
     Scheduler: Optional[type],
     scheduler_kwargs: Dict[str, Any],
 ) -> training.Trainer:
-    dx_dict = {'': 0.}
+    dx_dict = {"": 0.0}
     if params.fd_first_derivatives:
-        dx_dict['_mdx'] = -physics.dx
-        dx_dict['_pdx'] = physics.dx
+        dx_dict["_mdx"] = -physics.dx
+        dx_dict["_pdx"] = physics.dx
 
     unbatched_grids = grid_construction.get_unbatched_grids(
         device,
@@ -49,11 +49,12 @@ def get_trainer(
         dx_dict=dx_dict,
     )
 
-    x_grad_required = (not params.fd_first_derivatives
-                       or not params.fd_second_derivatives)
+    x_grad_required = (
+        not params.fd_first_derivatives or not params.fd_second_derivatives
+    )
     quantities_requiring_grad: Dict[str, Sequence[str]] = {}
     for grid_name in unbatched_grids.keys():
-        quantities_requiring_grad[grid_name] = ['x'] if x_grad_required else []
+        quantities_requiring_grad[grid_name] = ["x"] if x_grad_required else []
 
     constant_models = get_constant_models(
         device,

@@ -21,8 +21,8 @@ class Contact:
         get_previous_layer_index: Callable[[int], int],
         get_next_layer_index: Callable[[int], int],
     ):
-        assert name in ('L', 'R')
-        assert incoming_coeff_in_name in ('a', 'b')
+        assert name in ("L", "R")
+        assert incoming_coeff_in_name in ("a", "b")
 
         self.name = name
         self.index = index
@@ -33,13 +33,13 @@ class Contact:
         self.get_previous_layer_index = get_previous_layer_index
         self.get_next_layer_index = get_next_layer_index
         self.incoming_coeff_in_name = incoming_coeff_in_name
-        self.incoming_coeff_out_name = 'b' if incoming_coeff_in_name == 'a' else 'a'
+        self.incoming_coeff_out_name = "b" if incoming_coeff_in_name == "a" else "a"
         self.outgoing_coeff_in_name = self.incoming_coeff_out_name
         self.outgoing_coeff_out_name = self.incoming_coeff_in_name
 
         self.in_boundary_index = self.get_out_boundary_index(self.index)
         self.out_boundary_index = self.get_in_boundary_index(self.out_index)
-        self.out_boundary_name = f'boundary{self.out_boundary_index}'
+        self.out_boundary_name = f"boundary{self.out_boundary_index}"
 
     def __repr__(self):
         return self.name
@@ -84,22 +84,22 @@ class Device:
         assert sorted(self.boundaries) == self.boundaries, self.boundaries
 
         left_contact = Contact(
-            name='L',
+            name="L",
             index=0,
             out_index=N + 1,
-            grid_name=f'boundary{0}',
-            incoming_coeff_in_name='a',
+            grid_name=f"boundary{0}",
+            incoming_coeff_in_name="a",
             get_in_boundary_index=lambda i: max(0, i - 1),
             get_out_boundary_index=lambda i: min(N, i),
             get_previous_layer_index=lambda i: i - 1,
             get_next_layer_index=lambda i: i + 1,
         )
         right_contact = Contact(
-            name='R',
+            name="R",
             index=N + 1,
             out_index=0,
-            grid_name=f'boundary{N}',
-            incoming_coeff_in_name='b',
+            grid_name=f"boundary{N}",
+            incoming_coeff_in_name="b",
             get_in_boundary_index=lambda i: min(N, i),
             get_out_boundary_index=lambda i: max(0, i - 1),
             get_previous_layer_index=lambda i: i + 1,

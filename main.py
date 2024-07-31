@@ -7,7 +7,6 @@
 Solving the 1D Schrödinger equation with open bc using PINN.
 """
 
-from typing import Dict
 import random
 import torch
 
@@ -18,6 +17,7 @@ import parameters as params
 import physics
 from classes import Device
 import trainer_construction
+
 # import saving
 import plotting
 
@@ -33,7 +33,7 @@ torch.set_default_dtype(params.si_real_dtype)
 
 device = Device(**physics.device_kwargs)
 saved_parameters_index = storage.get_next_parameters_index()
-print('saved_parameters_index =', saved_parameters_index)
+print("saved_parameters_index =", saved_parameters_index)
 
 trainer = trainer_construction.get_trainer(
     device=device,
@@ -61,14 +61,17 @@ training.load(
 if __name__ == "__main__":
     training.train(trainer, report_each=params.report_each, save_if_best=True)
 
-    eval_times = dict(sorted(
-        trainer.state.evaluation_times.items(),
-        key=lambda item: item[1],
-        reverse=True,
-    ))
+    eval_times = dict(
+        sorted(
+            trainer.state.evaluation_times.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+    )
     total_eval_time = sum(eval_times.values())
-    eval_relatives = dict((key, value / total_eval_time)
-                          for key, value in eval_times.items())
+    eval_relatives = dict(
+        (key, value / total_eval_time) for key, value in eval_times.items()
+    )
     print("Evaluation time: ", total_eval_time * 1e-9, "s")
     for _, model_name in zip(range(25), eval_relatives):
         print(f"{eval_relatives[model_name]:.1%} {model_name}")

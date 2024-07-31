@@ -2,7 +2,7 @@
 
 
 from collections.abc import Sequence
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Callable
 
 from kolpinn import model
 from kolpinn.model import MultiModel
@@ -24,27 +24,31 @@ def get_trained_models(
 
     # Layers
     for i in range(1, N + 1):
-        layer_grids = ([f'boundary{i - 1}' + dx_string for dx_string in dx_dict.keys()]
-                       + [f'bulk{i}']
-                       + [f'boundary{i}' + dx_string for dx_string in dx_dict.keys()])
+        layer_grids = (
+            [f"boundary{i - 1}" + dx_string for dx_string in dx_dict.keys()]
+            + [f"bulk{i}"]
+            + [f"boundary{i}" + dx_string for dx_string in dx_dict.keys()]
+        )
         x_left = device.boundaries[i - 1]
         x_right = device.boundaries[i]
 
         inputs_labels = []
         if params.continuous_voltage:
-            inputs_labels.append('voltage')
+            inputs_labels.append("voltage")
         if params.continuous_energy:
-            inputs_labels.append('DeltaE')  # TODO: check whether E_L/E_R or DeltaE should be provided (required_quantities_labels would need to be changed as well)
-        inputs_labels.append('x')
+            inputs_labels.append(
+                "DeltaE"
+            )  # TODO: check whether E_L/E_R or DeltaE should be provided (required_quantities_labels would need to be changed as well)
+        inputs_labels.append("x")
 
-        model_transformations = {
-            'x': lambda x, q, x_left=x_left, x_right=x_right:
-                (x - x_left) / (x_right - x_left),
-            'DeltaE': lambda E, q: E / physics.EV,
+        model_transformations: Dict[str, Callable] = {
+            "x": lambda x, q, x_left=x_left, x_right=x_right: (x - x_left)
+            / (x_right - x_left),
+            "DeltaE": lambda E, q: E / physics.EV,
         }
 
         for contact in device.contacts:
-            for c in ('a', 'b'):
+            for c in ("a", "b"):
                 nn_model = model.SimpleNNModel(
                     inputs_labels,
                     params.activation_function,
@@ -58,13 +62,15 @@ def get_trained_models(
                     nn_model,
                     input_transformations=model_transformations,
                 )
-                trained_models.append(model.get_combined_multi_model(
-                    c_model,
-                    f'{c}_output{i}_{contact}',
-                    layer_grids,
-                    combined_dimension_name='x',
-                    required_quantities_labels=['voltage', 'DeltaE', 'x'],
-                ))
-                trained_models_labels.append(f'{c}_output{i}_{contact}')
+                trained_models.append(
+                    model.get_combined_multi_model(
+                        c_model,
+                        f"{c}_output{i}_{contact}",
+                        layer_grids,
+                        combined_dimension_name="x",
+                        required_quantities_labels=["voltage", "DeltaE", "x"],
+                    )
+                )
+                trained_models_labels.append(f"{c}_output{i}_{contact}")
 
     return trained_models, trained_models_labels
