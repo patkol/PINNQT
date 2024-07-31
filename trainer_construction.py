@@ -3,7 +3,11 @@
 
 from collections.abc import Sequence
 from typing import Dict, Callable, Optional, Any
+import copy
 
+from kolpinn.grids import Subgrid
+from kolpinn import quantities
+from kolpinn.quantities import QuantityDict
 from kolpinn import model
 from kolpinn import training
 
@@ -75,16 +79,37 @@ def get_trainer(
         quantities_requiring_grad,
     )
 
-    def get_batched_grids():
-        return grid_construction.get_batched_grids(
+    def get_batched_qs(full_qs: Dict[str, QuantityDict]) -> Dict[str, QuantityDict]:
+        batched_grids = grid_construction.get_batched_grids(
             unbatched_grids,
             batch_sizes=batch_sizes,
             device=device,
             dx_dict=dx_dict,
         )
+        layer_subgrids = grid_construction.get_batched_layer_grids_as_subgrids(
+            batched_grids,
+            unbatched_grids,
+            device=device,
+        )
+        # Use direct subgrids of the unbatched layers for the restriction
+        batched_grids_for_restriction = copy.copy(batched_grids)
+        batched_grids_for_restriction.update(layer_subgrids)
+
+        batched_qs: Dict[str, QuantityDict] = {}
+        for grid_name, grid in batched_grids.items():
+            batched_grid_for_restriction = batched_grids_for_restriction[grid_name]
+            assert isinstance(grid, Subgrid)
+            assert isinstance(batched_grid_for_restriction, Subgrid)
+            batched_qs[grid_name] = quantities.restrict_quantities(
+                full_qs[grid_name],
+                grid,
+                subgrid_for_restriction=batched_grid_for_restriction,
+            )
+
+        return batched_qs
 
     config = training.TrainerConfig(
-        get_batched_grids=get_batched_grids,
+        get_batched_qs=get_batched_qs,
         loss_quantities=loss_quantities,
         loss_aggregate_function=loss_aggregate_function,
         saved_parameters_index=saved_parameters_index,

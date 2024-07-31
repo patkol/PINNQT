@@ -4,6 +4,7 @@
 from typing import Dict
 import torch
 
+from kolpinn import grids
 from kolpinn.grids import Grid, Subgrid
 from kolpinn import batching
 
@@ -144,3 +145,37 @@ def get_batched_grids(
             )
 
     return batched_grids
+
+
+def get_batched_layer_grids_as_subgrids(
+    batched_grids: dict[str, Grid], unbatched_grids: dict[str, Grid], *, device: Device
+) -> dict[str, Grid]:
+    """
+    Return the batched grids "bulk{i}", which are subgrids of the batched "bulk",
+    as subgrids of the unbatched "bulk{i}".
+    Initial hierarchy:
+        unbatched_grids["bulk"] -> batched_grids["bulk"] -> batched_grids["bulk{i}"]
+    Hierarchy of output:
+        unbatched_grids["bulk"] -> unbatched_grids["bulk{i}"] -> layer_subgrids["bulk{i}"]
+    """
+
+    layer_subgrids: Dict[str, Grid] = {}
+    for layer_index in range(1, device.n_layers + 1):
+        layer_name = f"bulk{layer_index}"
+        subgrid_of_batched_bulk = batched_grids[layer_name]
+        assert isinstance(subgrid_of_batched_bulk, Subgrid)
+        subgrid_of_unbatched_bulk = grids.get_as_subgrid(
+            subgrid_of_batched_bulk, copy_all=False
+        )
+
+        unbatched_layer = unbatched_grids[layer_name]
+        assert isinstance(unbatched_layer, Subgrid)
+        subgrid_of_unbatched_layer = grids.get_as_subsubgrid(
+            subgrid_of_unbatched_bulk,
+            unbatched_layer,
+            copy_all=False,
+        )
+
+        layer_subgrids[layer_name] = subgrid_of_unbatched_layer
+
+    return layer_subgrids
