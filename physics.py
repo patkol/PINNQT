@@ -48,7 +48,7 @@ EPSILON_0 = EPSILON_0_SI * CHARGE_SCALING / VOLTAGE_SCALING / DISTANCE_SCALING
 
 
 E_MIN = 5e-4 * EV
-E_STEP = 5e-2 * EV
+E_STEP = 1e-1 * EV
 E_MAX = 0.4 * EV
 E_MIN += 1e-6 * EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
@@ -76,69 +76,69 @@ dx = 0.01 * NM  # Used for derivatives
 # not affect the outermost layers
 
 device_kwargs_dict: dict[str, dict] = {
-    'free1': {
-        'boundaries': [0, 5 * NM],
-        'potentials': [0, 0, 0],
-        'm_effs': [M_E, M_E, M_E],
-        'dopings': [0, 0, 0],
-        'permittivities': [EPSILON_0, EPSILON_0, EPSILON_0],
-        'includes_contacts': False,
+    "free1": {
+        "boundaries": [0, 5 * NM],
+        "potentials": [0, 0, 0],
+        "m_effs": [M_E, M_E, M_E],
+        "dopings": [0, 0, 0],
+        "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0],
+        "includes_contacts": False,
     },
-    'free2': {
-        'boundaries': [0, 5 * NM, 10 * NM],
-        'potentials': [0, 0, 0, 0],
-        'm_effs': [M_E, M_E, M_E, M_E],
-        'dopings': [0, 0, 0, 0],
-        'permittivities': [EPSILON_0, EPSILON_0, EPSILON_0, EPSILON_0],
-        'includes_contacts': False,
+    "free2": {
+        "boundaries": [0, 5 * NM, 10 * NM],
+        "potentials": [0, 0, 0, 0],
+        "m_effs": [M_E, M_E, M_E, M_E],
+        "dopings": [0, 0, 0, 0],
+        "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0, EPSILON_0],
+        "includes_contacts": False,
     },
-    'barrier1': {
-        'boundaries': [
+    "barrier1": {
+        "boundaries": [
             0 * NM,
             15 * NM,
             19 * NM,
             34 * NM,
         ],
-        'potentials': [
+        "potentials": [
             0 * EV,
             0 * EV,
             0.3 * EV,
             0 * EV,
             0 * EV,
         ],
-        'm_effs': [
+        "m_effs": [
             0.065 * M_E,
             0.065 * M_E,
             0.1 * M_E,
             0.065 * M_E,
             0.065 * M_E,
         ],
-        'dopings': [
+        "dopings": [
             1e19 / CM**3,
             0,
             0,
             0,
             1e19 / CM**3,
         ],
-        'permittivities': [
+        "permittivities": [
             12 * EPSILON_0,
             12 * EPSILON_0,
             6 * EPSILON_0,
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        'includes_contacts': False,
+        "includes_contacts": False,
     },
-    'barrier1_no_tails': {
-        'boundaries': [0, 5 * NM],
-        'potentials': [0, 0.3 * EV, 0],
-        'm_effs': [0.065 * M_E, 0.1 * M_E, 0.065 * M_E],
-        'dopings': [0, 0, 0],
-        'permittivities': [12 * EPSILON_0, 11 * EPSILON_0, 12 * EPSILON_0],
-        'includes_contacts': False,
+    "barrier1_no_tails": {
+        "boundaries": [0, 5 * NM],
+        "potentials": [0, 0.3 * EV, 0],
+        "m_effs": [0.065 * M_E, 0.1 * M_E, 0.065 * M_E],
+        "dopings": [0, 0, 0],
+        "permittivities": [12 * EPSILON_0, 11 * EPSILON_0, 12 * EPSILON_0],
+        "includes_contacts": False,
     },
-    'barrier1_extended': {
-        'boundaries': [
+    "barrier1_extended": {
+        "boundaries": [
             0 * NM,
             30 * NM,
             45 * NM,
@@ -146,7 +146,7 @@ device_kwargs_dict: dict[str, dict] = {
             64 * NM,
             94 * NM,
         ],
-        'potentials': [
+        "potentials": [
             0 * EV,
             0 * EV,
             0 * EV,
@@ -155,7 +155,7 @@ device_kwargs_dict: dict[str, dict] = {
             0 * EV,
             0 * EV,
         ],
-        'm_effs': [
+        "m_effs": [
             0.065 * M_E,
             0.065 * M_E,
             0.065 * M_E,
@@ -164,7 +164,7 @@ device_kwargs_dict: dict[str, dict] = {
             0.065 * M_E,
             0.065 * M_E,
         ],
-        'dopings': [
+        "dopings": [
             1e19 / CM**3,
             1e19 / CM**3,
             0,
@@ -173,7 +173,7 @@ device_kwargs_dict: dict[str, dict] = {
             1e19 / CM**3,
             1e19 / CM**3,
         ],
-        'permittivities': [
+        "permittivities": [
             12 * EPSILON_0,
             12 * EPSILON_0,
             12 * EPSILON_0,
@@ -182,12 +182,12 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        'includes_contacts': True,
+        "includes_contacts": True,
     },
-    'rtd1': {
-        'boundaries': [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
-        'potentials': [0 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0 * EV],
-        'm_effs': [
+    "rtd1": {
+        "boundaries": [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
+        "potentials": [0 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0 * EV],
+        "m_effs": [
             0.065 * M_E,
             0.065 * M_E,
             0.1 * M_E,
@@ -196,8 +196,8 @@ device_kwargs_dict: dict[str, dict] = {
             0.065 * M_E,
             0.065 * M_E,
         ],
-        'dopings': [1e19 / CM**3, 0, 0, 1e18 / CM**3, 0, 0, 1e19 / CM**3],
-        'permittivities': [
+        "dopings": [1e19 / CM**3, 0, 0, 1e18 / CM**3, 0, 0, 1e19 / CM**3],
+        "permittivities": [
             12 * EPSILON_0,
             12 * EPSILON_0,
             11 * EPSILON_0,
@@ -206,30 +206,30 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        'includes_contacts': False,
+        "includes_contacts": False,
     },
-    'rtd1_no_tails': {
-        'boundaries': [0 * NM, 2.6 * NM, 6.6 * NM, 9.2 * NM],
-        'potentials': [0, 0.3 * EV, 0, 0.3 * EV, 0],
-        'm_effs': [
+    "rtd1_no_tails": {
+        "boundaries": [0 * NM, 2.6 * NM, 6.6 * NM, 9.2 * NM],
+        "potentials": [0, 0.3 * EV, 0, 0.3 * EV, 0],
+        "m_effs": [
             0.065 * M_E,
             0.1 * M_E,
             0.065 * M_E,
             0.1 * M_E,
             0.065 * M_E,
         ],
-        'dopings': [0, 0, 1e18 / CM**3, 0, 0],
-        'permittivities': [
+        "dopings": [0, 0, 1e18 / CM**3, 0, 0],
+        "permittivities": [
             12 * EPSILON_0,
             11 * EPSILON_0,
             12 * EPSILON_0,
             11 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        'includes_contacts': False,
+        "includes_contacts": False,
     },
-    'rtd1_extended': {
-        'boundaries': [
+    "rtd1_extended": {
+        "boundaries": [
             0 * NM,
             30 * NM,
             45 * NM,
@@ -239,7 +239,7 @@ device_kwargs_dict: dict[str, dict] = {
             69.2 * NM,
             99.2 * NM,
         ],
-        'potentials': [
+        "potentials": [
             0 * EV,
             0 * EV,
             0 * EV,
@@ -250,7 +250,7 @@ device_kwargs_dict: dict[str, dict] = {
             0 * EV,
             0 * EV,
         ],
-        'm_effs': [
+        "m_effs": [
             0.065 * M_E,
             0.065 * M_E,
             0.065 * M_E,
@@ -261,7 +261,7 @@ device_kwargs_dict: dict[str, dict] = {
             0.065 * M_E,
             0.065 * M_E,
         ],
-        'dopings': [
+        "dopings": [
             1e19 / CM**3,
             1e19 / CM**3,
             0,
@@ -272,7 +272,7 @@ device_kwargs_dict: dict[str, dict] = {
             1e19 / CM**3,
             1e19 / CM**3,
         ],
-        'permittivities': [
+        "permittivities": [
             12 * EPSILON_0,
             12 * EPSILON_0,
             12 * EPSILON_0,
@@ -283,7 +283,7 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        'includes_contacts': True,
+        "includes_contacts": True,
     },
 }
 

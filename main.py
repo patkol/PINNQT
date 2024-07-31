@@ -32,15 +32,12 @@ torch.set_default_dtype(params.si_real_dtype)
 
 
 device = Device(**physics.device_kwargs)
-batch_sizes: Dict[str, int] = {}
-if params.batch_size_x != -1:
-    batch_sizes['x'] = params.batch_size_x
 saved_parameters_index = storage.get_next_parameters_index()
 print('saved_parameters_index =', saved_parameters_index)
 
 trainer = trainer_construction.get_trainer(
     device=device,
-    batch_sizes=batch_sizes,
+    batch_sizes=params.batch_sizes,
     loss_aggregate_function=params.loss_aggregate_function,
     saved_parameters_index=saved_parameters_index,
     save_optimizer=params.save_optimizer,

@@ -2,10 +2,9 @@
 
 
 from typing import Dict
-import copy
 import torch
 
-from kolpinn.grids import Grid
+from kolpinn.grids import Grid, Subgrid
 from kolpinn import batching
 
 import parameters as params
@@ -90,10 +89,10 @@ def get_unbatched_grids(
     update_layer_subgrids(grids, device)
 
     # Boundaries
-    for i in range(device.n_layers + 1):
+    for boundary_index in range(device.n_layers + 1):
         for dx_string, dx_shift in dx_dict.items():
-            grid_name = f'boundary{i}' + dx_string
-            x = device.boundaries[i] + dx_shift
+            grid_name = f'boundary{boundary_index}' + dx_string
+            x = device.boundaries[boundary_index] + dx_shift
             grids[grid_name] = Grid({
                 'voltage': voltages,
                 'DeltaE': energies,
@@ -104,17 +103,42 @@ def get_unbatched_grids(
 
 
 def get_batched_grids(
-    grids: dict[str, Grid],
+    unbatched_grids: dict[str, Grid],
+    batch_sizes: Dict[str, int] = {},
     *,
     device: Device,
-    batch_sizes: Dict[str, int] = {},
+    dx_dict: Dict[str, float],
 ) -> Dict[str, Grid]:
-    grids = copy.copy(grids)
-
-    grids['bulk'] = batching.get_random_subgrid(
-        grids['bulk'],
+    batched_grids: dict[str, Grid] = {}
+    batched_indices_dict = batching.get_randomly_batched_indices_dict(
+        unbatched_grids['bulk'],
         batch_sizes,
     )
-    update_layer_subgrids(grids, device)
 
-    return grids
+    # Bulk
+    batched_grids['bulk'] = Subgrid(
+        unbatched_grids['bulk'],
+        batched_indices_dict,
+        copy_all=False,
+    )
+
+    # Layers
+    update_layer_subgrids(batched_grids, device)
+
+    # Boundaries
+    # Not batching the boundaries in 'x'
+    batched_indices_dict_excluding_x = dict(
+        (dim, indices)
+        for dim, indices in batched_indices_dict.items()
+        if dim != 'x'
+    )
+    for boundary_index in range(device.n_layers + 1):
+        for dx_string, dx_shift in dx_dict.items():
+            grid_name = f'boundary{boundary_index}' + dx_string
+            batched_grids[grid_name] = Subgrid(
+                unbatched_grids[grid_name],
+                batched_indices_dict_excluding_x,
+                copy_all=False,
+            )
+
+    return batched_grids

@@ -77,8 +77,9 @@ def get_trainer(
     def get_batched_grids():
         return grid_construction.get_batched_grids(
             unbatched_grids,
-            device=device,
             batch_sizes=batch_sizes,
+            device=device,
+            dx_dict=dx_dict,
         )
 
     config = training.TrainerConfig(

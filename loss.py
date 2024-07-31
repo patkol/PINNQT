@@ -1,5 +1,6 @@
 # Copyright (c) 2024 ETH Zurich, Patrice Kolb
 
+# TODO: turn these into single models (q_full is now passed through)
 
 from kolpinn.mathematics import complex_abs2, grad
 from kolpinn.quantities import get_fd_second_derivative, mean_dimension, restrict

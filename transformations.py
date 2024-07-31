@@ -200,7 +200,6 @@ def to_full_trafo(
     They're called 'label_fn(i)' in the bulk grids and
     'quantity_label' in 'bulk'.
     """
-    q = qs['bulk']
     quantity_list: list[torch.Tensor] = []
     subgrid_list: list[Subgrid] = []
     for i in range(1, N + 1):
@@ -209,10 +208,10 @@ def to_full_trafo(
         assert isinstance(q_layer.grid, Subgrid)
         subgrid_list.append(q_layer.grid)
 
-    q[quantity_label] = quantities.combine_quantity(
+    qs['bulk'][quantity_label] = quantities.combine_quantity(
         quantity_list,
         subgrid_list,
-        q.grid,
+        qs['bulk'].grid,
     )
 
     return qs
