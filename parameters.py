@@ -48,6 +48,7 @@ continuous_energy = True
 # Whether to use the weights from the previous energy step
 continuous_training = loaded_parameters_index is None
 batch_sizes: Dict[str, int] = {
+    "x": 20,
     "DeltaE": 4,
 }
 

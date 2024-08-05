@@ -79,12 +79,15 @@ def get_trainer(
         quantities_requiring_grad,
     )
 
-    def get_batched_qs(full_qs: Dict[str, QuantityDict]) -> Dict[str, QuantityDict]:
+    def get_batched_qs(
+        full_qs: Dict[str, QuantityDict], randomize: bool
+    ) -> Dict[str, QuantityDict]:
         batched_grids = grid_construction.get_batched_grids(
             unbatched_grids,
             batch_sizes=batch_sizes,
             device=device,
             dx_dict=dx_dict,
+            randomize=randomize,
         )
         layer_subgrids = grid_construction.get_batched_layer_grids_as_subgrids(
             batched_grids,

@@ -113,11 +113,13 @@ def get_batched_grids(
     *,
     device: Device,
     dx_dict: Dict[str, float],
+    randomize: bool,
 ) -> Dict[str, Grid]:
     batched_grids: dict[str, Grid] = {}
-    batched_indices_dict = batching.get_randomly_batched_indices_dict(
+    batched_indices_dict = batching.get_equispaced_batched_indices_dict(
         unbatched_grids["bulk"],
         batch_sizes,
+        randomize=randomize,
     )
 
     # Bulk
