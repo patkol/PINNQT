@@ -14,8 +14,8 @@ from kolpinn.training import Trainer
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
 
+import physical_constants as consts
 import parameters as params
-import physics
 from classes import Device
 
 
@@ -38,9 +38,9 @@ def save_plots(trainer: Trainer, device: Device):
                 "DeltaE",
                 "voltage",
                 path_prefix=path_prefix,
-                x_unit=physics.EV,
+                x_unit=consts.EV,
                 x_unit_name="eV",
-                lines_unit=physics.VOLT,
+                lines_unit=consts.VOLT,
                 lines_unit_name="V",
             )
 
@@ -52,9 +52,9 @@ def save_plots(trainer: Trainer, device: Device):
         "V_int",
         "x",
         path_prefix=path_prefix,
-        quantity_unit=physics.EV,
+        quantity_unit=consts.EV,
         quantity_unit_name="eV",
-        x_unit=physics.NM,
+        x_unit=consts.NM,
         x_unit_name="nm",
     )
 
@@ -65,11 +65,11 @@ def save_plots(trainer: Trainer, device: Device):
         "x",
         "voltage",
         path_prefix=path_prefix,
-        quantity_unit=physics.EV,
+        quantity_unit=consts.EV,
         quantity_unit_name="eV",
-        x_unit=physics.NM,
+        x_unit=consts.NM,
         x_unit_name="nm",
-        lines_unit=physics.VOLT,
+        lines_unit=consts.VOLT,
         lines_unit_name="V",
     )
 
@@ -80,11 +80,11 @@ def save_plots(trainer: Trainer, device: Device):
         "x",
         "voltage",
         path_prefix=path_prefix,
-        quantity_unit=1 / physics.NM,
+        quantity_unit=1 / consts.NM,
         quantity_unit_name="1/nm",
-        x_unit=physics.NM,
+        x_unit=consts.NM,
         x_unit_name="nm",
-        lines_unit=physics.VOLT,
+        lines_unit=consts.VOLT,
         lines_unit_name="V",
     )
 
@@ -95,11 +95,11 @@ def save_plots(trainer: Trainer, device: Device):
         "x",
         "voltage",
         path_prefix=path_prefix,
-        quantity_unit=1 / physics.NM,
+        quantity_unit=1 / consts.NM,
         quantity_unit_name="1/nm",
-        x_unit=physics.NM,
+        x_unit=consts.NM,
         x_unit_name="nm",
-        lines_unit=physics.VOLT,
+        lines_unit=consts.VOLT,
         lines_unit_name="V",
     )
 
@@ -110,9 +110,9 @@ def save_plots(trainer: Trainer, device: Device):
         q.grid,
         "PINN",
         "voltage",
-        quantity_unit=1e6 / physics.CM**2,
+        quantity_unit=1e6 / consts.CM**2,
         # quantity_unit_name='10^6 A/cm^2',
-        x_unit=physics.VOLT,
+        x_unit=consts.VOLT,
         x_unit_name="V",
         marker=".",
         linewidth=0,
@@ -152,8 +152,8 @@ def save_plots(trainer: Trainer, device: Device):
             q.grid,
             f"I_{contact}",
             "voltage",
-            quantity_unit=1 / physics.CM**2,
-            x_unit=physics.VOLT,
+            quantity_unit=1 / consts.CM**2,
+            x_unit=consts.VOLT,
             x_unit_name="V",
         )
         ax.set_xlabel("U [V]")
@@ -213,9 +213,9 @@ def save_plots(trainer: Trainer, device: Device):
                 f"|phi_{contact}|^2",
                 "x",
                 "DeltaE",
-                x_unit=physics.NM,
+                x_unit=consts.NM,
                 x_unit_name="nm",
-                lines_unit=physics.EV,
+                lines_unit=consts.EV,
                 lines_unit_name="eV",
                 path_prefix=voltage_path_prefix,
             )
@@ -225,9 +225,9 @@ def save_plots(trainer: Trainer, device: Device):
                 f"Re(phi_{contact})",
                 "x",
                 "DeltaE",
-                x_unit=physics.NM,
+                x_unit=consts.NM,
                 x_unit_name="nm",
-                lines_unit=physics.EV,
+                lines_unit=consts.EV,
                 lines_unit_name="eV",
                 path_prefix=voltage_path_prefix,
             )
@@ -237,9 +237,9 @@ def save_plots(trainer: Trainer, device: Device):
                 f"Im(phi_{contact})",
                 "x",
                 "DeltaE",
-                x_unit=physics.NM,
+                x_unit=consts.NM,
                 x_unit_name="nm",
-                lines_unit=physics.EV,
+                lines_unit=consts.EV,
                 lines_unit_name="eV",
                 path_prefix=voltage_path_prefix,
             )
@@ -249,7 +249,7 @@ def save_plots(trainer: Trainer, device: Device):
                 f"phi_{contact}",
                 "x",
                 "DeltaE",
-                lines_unit=physics.EV,
+                lines_unit=consts.EV,
                 lines_unit_name="eV",
                 path_prefix=voltage_path_prefix,
             )
@@ -259,11 +259,11 @@ def save_plots(trainer: Trainer, device: Device):
                 f"DOS_{contact}",
                 "x",
                 "DeltaE",
-                quantity_unit=1 / physics.NM / physics.EV,
+                quantity_unit=1 / consts.NM / consts.EV,
                 quantity_unit_name="1/nm/eV",
-                x_unit=physics.NM,
+                x_unit=consts.NM,
                 x_unit_name="nm",
-                y_unit=physics.EV,
+                y_unit=consts.EV,
                 y_unit_name="eV",
                 path_prefix=voltage_path_prefix,
             )
@@ -277,7 +277,7 @@ def save_plots(trainer: Trainer, device: Device):
                 "Reflection probability",
                 "DeltaE",
                 x_quantity=q_full[f"E_{contact}"],
-                x_unit=physics.EV,
+                x_unit=consts.EV,
                 marker="x",
                 linewidth=0,
                 c="blue",
@@ -289,7 +289,7 @@ def save_plots(trainer: Trainer, device: Device):
                 "Transmission probability",
                 "DeltaE",
                 x_quantity=q_full[f"E_{contact}"],
-                x_unit=physics.EV,
+                x_unit=consts.EV,
                 marker="x",
                 linewidth=0,
                 c="orange",
@@ -338,9 +338,9 @@ def save_plots(trainer: Trainer, device: Device):
                 "DeltaE",
                 x_quantity=q_full[f"E_{contact}"],
                 x_label="E",
-                quantity_unit=1 / physics.CM**2 / physics.EV,
+                quantity_unit=1 / consts.CM**2 / consts.EV,
                 quantity_unit_name="A/cm^2/eV",
-                x_unit=physics.EV,
+                x_unit=consts.EV,
                 x_unit_name="eV",
                 path_prefix=voltage_path_prefix,
             )
@@ -350,9 +350,9 @@ def save_plots(trainer: Trainer, device: Device):
                 q_full.grid,
                 "n",
                 "x",
-                quantity_unit=1 / physics.CM**3,
+                quantity_unit=1 / consts.CM**3,
                 quantity_unit_name="1/cm$^3$",
-                x_unit=1 / physics.NM,
+                x_unit=1 / consts.NM,
                 x_unit_name="nm",
                 path_prefix=voltage_path_prefix,
             )
@@ -362,21 +362,21 @@ def save_plots(trainer: Trainer, device: Device):
                 q_full.grid,
                 "Total Charge Density",
                 "x",
-                quantity_unit=1 / physics.CM**3,
+                quantity_unit=1 / consts.CM**3,
                 quantity_unit_name="q/cm$^3$",
-                x_unit=1 / physics.NM,
+                x_unit=1 / consts.NM,
                 x_unit_name="nm",
                 path_prefix=voltage_path_prefix,
             )
 
-            save_lineplot(
-                q_full["V_el"],
-                q_full.grid,
-                "V_el",
-                "x",
-                quantity_unit=physics.EV,
-                quantity_unit_name="eV",
-                x_unit=physics.NM,
-                x_unit_name="nm",
-                path_prefix=voltage_path_prefix,
-            )
+            # save_lineplot(
+            #     q_full["V_el"],
+            #     q_full.grid,
+            #     "V_el",
+            #     "x",
+            #     quantity_unit=consts.EV,
+            #     quantity_unit_name="eV",
+            #     x_unit=consts.NM,
+            #     x_unit_name="nm",
+            #     path_prefix=voltage_path_prefix,
+            # )

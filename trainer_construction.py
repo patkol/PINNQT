@@ -12,7 +12,6 @@ from kolpinn import model
 from kolpinn import training
 
 import parameters as params
-import physics
 from classes import Device
 import grid_construction
 from constant_models_construction import get_constant_models
@@ -38,17 +37,17 @@ def get_trainer(
 ) -> training.Trainer:
     dx_dict = {"": 0.0}
     if params.fd_first_derivatives:
-        dx_dict["_mdx"] = -physics.dx
-        dx_dict["_pdx"] = physics.dx
+        dx_dict["_mdx"] = -params.dx
+        dx_dict["_pdx"] = params.dx
 
     unbatched_grids = grid_construction.get_unbatched_grids(
         device,
-        V_min=physics.VOLTAGE_MIN,
-        V_max=physics.VOLTAGE_MAX,
-        V_step=physics.VOLTAGE_STEP,
-        E_min=physics.E_MIN,
-        E_max=physics.E_MAX,
-        E_step=physics.E_STEP,
+        V_min=params.VOLTAGE_MIN,
+        V_max=params.VOLTAGE_MAX,
+        V_step=params.VOLTAGE_STEP,
+        E_min=params.E_MIN,
+        E_max=params.E_MAX,
+        E_step=params.E_STEP,
         N_x=params.N_x,
         dx_dict=dx_dict,
     )

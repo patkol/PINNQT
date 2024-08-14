@@ -7,8 +7,8 @@ from typing import Dict, Tuple, Callable
 from kolpinn import model
 from kolpinn.model import MultiModel
 
+import physical_constants as consts
 import parameters as params
-import physics
 from classes import Device
 
 
@@ -44,7 +44,7 @@ def get_trained_models(
         model_transformations: Dict[str, Callable] = {
             "x": lambda x, q, x_left=x_left, x_right=x_right: (x - x_left)
             / (x_right - x_left),
-            "DeltaE": lambda E, q: E / physics.EV,
+            "DeltaE": lambda E, q: E / consts.EV,
         }
 
         for contact in device.contacts:

@@ -2,9 +2,12 @@
 
 
 from typing import Dict, Any
+import numpy as np
 import torch
 
 from kolpinn import mathematics
+
+import physical_constants as consts
 
 
 # General
@@ -21,15 +24,15 @@ loaded_parameters_index = None
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 9
-n_neurons_per_hidden_layer = 100
+n_hidden_layers = 5
+n_neurons_per_hidden_layer = 50
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 5
 max_time = None
-min_loss = 1000e-6
+min_loss = None
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -45,17 +48,40 @@ fd_second_derivatives = True
 # Whether the voltage/energy is an input to the NN
 continuous_voltage = True
 continuous_energy = True
-# Whether to use the weights from the previous energy step
-continuous_training = loaded_parameters_index is None
 batch_sizes: Dict[str, int] = {
-    "x": 20,
-    "DeltaE": 4,
+    "x": 25,
+    "DeltaE": 20,
 }
-
-# Resolution
-N_x = 50
 
 # Plotting
 plot_each_voltage = 10
-plot_each_energy = 20
+plot_each_energy = 10
 extra_plots = False
+
+# Resolution
+N_x = 100
+E_STEP = 1e-2 * consts.EV
+VOLTAGE_STEP = 0.002 * consts.VOLT
+
+
+# Physical
+E_MIN = 1e-4 * consts.EV
+E_MAX = 0.4 * consts.EV
+E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
+E_MAX += E_STEP / 2  # Making sure that E_MAX is used
+
+VOLTAGE_MIN = 0.0 * consts.VOLT
+VOLTAGE_MAX = 0.0 * consts.VOLT
+VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
+
+TEMPERATURE = 300 * consts.KELVIN
+
+energy_smoothing_range = 0.05 * consts.EV
+transition_distance = 0.5 * consts.NM
+dx = 0.01 * consts.NM  # Used for derivatives
+
+V_OOM = 0.3 * consts.EV
+M_EFF_OOM = 0.1 * consts.M_E
+K_OOM = np.sqrt(2 * M_EFF_OOM * V_OOM / consts.H_BAR**2)
+CURRENT_CONTINUITY_OOM = K_OOM / M_EFF_OOM
+PROBABILITY_CURRENT_OOM = consts.H_BAR * K_OOM / M_EFF_OOM

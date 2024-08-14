@@ -9,6 +9,7 @@ import torch
 from kolpinn import model
 from kolpinn.model import Model, MultiModel
 
+import physical_constants as consts
 import parameters as params
 import physics
 from classes import Device
@@ -29,7 +30,7 @@ def get_constant_models(
         lambda q: q["DeltaE"],
     )
     layer_indep_const_models_dict["E_R"] = model.FunctionModel(
-        lambda q: q["DeltaE"] - physics.Q_E * q["voltage"],
+        lambda q: q["DeltaE"] - consts.Q_E * q["voltage"],
     )
 
     # const_models_dict[i][name] = model
@@ -110,7 +111,7 @@ def get_constant_models(
         model_dtype=params.si_real_dtype,
     )
     const_models_dict[N + 1][f"V_el{N+1}"] = model.FunctionModel(
-        lambda q: -q["voltage"] * physics.EV,
+        lambda q: -q["voltage"] * consts.EV,
     )
 
     for contact in device.contacts:
@@ -153,7 +154,7 @@ def get_constant_models(
         const_models_dict[i][f"dE_dk{i}_{contact}"] = model.FunctionModel(
             lambda q, i=i, contact=contact: torch.sqrt(
                 2
-                * physics.H_BAR**2
+                * consts.H_BAR**2
                 * (q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"])
                 / q[f"m_eff{i}"]
             ),
@@ -164,7 +165,7 @@ def get_constant_models(
         const_models_dict[i][f"fermi_integral_{contact}"] = model.FunctionModel(
             lambda q, i=i, contact=contact: (
                 q[f"m_eff{i}"]
-                / (np.pi * physics.H_BAR**2 * physics.BETA)
+                / (np.pi * consts.H_BAR**2 * physics.BETA)
                 * torch.log(
                     1
                     + torch.exp(

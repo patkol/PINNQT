@@ -7,6 +7,8 @@
 Solving the 1D Schrödinger equation with open bc using PINN.
 """
 
+import os
+import shutil
 import random
 import torch
 
@@ -59,8 +61,15 @@ training.load(
 
 
 if __name__ == "__main__":
+    # Copy parameters.py
+    saved_parameters_path = storage.get_parameters_path(saved_parameters_index)
+    os.makedirs(saved_parameters_path, exist_ok=True)
+    shutil.copy("parameters.py", saved_parameters_path)
+
+    # Train
     training.train(trainer, report_each=params.report_each, save_if_best=True)
 
+    # Print evaluation times
     eval_times = dict(
         sorted(
             trainer.state.evaluation_times.items(),
@@ -76,5 +85,6 @@ if __name__ == "__main__":
     for _, model_name in zip(range(25), eval_relatives):
         print(f"{eval_relatives[model_name]:.1%} {model_name}")
 
+    # Save quantities and plots
     # saving.save_q_full(device, excluded_quantities_labels=['phi_L', 'phi_R'])
     plotting.save_plots(trainer, device)

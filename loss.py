@@ -5,6 +5,7 @@
 from kolpinn.mathematics import complex_abs2, grad
 from kolpinn.quantities import get_fd_second_derivative, mean_dimension, restrict
 
+import physical_constants as consts
 import parameters as params
 import physics
 
@@ -24,12 +25,10 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
 
     if params.fd_second_derivatives:
         phi_dx_dx = get_fd_second_derivative("x", q[f"phi{i}_{contact}"], q.grid)
-        hbar_phi_dx_over_m_dx = phi_dx_dx * (physics.H_BAR / q[f"m_eff{i}"])
+        hbar_phi_dx_over_m_dx = phi_dx_dx * (consts.H_BAR / q[f"m_eff{i}"])
     else:
         # Multiplying hbar here for numerical stability
-        hbar_phi_dx_over_m = q[f"phi{i}_{contact}_dx"] * (
-            physics.H_BAR / q[f"m_eff{i}"]
-        )
+        hbar_phi_dx_over_m = q[f"phi{i}_{contact}_dx"] * (consts.H_BAR / q[f"m_eff{i}"])
         hbar_phi_dx_over_m_dx_full = grad(
             hbar_phi_dx_over_m,
             q_full["x"],
@@ -38,13 +37,13 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
         )
         hbar_phi_dx_over_m_dx = restrict(hbar_phi_dx_over_m_dx_full, q.grid)
     residual = (
-        -0.5 * physics.H_BAR * hbar_phi_dx_over_m_dx
+        -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx
         + (q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"])
         # + (q[f'V_int{i}'] + q[f'V_el_approx{i}'] - q[f'E_{contact}'])
         * q[f"phi{i}_{contact}"]
     )
     residual /= coeff_in
-    residual /= physics.V_OOM
+    residual /= params.V_OOM
     q[f"SE_loss{i}_{contact}"] = params.loss_function(residual)
 
     return qs
@@ -58,7 +57,7 @@ def j_loss_trafo(qs, *, i, N, contact):
     # coeff_in = qs[contact.grid_name][f'{contact.incoming_coeff_in_name}{contact.index}_{contact}']
     # residual /= complex_abs2(coeff_in)
     residual /= mean_dimension("x", complex_abs2(q[f"phi{i}_{contact}"]), q.grid)
-    residual /= physics.PROBABILITY_CURRENT_OOM
+    residual /= params.PROBABILITY_CURRENT_OOM
     # exact_prob_current = qs[contact.out_boundary_name][f'j_exact_{contact}']
     # residual = torch.log(complex_abs2(prob_current / exact_prob_current))
     q[f"j_loss{i}_{contact}"] = params.loss_function(residual)
@@ -86,7 +85,7 @@ def cc_loss_trafo(qs, *, i, contact):
         q[f"phi{right_index}_{contact}_dx"] / q["m_eff" + left_index]
         - q[f"phi{left_index}_{contact}_dx"] / q["m_eff" + right_index]
     )
-    residual /= physics.CURRENT_CONTINUITY_OOM
+    residual /= params.CURRENT_CONTINUITY_OOM
     q[f"cc_loss{i}_{contact}"] = params.loss_function(residual)
 
     return qs

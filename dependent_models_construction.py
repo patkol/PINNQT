@@ -8,8 +8,8 @@ import torch
 from kolpinn import model
 from kolpinn.model import MultiModel
 
+import physical_constants as consts
 import parameters as params
-import physics
 from classes import Device
 import loss
 import transformations as trafos
@@ -169,7 +169,7 @@ def get_dependent_models(
                 model.get_multi_model(
                     model.FunctionModel(
                         lambda q, i=i, contact=contact: torch.imag(
-                            physics.H_BAR
+                            consts.H_BAR
                             * torch.conj(q[f"phi{i}_{contact}"])
                             * q[f"phi{i}_{contact}_dx"]
                             / q[f"m_eff{i}"]

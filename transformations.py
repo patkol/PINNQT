@@ -12,6 +12,8 @@ from kolpinn import quantities
 from kolpinn.quantities import QuantityDict
 from kolpinn import model
 
+import physical_constants as consts
+import parameters as params
 import physics
 from classes import Contact
 
@@ -37,7 +39,7 @@ def smooth_k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor
         q[f"m_eff{i}"],
         smoother_function(
             q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el_approx{i}"],
-            physics.energy_smoothing_range,
+            params.energy_smoothing_range,
         ),
     )
 
@@ -56,7 +58,7 @@ def get_V_voltage(q: QuantityDict, device_start, device_end):
     # the contacts
     distance_factor[distance_factor < 0] = 0
     distance_factor[distance_factor > 1] = 1
-    V_voltage = -q["voltage"] * physics.EV * distance_factor
+    V_voltage = -q["voltage"] * consts.EV * distance_factor
 
     return V_voltage
 
@@ -82,7 +84,7 @@ def get_dx_model(mode: str, quantity_name: str, grid_name: str):
         def dx_qs_trafo(qs):
             quantity_right = qs[grid_name + "_pdx"][quantity_name]
             quantity_left = qs[grid_name + "_mdx"][quantity_name]
-            qs[grid_name][name] = (quantity_right - quantity_left) / (2 * physics.dx)
+            qs[grid_name][name] = (quantity_right - quantity_left) / (2 * params.dx)
             return qs
 
     elif mode == "singlegrid":
@@ -99,32 +101,30 @@ def get_dx_model(mode: str, quantity_name: str, grid_name: str):
 
 
 def get_E_fermi(q: QuantityDict, *, i):
-    dos = 8 * np.pi / physics.H**3 * torch.sqrt(2 * q[f"m_eff{i}"] ** 3 * q["DeltaE"])
+    dos = 8 * np.pi / consts.H**3 * torch.sqrt(2 * q[f"m_eff{i}"] ** 3 * q["DeltaE"])
 
     best_E_f = None
     best_abs_remaining_charge = float("inf")
-    E_fs = np.arange(0 * physics.EV, 0.8 * physics.EV, 1e-3 * physics.EV)
+    E_fs = np.arange(0 * consts.EV, 0.8 * consts.EV, 1e-3 * consts.EV)
     for E_f in E_fs:
         fermi_dirac = 1 / (1 + torch.exp(physics.BETA * (q["DeltaE"] - E_f)))
         integrand = dos * fermi_dirac
         # Particle, not charge density
-        n = quantities.sum_dimension("DeltaE", integrand, q.grid) * physics.E_STEP
+        n = quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
         abs_remaining_charge = torch.abs(n - q[f"doping{i}"]).item()
         if abs_remaining_charge < best_abs_remaining_charge:
             best_abs_remaining_charge = abs_remaining_charge
             best_E_f = E_f
 
-        E_f += 1e-3 * physics.EV
+        E_f += 1e-3 * consts.EV
 
     assert best_E_f is not None
-    assert best_E_f != E_fs[0] and best_E_f != E_fs[-1], E_f / physics.EV
+    assert best_E_f != E_fs[0] and best_E_f != E_fs[-1], E_f / consts.EV
 
     relative_remaining_charge = best_abs_remaining_charge / q[f"doping{i}"]
     print(
-        f"Best fermi energy: {best_E_f / physics.EV} eV with a relative remaining charge of {relative_remaining_charge}"
+        f"Best fermi energy: {best_E_f / consts.EV} eV with a relative remaining charge of {relative_remaining_charge}"
     )
-
-    # best_E_f = 0.258 * physics.EV # Fixed fermi level
 
     return best_E_f + q[f"V_int{i}"] + q[f"V_el{i}"]
 
@@ -271,7 +271,7 @@ def n_contact_trafo(qs, *, contact):
 
     integrand = q[f"DOS_{contact}"] * q_in[f"fermi_integral_{contact}"]
     q[f"n_{contact}"] = (
-        quantities.sum_dimension("DeltaE", integrand, q.grid) * physics.E_STEP
+        quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
     )
     return qs
 
@@ -286,6 +286,10 @@ def n_trafo(qs, *, contacts):
 
 def V_electrostatic_trafo(qs):
     q = qs["bulk"]
+
+    # TEMP
+    q["V_el"] = torch.zeros((1, 1, 1))
+    return qs
 
     assert q.grid.dimensions_labels[-1] == "x"
 
@@ -311,18 +315,18 @@ def V_electrostatic_trafo(qs):
     # TODO: implementation that works if x is not the last coordinate,
     #       kolpinn function
     #       Then remove the assertion above
-    rho = physics.Q_E * (q["doping"] - q["n"])
-    rhs = -physics.Q_E * rho
+    rho = consts.Q_E * (q["doping"] - q["n"])
+    rhs = -consts.Q_E * rho
     # Phi[-1] = 0, Phi[Nx] = -voltage * EV
     # S[0] = -epsilon[-1/2] / dx^2 * Phi[-1],
     # S[Nx-1] = -epsilon[Nx-1/2] / dx^2 * Phi[Nx]
-    Phi_Nx = q["voltage"].squeeze(-1) * physics.EV
+    Phi_Nx = q["voltage"].squeeze(-1) * consts.EV
     rhs[:, :, Nx - 1] += -permittivity[-1] / dx**2 * Phi_Nx
     # Permute: x must be the second last coordinate for torch.linalg.solve
     rhs_permuted = torch.permute(rhs, (0, 2, 1))
     Phi_permuted = torch.linalg.solve(M, rhs_permuted)
     Phi = torch.permute(Phi_permuted, (0, 2, 1))
-    q["V_el"] = -physics.Q_E * Phi
+    q["V_el"] = -consts.Q_E * Phi
 
     return qs
 
@@ -360,9 +364,9 @@ def I_contact_trafo(qs, *, contact):
     q = qs["bulk"]
     q_in = qs[contact.grid_name]
     integrand = q[f"T_{contact}"] * q_in[f"fermi_integral_{contact}"]
-    integral = quantities.sum_dimension("DeltaE", integrand, q.grid) * physics.E_STEP
+    integral = quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
     sign = 1 if contact.name == "L" else -1
-    prefactor = -physics.Q_E / physics.H_BAR / (2 * np.pi) * sign
+    prefactor = -consts.Q_E / consts.H_BAR / (2 * np.pi) * sign
     q[f"I_spectrum_{contact}"] = prefactor * integrand
     q[f"I_{contact}"] = prefactor * integral
 
@@ -384,6 +388,6 @@ def j_exact_trafo(qs, *, contact):
     k = q[f"k{contact.out_index}_{contact}"]
     m_eff = q[f"m_eff{contact.out_index}"]
     sign = -1 if contact.name == "L" else 1
-    q[f"j_exact_{contact}"] = sign * physics.H_BAR * k / m_eff
+    q[f"j_exact_{contact}"] = sign * consts.H_BAR * k / m_eff
 
     return qs
