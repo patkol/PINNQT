@@ -7,7 +7,6 @@ from kolpinn.quantities import get_fd_second_derivative, mean_dimension, restric
 
 import physical_constants as consts
 import parameters as params
-import physics
 
 
 def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
@@ -18,10 +17,6 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
 
     q = qs[f"bulk{i}"]
     q_full = qs_full[f"bulk{i}"]
-
-    coeff_in = qs[contact.grid_name][
-        f"{contact.incoming_coeff_in_name}{contact.index}_{contact}"
-    ]
 
     if params.fd_second_derivatives:
         phi_dx_dx = get_fd_second_derivative("x", q[f"phi{i}_{contact}"], q.grid)
@@ -36,13 +31,9 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
             create_graph=with_grad,
         )
         hbar_phi_dx_over_m_dx = restrict(hbar_phi_dx_over_m_dx_full, q.grid)
-    residual = (
-        -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx
-        + (q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"])
-        # + (q[f'V_int{i}'] + q[f'V_el_approx{i}'] - q[f'E_{contact}'])
-        * q[f"phi{i}_{contact}"]
+    residual = -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx / q[f"phi{i}_{contact}"] + (
+        q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"]
     )
-    residual /= coeff_in
     residual /= params.V_OOM
     q[f"SE_loss{i}_{contact}"] = params.loss_function(residual)
 

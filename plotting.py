@@ -30,6 +30,7 @@ def save_plots(trainer: Trainer, device: Device):
     # Loss vs. E plots
     for grid_name, loss_names in trainer.config.loss_quantities.items():
         q = qs[grid_name]
+        total_loss = 0
         for loss_name in loss_names:
             save_lineplot(
                 q[loss_name],
@@ -43,6 +44,31 @@ def save_plots(trainer: Trainer, device: Device):
                 lines_unit=consts.VOLT,
                 lines_unit_name="V",
             )
+            total_loss += q[loss_name]
+        save_lineplot(
+            total_loss,
+            q.grid,
+            f"Total_loss_{grid_name}",
+            "DeltaE",
+            "voltage",
+            path_prefix=path_prefix,
+            x_unit=consts.EV,
+            x_unit_name="eV",
+            lines_unit=consts.VOLT,
+            lines_unit_name="V",
+        )
+        save_lineplot(
+            total_loss,
+            q.grid,
+            f"Total_loss_{grid_name}",
+            "x",
+            "voltage",
+            path_prefix=path_prefix,
+            x_unit=consts.EV,
+            x_unit_name="eV",
+            lines_unit=consts.VOLT,
+            lines_unit_name="V",
+        )
 
     q = qs["bulk"]
 
@@ -206,9 +232,15 @@ def save_plots(trainer: Trainer, device: Device):
             )
             q_out_reduced = restrict_quantities(q_out, out_boundary_grid_reduced)
 
+            incoming_coeff_in_reduced = q_in_reduced[
+                f"{contact.incoming_coeff_in_name}{contact.index}_{contact}"
+            ]
+
             # Wave function
             save_lineplot(
-                complex_abs2(q_full_reduced[f"phi_{contact}"]),
+                complex_abs2(
+                    q_full_reduced[f"phi_{contact}"] / incoming_coeff_in_reduced
+                ),
                 q_full_reduced.grid,
                 f"|phi_{contact}|^2",
                 "x",
@@ -220,7 +252,9 @@ def save_plots(trainer: Trainer, device: Device):
                 path_prefix=voltage_path_prefix,
             )
             save_lineplot(
-                torch.real(q_full_reduced[f"phi_{contact}"]),
+                torch.real(
+                    q_full_reduced[f"phi_{contact}"] / incoming_coeff_in_reduced
+                ),
                 q_full_reduced.grid,
                 f"Re(phi_{contact})",
                 "x",
@@ -232,7 +266,9 @@ def save_plots(trainer: Trainer, device: Device):
                 path_prefix=voltage_path_prefix,
             )
             save_lineplot(
-                torch.imag(q_full_reduced[f"phi_{contact}"]),
+                torch.imag(
+                    q_full_reduced[f"phi_{contact}"] / incoming_coeff_in_reduced
+                ),
                 q_full_reduced.grid,
                 f"Im(phi_{contact})",
                 "x",
@@ -244,7 +280,7 @@ def save_plots(trainer: Trainer, device: Device):
                 path_prefix=voltage_path_prefix,
             )
             visualization.save_complex_polar_plot(
-                q_full_reduced[f"phi_{contact}"],
+                q_full_reduced[f"phi_{contact}"] / incoming_coeff_in_reduced,
                 q_full_reduced.grid,
                 f"phi_{contact}",
                 "x",
@@ -265,6 +301,18 @@ def save_plots(trainer: Trainer, device: Device):
                 x_unit_name="nm",
                 y_unit=consts.EV,
                 y_unit_name="eV",
+                path_prefix=voltage_path_prefix,
+            )
+            save_lineplot(
+                q_full_reduced[f"DOS_{contact}"],
+                q_full_reduced.grid,
+                f"DOS_{contact}",
+                "x",
+                "DeltaE",
+                x_unit=consts.NM,
+                x_unit_name="nm",
+                lines_unit=consts.EV,
+                lines_unit_name="eV",
                 path_prefix=voltage_path_prefix,
             )
 
@@ -352,7 +400,7 @@ def save_plots(trainer: Trainer, device: Device):
                 "x",
                 quantity_unit=1 / consts.CM**3,
                 quantity_unit_name="1/cm$^3$",
-                x_unit=1 / consts.NM,
+                x_unit=consts.NM,
                 x_unit_name="nm",
                 path_prefix=voltage_path_prefix,
             )
@@ -364,7 +412,7 @@ def save_plots(trainer: Trainer, device: Device):
                 "x",
                 quantity_unit=1 / consts.CM**3,
                 quantity_unit_name="q/cm$^3$",
-                x_unit=1 / consts.NM,
+                x_unit=consts.NM,
                 x_unit_name="nm",
                 path_prefix=voltage_path_prefix,
             )
@@ -380,3 +428,36 @@ def save_plots(trainer: Trainer, device: Device):
             #     x_unit_name="nm",
             #     path_prefix=voltage_path_prefix,
             # )
+
+            if not params.extra_plots:
+                continue
+
+            for i in range(1, device.n_layers + 1):
+                q_layer = qs[f"bulk{i}"]
+                grid_layer = Subgrid(q_layer.grid, voltage_index_dict, copy_all=False)
+                q_layer = restrict_quantities(q_layer, grid_layer)
+                grid_layer_reduced = Subgrid(
+                    grid_layer, energies_index_dict, copy_all=False
+                )
+                q_layer_reduced = restrict_quantities(q_layer, grid_layer_reduced)
+                for c in ("a", "b"):
+                    save_lineplot(
+                        torch.real(q_layer_reduced[f"{c}_output{i}_{contact}"]),
+                        q_layer_reduced.grid,
+                        f"Re[{c}_output{i}_{contact}]",
+                        "x",
+                        "DeltaE",
+                        x_unit=consts.NM,
+                        x_unit_name="nm",
+                        path_prefix=voltage_path_prefix,
+                    )
+                    save_lineplot(
+                        torch.imag(q_layer_reduced[f"{c}_output{i}_{contact}"]),
+                        q_layer_reduced.grid,
+                        f"Im[{c}_output{i}_{contact}]",
+                        "x",
+                        "DeltaE",
+                        x_unit=consts.NM,
+                        x_unit_name="nm",
+                        path_prefix=voltage_path_prefix,
+                    )

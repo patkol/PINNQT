@@ -35,6 +35,14 @@ device_kwargs_dict: dict[str, dict] = {
         "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0, EPSILON_0],
         "includes_contacts": False,
     },
+    "free3": {
+        "boundaries": [0, 100 * NM],
+        "potentials": [0, 0, 0],
+        "m_effs": [M_E, M_E, M_E],
+        "dopings": [0, 0, 0],
+        "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0],
+        "includes_contacts": False,
+    },
     "barrier1": {
         "boundaries": [
             0 * NM,
@@ -73,7 +81,7 @@ device_kwargs_dict: dict[str, dict] = {
         "includes_contacts": False,
     },
     "barrier1_no_tails": {
-        "boundaries": [0, 5 * NM],
+        "boundaries": [0, 4 * NM],
         "potentials": [0, 0.3 * EV, 0],
         "m_effs": [0.065 * M_E, 0.1 * M_E, 0.065 * M_E],
         "dopings": [0, 0, 0],
@@ -125,6 +133,8 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
+        # TODO: respect the different permittivities while calculating the potential,
+        #       and set them to inf at the contacts to replace the "includes_contacts"
         "includes_contacts": True,
     },
     "rtd1": {

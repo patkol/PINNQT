@@ -58,6 +58,15 @@ def get_trained_models(
                     output_dtype=params.si_complex_dtype,
                     device=params.device,
                 )
+
+                # DEBUG: use the ansatz
+                # if (contact.name == "L" and c == "a") or (
+                #     contact.name == "R" and c == "b"
+                # ):
+                #     nn_model = model.ConstModel(1, model_dtype=params.si_real_dtype)
+                # else:
+                #     nn_model = model.ConstModel(0, model_dtype=params.si_real_dtype)
+
                 c_model = model.TransformedModel(
                     nn_model,
                     input_transformations=model_transformations,

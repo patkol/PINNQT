@@ -30,7 +30,7 @@ random.seed(params.seed)
 torch.manual_seed(params.seed)
 torch.set_default_device(params.device)
 torch.set_default_dtype(params.si_real_dtype)
-# torch.autograd.set_detect_anomaly(True) # For debugging, very expensive
+# torch.autograd.set_detect_anomaly(True)  # For debugging, very expensive
 
 
 device = Device(**physics.device_kwargs)
