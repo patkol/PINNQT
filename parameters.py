@@ -75,6 +75,10 @@ VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
 TEMPERATURE = 300 * consts.KELVIN
 
+# CONSTANT_FERMI_LEVEL: None to find the correct fermi level.
+#                       V_int and V_el are added.
+CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
+
 energy_smoothing_range = 0.05 * consts.EV
 transition_distance = 0.5 * consts.NM
 dx = 0.01 * consts.NM  # Used for derivatives

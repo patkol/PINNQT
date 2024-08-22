@@ -160,7 +160,11 @@ def get_constant_models(
             ),
         )
         const_models_dict[i][f"E_fermi_{contact}"] = model.FunctionModel(
-            lambda q, i=i: trafos.get_E_fermi(q, i=i),
+            lambda q, i=i: (
+                trafos.get_E_fermi(q, i=i)
+                if params.CONSTANT_FERMI_LEVEL is None
+                else params.CONSTANT_FERMI_LEVEL + q[f"V_int{i}"] + q[f"V_el{i}"]
+            )
         )
         const_models_dict[i][f"fermi_integral_{contact}"] = model.FunctionModel(
             lambda q, i=i, contact=contact: (
