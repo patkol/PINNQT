@@ -11,14 +11,14 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "free3"
+simulated_device_name = "barrier1"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 212
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -32,7 +32,7 @@ model_dtype = torch.float32
 # Training
 max_n_training_steps = 0
 max_time = None
-min_loss = 50e-6
+min_loss = 10e-6
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -62,9 +62,9 @@ extra_plots = True
 N_x = 1000
 
 # Physical
-E_MIN = 1e-2 * consts.EV
+E_MIN = 0.3 * consts.EV
 E_STEP = 5e-3 * consts.EV
-E_MAX = 1e-2 * consts.EV
+E_MAX = 0.3 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 

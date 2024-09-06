@@ -43,6 +43,14 @@ device_kwargs_dict: dict[str, dict] = {
         "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0],
         "includes_contacts": False,
     },
+    "free4": {
+        "boundaries": [0, 15 * NM],
+        "potentials": [0, 0, 0],
+        "m_effs": [M_E, M_E, M_E],
+        "dopings": [0, 0, 0],
+        "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0],
+        "includes_contacts": False,
+    },
     "barrier1": {
         "boundaries": [
             0 * NM,

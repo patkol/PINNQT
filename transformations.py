@@ -1,7 +1,7 @@
 # Copyright (c) 2024 ETH Zurich, Patrice Kolb
 
 
-from typing import Dict, Callable
+from typing import Dict, Callable, Sequence
 import numpy as np
 import torch
 
@@ -100,7 +100,7 @@ def get_dx_model(mode: str, quantity_name: str, grid_name: str):
     return model.MultiModel(dx_qs_trafo, name)
 
 
-def get_E_fermi(q: QuantityDict, *, i):
+def get_E_fermi(q: QuantityDict, *, i: int):
     dos = 8 * np.pi / consts.H**3 * torch.sqrt(2 * q[f"m_eff{i}"] ** 3 * q["DeltaE"])
 
     best_E_f = None
@@ -129,73 +129,25 @@ def get_E_fermi(q: QuantityDict, *, i):
     return best_E_f + q[f"V_int{i}"] + q[f"V_el{i}"]
 
 
-def factors_trafo(qs, i, contact):
+def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
+    return (
+        q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
+        + q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
+    )
+
+
+def get_phi_target(q: QuantityDict, *, i: int, contact: Contact):
     """
-    Use the boundary conditions to find the factors to multiply a/b_output with
-    given that a and b are known in layer `i_next`
+    Boundary conditions: Given phi{next_i}, find phi{i} at the boundary between
+    i and next_i.
     """
+    next_i = i + contact.direction
+    phi_target = q[f"phi{next_i}_{contact}"]
+    phi_dx_target = (
+        q[f"m_eff{i}"] / q[f"m_eff{next_i}"] * q[f"phi{next_i}_{contact}_dx"]
+    )
 
-    i_next = contact.get_next_layer_index(i)
-    i_boundary = contact.get_out_boundary_index(i)
-    q = qs[f"boundary{i_boundary}"]
-
-    m = q[f"m_eff{i}"]
-    m_next = q[f"m_eff{i_next}"]
-    k = q[f"smooth_k{i}_{contact}"]
-    k_next = q[f"smooth_k{i_next}_{contact}"]
-    o_a = q[f"a_output{i}_{contact}"]
-    o_b = q[f"b_output{i}_{contact}"]
-    z_a = 1j * k * o_a + q[f"a_output{i}_{contact}_dx"]
-    z_b = 1j * k * o_b - q[f"b_output{i}_{contact}_dx"]
-    a_next = q[f"a{i_next}_propagated_{contact}"]
-    b_next = q[f"b{i_next}_propagated_{contact}"]
-    a_dx_next = q[f"a{i_next}_propagated_{contact}_dx"]
-    b_dx_next = q[f"b{i_next}_propagated_{contact}_dx"]
-
-    a_factor = (
-        a_next
-        + b_next
-        + m
-        / m_next
-        * o_b
-        / z_b
-        * (a_dx_next + b_dx_next + 1j * k_next * (a_next - b_next))
-    ) / (o_a + z_a / z_b * o_b)
-
-    b_factor = (a_next + b_next - a_factor * o_a) / o_b
-
-    q[f"a_factor{i}_{contact}"] = a_factor
-    q[f"b_factor{i}_{contact}"] = b_factor
-
-    return qs
-
-
-def add_coeff(
-    c: str,
-    qs: dict[str, QuantityDict],
-    contact: Contact,
-    grid_name: str,
-    i: int,
-):
-    boundary_q = qs[f"boundary{contact.get_out_boundary_index(i)}"]
-    q = qs[grid_name]
-
-    coeff = boundary_q[f"{c}_factor{i}_{contact}"] * q[f"{c}_output{i}_{contact}"]
-    q[f"{c}{i}_{contact}"] = coeff
-
-    return qs
-
-
-def add_coeffs(
-    qs: dict[str, QuantityDict],
-    contact: Contact,
-    grid_name: str,
-    i: int,
-):
-    for c in ("a", "b"):
-        add_coeff(c, qs, contact, grid_name, i)
-
-    return qs
+    return phi_target, phi_dx_target
 
 
 def to_full_trafo(
@@ -246,20 +198,103 @@ def to_bulks_trafo(
     return qs
 
 
+def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
+    boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
+    q_out = qs[boundary_out]
+    phi_zero = q_out[f"phi_zero{i}_{contact}"]
+    phi_zero_dx = q_out[f"phi_zero{i}_{contact}_dx"]
+    phi_target, phi_dx_target = get_phi_target(q_out, i=i, contact=contact)
+
+    # phi = u * phi_zero + v * conj(phi_zero), find u & v s.t. this matches the target
+    determinant = 2j * torch.imag(phi_zero * torch.conj(phi_zero_dx))
+    u = (
+        phi_target * torch.conj(phi_zero_dx) - torch.conj(phi_zero) * phi_dx_target
+    ) / determinant
+    v = -(phi_target * phi_zero_dx - phi_zero * phi_dx_target) / determinant
+
+    for grid_name in grid_names:
+        q = qs[grid_name]
+        phi_zero_full = q[f"phi_zero{i}_{contact}"]
+        q[f"phi{i}_{contact}"] = u * phi_zero_full + v * torch.conj(phi_zero_full)
+
+    return qs
+
+
+def contact_coeffs_trafo(qs, *, contact):
+    q_in = qs[contact.grid_name]
+    i = contact.index
+    phi_target, phi_dx_target = get_phi_target(q_in, i=i, contact=contact)
+    k = q_in[f"k{i}_{contact}"]
+    q = qs["bulk"]
+    q[f"incoming_coeff_{contact}"] = 0.5 * (
+        phi_target + phi_dx_target / (1j * contact.direction * k)
+    )
+    q[f"reflected_coeff_{contact}"] = phi_target - q[f"incoming_coeff_{contact}"]
+
+    return qs
+
+
+def TR_trafo(qs, *, contact):
+    """Transmission probability"""
+    q = qs["bulk"]
+    q_in = qs[contact.grid_name]
+    q_out = qs[contact.out_boundary_name]
+    incoming_amplitude = complex_abs2(q[f"incoming_coeff_{contact}"])
+    reflected_amplitude = complex_abs2(q[f"reflected_coeff_{contact}"])
+    transmitted_amplitude = complex_abs2(q[f"transmitted_coeff_{contact}"])
+    real_v_in = torch.real(q_in[f"v{contact.index}_{contact}"])
+    real_v_out = torch.real(q_out[f"v{contact.out_index}_{contact}"])
+    q[f"T_{contact}"] = (
+        transmitted_amplitude / incoming_amplitude * real_v_out / real_v_in
+    )
+    q[f"R_{contact}"] = reflected_amplitude / incoming_amplitude
+
+    return qs
+
+
+def I_contact_trafo(qs, *, contact):
+    q = qs["bulk"]
+    q_in = qs[contact.grid_name]
+    integrand = q[f"T_{contact}"] * q_in[f"fermi_integral_{contact}"]
+    integral = quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
+    prefactor = -consts.Q_E / consts.H_BAR / (2 * np.pi) * contact.direction
+    q[f"I_spectrum_{contact}"] = prefactor * integrand
+    q[f"I_{contact}"] = prefactor * integral
+
+    return qs
+
+
+def I_trafo(qs, *, contacts):
+    q = qs["bulk"]
+    q["I"] = sum(q[f"I_{contact}"] for contact in contacts)
+
+    return qs
+
+
+def j_exact_trafo(qs, *, contact):
+    """
+    Calculate the exact current at the output contact
+    """
+    q = qs[f"boundary{contact.out_boundary_index}"]
+    k = q[f"k{contact.out_index}_{contact}"]
+    m_eff = q[f"m_eff{contact.out_index}"]
+    q[f"j_exact_{contact}"] = -contact.direction * consts.H_BAR * k / m_eff
+
+    return qs
+
+
 def dos_trafo(qs, *, contact):
     q = qs["bulk"]
     q_in = qs[contact.grid_name]
 
-    incoming_coeff_in = q_in[
-        f"{contact.incoming_coeff_in_name}{contact.index}_{contact}"
-    ]
-    incoming_amplitude = complex_abs2(incoming_coeff_in)
+    incoming_amplitude = complex_abs2(q[f"incoming_coeff_{contact}"])
+    v = q_in[f"v{contact.index}_{contact}"]
+    assert torch.allclose(
+        torch.imag(v), torch.tensor(0, dtype=params.si_real_dtype)
+    ), "The energy in the input contact should be positive"
+    dE_dk = consts.H_BAR * torch.real(v)
     q[f"DOS_{contact}"] = (
-        1
-        / (2 * np.pi)
-        * complex_abs2(q[f"phi_{contact}"])
-        / q_in[f"dE_dk{contact.index}_{contact}"]
-        / incoming_amplitude
+        1 / (2 * np.pi) * complex_abs2(q[f"phi_{contact}"]) / dE_dk / incoming_amplitude
     )
     return qs
 
@@ -327,67 +362,5 @@ def V_electrostatic_trafo(qs):
     Phi_permuted = torch.linalg.solve(M, rhs_permuted)
     Phi = torch.permute(Phi_permuted, (0, 2, 1))
     q["V_el"] = -consts.Q_E * Phi
-
-    return qs
-
-
-def TR_trafo(qs, *, contact):
-    """Transmission probability"""
-    q = qs["bulk"]
-    q_in = qs[contact.grid_name]
-    q_out = qs[contact.out_boundary_name]
-    incoming_coeff_in = q_in[
-        f"{contact.incoming_coeff_in_name}{contact.index}_{contact}"
-    ]
-    incoming_coeff_out = q_in[
-        f"{contact.incoming_coeff_out_name}{contact.index}_{contact}"
-    ]
-    outgoing_coeff_out = q_out[
-        f"{contact.outgoing_coeff_out_name}{contact.out_index}_propagated_{contact}"
-    ]
-    real_v_in = torch.real(q_in[f"v{contact.index}_{contact}"])
-    real_v_out = torch.real(q_out[f"v{contact.out_index}_{contact}"])
-    q[f"T_{contact}"] = (
-        complex_abs2(outgoing_coeff_out)
-        / complex_abs2(incoming_coeff_in)
-        * real_v_out
-        / real_v_in
-    )
-    q[f"R_{contact}"] = complex_abs2(incoming_coeff_out) / complex_abs2(
-        incoming_coeff_in
-    )
-
-    return qs
-
-
-def I_contact_trafo(qs, *, contact):
-    q = qs["bulk"]
-    q_in = qs[contact.grid_name]
-    integrand = q[f"T_{contact}"] * q_in[f"fermi_integral_{contact}"]
-    integral = quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
-    sign = 1 if contact.name == "L" else -1
-    prefactor = -consts.Q_E / consts.H_BAR / (2 * np.pi) * sign
-    q[f"I_spectrum_{contact}"] = prefactor * integrand
-    q[f"I_{contact}"] = prefactor * integral
-
-    return qs
-
-
-def I_trafo(qs, *, contacts):
-    q = qs["bulk"]
-    q["I"] = sum(q[f"I_{contact}"] for contact in contacts)
-
-    return qs
-
-
-def j_exact_trafo(qs, *, contact):
-    """
-    Calculate the exact current at the output contact
-    """
-    q = qs[f"boundary{contact.out_boundary_index}"]
-    k = q[f"k{contact.out_index}_{contact}"]
-    m_eff = q[f"m_eff{contact.out_index}"]
-    sign = -1 if contact.name == "L" else 1
-    q[f"j_exact_{contact}"] = sign * consts.H_BAR * k / m_eff
 
     return qs

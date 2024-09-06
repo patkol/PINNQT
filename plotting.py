@@ -232,15 +232,11 @@ def save_plots(trainer: Trainer, device: Device):
             )
             q_out_reduced = restrict_quantities(q_out, out_boundary_grid_reduced)
 
-            incoming_coeff_in_reduced = q_in_reduced[
-                f"{contact.incoming_coeff_in_name}{contact.index}_{contact}"
-            ]
+            phi_factor_reduced = 1  # / q_full_reduced[f"incoming_coeff_{contact}"]
 
             # Wave function
             save_lineplot(
-                complex_abs2(
-                    q_full_reduced[f"phi_{contact}"] / incoming_coeff_in_reduced
-                ),
+                complex_abs2(q_full_reduced[f"phi_{contact}"] * phi_factor_reduced),
                 q_full_reduced.grid,
                 f"|phi_{contact}|^2",
                 "x",
@@ -252,9 +248,7 @@ def save_plots(trainer: Trainer, device: Device):
                 path_prefix=voltage_path_prefix,
             )
             save_lineplot(
-                torch.real(
-                    q_full_reduced[f"phi_{contact}"] / incoming_coeff_in_reduced
-                ),
+                torch.real(q_full_reduced[f"phi_{contact}"] * phi_factor_reduced),
                 q_full_reduced.grid,
                 f"Re(phi_{contact})",
                 "x",
@@ -266,9 +260,7 @@ def save_plots(trainer: Trainer, device: Device):
                 path_prefix=voltage_path_prefix,
             )
             save_lineplot(
-                torch.imag(
-                    q_full_reduced[f"phi_{contact}"] / incoming_coeff_in_reduced
-                ),
+                torch.imag(q_full_reduced[f"phi_{contact}"] * phi_factor_reduced),
                 q_full_reduced.grid,
                 f"Im(phi_{contact})",
                 "x",
@@ -280,7 +272,7 @@ def save_plots(trainer: Trainer, device: Device):
                 path_prefix=voltage_path_prefix,
             )
             visualization.save_complex_polar_plot(
-                q_full_reduced[f"phi_{contact}"] / incoming_coeff_in_reduced,
+                q_full_reduced[f"phi_{contact}"] * phi_factor_reduced,
                 q_full_reduced.grid,
                 f"phi_{contact}",
                 "x",
@@ -432,6 +424,8 @@ def save_plots(trainer: Trainer, device: Device):
             if not params.extra_plots:
                 continue
 
+            extra_prefix = voltage_path_prefix + "extra/"
+            os.makedirs(extra_prefix, exist_ok=True)
             for i in range(1, device.n_layers + 1):
                 q_layer = qs[f"bulk{i}"]
                 grid_layer = Subgrid(q_layer.grid, voltage_index_dict, copy_all=False)
@@ -440,6 +434,7 @@ def save_plots(trainer: Trainer, device: Device):
                     grid_layer, energies_index_dict, copy_all=False
                 )
                 q_layer_reduced = restrict_quantities(q_layer, grid_layer_reduced)
+
                 for c in ("a", "b"):
                     save_lineplot(
                         torch.real(q_layer_reduced[f"{c}_output{i}_{contact}"]),
@@ -449,7 +444,7 @@ def save_plots(trainer: Trainer, device: Device):
                         "DeltaE",
                         x_unit=consts.NM,
                         x_unit_name="nm",
-                        path_prefix=voltage_path_prefix,
+                        path_prefix=extra_prefix,
                     )
                     save_lineplot(
                         torch.imag(q_layer_reduced[f"{c}_output{i}_{contact}"]),
@@ -459,5 +454,36 @@ def save_plots(trainer: Trainer, device: Device):
                         "DeltaE",
                         x_unit=consts.NM,
                         x_unit_name="nm",
-                        path_prefix=voltage_path_prefix,
+                        path_prefix=extra_prefix,
                     )
+
+                save_lineplot(
+                    torch.real(q_layer_reduced[f"phi_zero{i}_{contact}"]),
+                    q_layer_reduced.grid,
+                    f"Re[phi_zero{i}_{contact}]",
+                    "x",
+                    "DeltaE",
+                    x_unit=consts.NM,
+                    x_unit_name="nm",
+                    path_prefix=extra_prefix,
+                )
+                save_lineplot(
+                    torch.imag(q_layer_reduced[f"phi_zero{i}_{contact}"]),
+                    q_layer_reduced.grid,
+                    f"Im[phi_zero{i}_{contact}]",
+                    "x",
+                    "DeltaE",
+                    x_unit=consts.NM,
+                    x_unit_name="nm",
+                    path_prefix=extra_prefix,
+                )
+                save_lineplot(
+                    complex_abs2(q_layer_reduced[f"phi_zero{i}_{contact}"]),
+                    q_layer_reduced.grid,
+                    f"|phi_zero{i}_{contact}|^2",
+                    "x",
+                    "DeltaE",
+                    x_unit=consts.NM,
+                    x_unit_name="nm",
+                    path_prefix=extra_prefix,
+                )

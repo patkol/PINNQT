@@ -7,36 +7,21 @@ from collections.abc import Sequence
 from typing import Callable
 
 
+@dataclass
 class Contact:
-    def __init__(
-        self,
-        name: str,
-        *,
-        index: int,
-        out_index: int,
-        grid_name: str,
-        incoming_coeff_in_name: str,
-        get_in_boundary_index: Callable[[int], int],
-        get_out_boundary_index: Callable[[int], int],
-        get_previous_layer_index: Callable[[int], int],
-        get_next_layer_index: Callable[[int], int],
-    ):
-        assert name in ("L", "R")
-        assert incoming_coeff_in_name in ("a", "b")
+    name: str
+    index: int
+    out_index: int
+    direction: int  # i +/- direction gives the next/previous layer index.
+    grid_name: str
+    get_in_boundary_index: Callable[[int], int]
+    get_out_boundary_index: Callable[[int], int]
 
-        self.name = name
-        self.index = index
-        self.out_index = out_index
-        self.grid_name = grid_name
-        self.get_in_boundary_index = get_in_boundary_index
-        self.get_out_boundary_index = get_out_boundary_index
-        self.get_previous_layer_index = get_previous_layer_index
-        self.get_next_layer_index = get_next_layer_index
-        self.incoming_coeff_in_name = incoming_coeff_in_name
-        self.incoming_coeff_out_name = "b" if incoming_coeff_in_name == "a" else "a"
-        self.outgoing_coeff_in_name = self.incoming_coeff_out_name
-        self.outgoing_coeff_out_name = self.incoming_coeff_in_name
+    in_boundary_index: int = dataclasses.field(init=False)
+    out_boundary_index: int = dataclasses.field(init=False)
+    out_boundary_name: str = dataclasses.field(init=False)
 
+    def __post_init__(self):
         self.in_boundary_index = self.get_out_boundary_index(self.index)
         self.out_boundary_index = self.get_in_boundary_index(self.out_index)
         self.out_boundary_name = f"boundary{self.out_boundary_index}"
@@ -62,6 +47,7 @@ class Device:
     dopings: Sequence[float]
     permittivities: Sequence[float]
     includes_contacts: bool
+
     device_start: float = dataclasses.field(init=False)
     device_end: float = dataclasses.field(init=False)
     n_layers: int = dataclasses.field(init=False)
@@ -87,23 +73,19 @@ class Device:
             name="L",
             index=0,
             out_index=N + 1,
+            direction=1,
             grid_name=f"boundary{0}",
-            incoming_coeff_in_name="a",
             get_in_boundary_index=lambda i: max(0, i - 1),
             get_out_boundary_index=lambda i: min(N, i),
-            get_previous_layer_index=lambda i: i - 1,
-            get_next_layer_index=lambda i: i + 1,
         )
         right_contact = Contact(
             name="R",
             index=N + 1,
             out_index=0,
+            direction=-1,
             grid_name=f"boundary{N}",
-            incoming_coeff_in_name="b",
             get_in_boundary_index=lambda i: min(N, i),
             get_out_boundary_index=lambda i: max(0, i - 1),
-            get_previous_layer_index=lambda i: i + 1,
-            get_next_layer_index=lambda i: i - 1,
         )
 
         self.contacts = [left_contact, right_contact]

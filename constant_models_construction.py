@@ -67,7 +67,6 @@ def get_constant_models(
         )
 
         for contact in device.contacts:
-            x_in = device.boundaries[contact.get_in_boundary_index(i)]
             x_out = device.boundaries[contact.get_out_boundary_index(i)]
 
             models_dict[f"k{i}_{contact}"] = model.FunctionModel(
@@ -91,74 +90,38 @@ def get_constant_models(
                     -1j * q[f"smooth_k{i}_{contact}"] * (q["x"] - x_out)
                 ),
             )
-            models_dict[f"a_propagation_factor{i}_{contact}"] = model.FunctionModel(
-                lambda q, i=i, x_in=x_in, x_out=x_out, contact=contact: torch.exp(
-                    1j * q[f"smooth_k{i}_{contact}"] * (x_in - x_out)
-                ),
-            )
-            models_dict[f"b_propagation_factor{i}_{contact}"] = model.FunctionModel(
-                lambda q, i=i, x_in=x_in, x_out=x_out, contact=contact: torch.exp(
-                    -1j * q[f"smooth_k{i}_{contact}"] * (x_in - x_out)
-                ),
-            )
 
     zero_model = model.ConstModel(0, model_dtype=params.si_real_dtype)
     one_model = model.ConstModel(1, model_dtype=params.si_real_dtype)
 
     # Both contacts
-    const_models_dict[0]["V_el0"] = model.ConstModel(
-        0,
-        model_dtype=params.si_real_dtype,
-    )
+    const_models_dict[0]["V_el0"] = zero_model
     const_models_dict[N + 1][f"V_el{N+1}"] = model.FunctionModel(
         lambda q: -q["voltage"] * consts.EV,
     )
-
     for contact in device.contacts:
         for i in (contact.index, contact.out_index):
-            for c in ("a", "b"):
-                const_models_dict[i][f"{c}_output{i}_{contact}"] = one_model
-                const_models_dict[i][f"{c}_output{i}_{contact}_dx"] = zero_model
-            # V_el_approx is exact at the contacts
             const_models_dict[i][f"v{i}_{contact}"] = model.FunctionModel(
-                lambda q, i=i, contact=contact: torch.sqrt(
-                    (
-                        2
-                        * (q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"])
-                        / q[f"m_eff{i}"]
-                    ).to(params.si_complex_dtype)
-                )
+                lambda q, i=i, contact=contact: consts.H_BAR
+                * q[f"k{i}_{contact}"]
+                / q[f"m_eff{i}"]
             )
 
     # Output contact: Initial conditions
-    const_models_dict[N + 1][f"a{N + 1}_L"] = one_model
-    const_models_dict[N + 1][f"b{N + 1}_L"] = zero_model
-    const_models_dict[0]["a0_R"] = zero_model
-    const_models_dict[0]["b0_R"] = one_model
     for contact in device.contacts:
         i = contact.out_index
-        for c in ("a", "b"):
-            const_models_dict[i][f"{c}{i}_{contact}_dx"] = zero_model
-            const_models_dict[i][f"{c}{i}_propagated_{contact}"] = const_models_dict[i][
-                f"{c}{i}_{contact}"
-            ]
-            const_models_dict[i][f"{c}{i}_propagated_{contact}_dx"] = const_models_dict[
-                i
-            ][f"{c}{i}_{contact}_dx"]
+        const_models_dict[i][f"phi{i}_{contact}"] = one_model
+        const_models_dict[i][f"phi{i}_{contact}_dx"] = model.FunctionModel(
+            lambda q, i=i, contact=contact: contact.direction
+            * 1j
+            * q[f"k{i}_{contact}"]
+        )
 
     # Input contact
     for contact in device.contacts:
         # OPTIM: move to 'bulk' such that it does not have to be computed
         #        for the pdx & mdx grids separately
         i = contact.index
-        const_models_dict[i][f"dE_dk{i}_{contact}"] = model.FunctionModel(
-            lambda q, i=i, contact=contact: torch.sqrt(
-                2
-                * consts.H_BAR**2
-                * (q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"])
-                / q[f"m_eff{i}"]
-            ),
-        )
         const_models_dict[i][f"E_fermi_{contact}"] = model.FunctionModel(
             lambda q, i=i: (
                 trafos.get_E_fermi(q, i=i)
@@ -180,10 +143,9 @@ def get_constant_models(
         )
 
     # Full device
-    grid_name = "bulk"
     for model_name, model_ in layer_indep_const_models_dict.items():
         const_models.append(
-            model.get_multi_model(model_, model_name, grid_name),
+            model.get_multi_model(model_, model_name, "bulk"),
         )
 
     # Layers
@@ -212,15 +174,11 @@ def get_constant_models(
 
     # Constant MultiModels
     for contact in device.contacts:
-        # OPTIM: unused
         const_models.append(
-            model.MultiModel(
-                trafos.j_exact_trafo,
-                f"j_exact_{contact}",
-                kwargs={"contact": contact},
-            )
+            model.get_multi_model(one_model, f"transmitted_coeff_{contact}", "bulk"),
         )
 
+    # Promoting quantities to full grid
     const_models.append(
         model.MultiModel(
             trafos.to_full_trafo,

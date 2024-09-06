@@ -59,17 +59,19 @@ def get_trained_models(
                     device=params.device,
                 )
 
-                # DEBUG: use the ansatz
+                output_transformation = None
+                # DEBUG: Free space solution w/ correct tensor shape
                 # if (contact.name == "L" and c == "a") or (
                 #     contact.name == "R" and c == "b"
                 # ):
-                #     nn_model = model.ConstModel(1, model_dtype=params.si_real_dtype)
+                #     output_transformation = lambda quantity, q: quantity * 0 + 1
                 # else:
-                #     nn_model = model.ConstModel(0, model_dtype=params.si_real_dtype)
+                #     output_transformation = lambda quantity, q: quantity * 0
 
                 c_model = model.TransformedModel(
                     nn_model,
                     input_transformations=model_transformations,
+                    output_transformation=output_transformation,
                 )
                 trained_models.append(
                     model.get_combined_multi_model(
