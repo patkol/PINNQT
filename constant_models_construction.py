@@ -3,7 +3,6 @@
 
 from collections.abc import Sequence
 from typing import Dict
-import numpy as np
 import torch
 
 from kolpinn import model
@@ -11,7 +10,6 @@ from kolpinn.model import Model, MultiModel
 
 import physical_constants as consts
 import parameters as params
-import physics
 from classes import Device
 import transformations as trafos
 
@@ -21,8 +19,6 @@ def get_constant_models(
     *,
     dx_dict: Dict[str, float],
 ) -> Sequence[MultiModel]:
-    const_models: list[MultiModel] = []
-
     N = device.n_layers
 
     layer_indep_const_models_dict = {}
@@ -117,30 +113,7 @@ def get_constant_models(
             * q[f"k{i}_{contact}"]
         )
 
-    # Input contact
-    for contact in device.contacts:
-        # OPTIM: move to 'bulk' such that it does not have to be computed
-        #        for the pdx & mdx grids separately
-        i = contact.index
-        const_models_dict[i][f"E_fermi_{contact}"] = model.FunctionModel(
-            lambda q, i=i: (
-                trafos.get_E_fermi(q, i=i)
-                if params.CONSTANT_FERMI_LEVEL is None
-                else params.CONSTANT_FERMI_LEVEL + q[f"V_int{i}"] + q[f"V_el{i}"]
-            )
-        )
-        const_models_dict[i][f"fermi_integral_{contact}"] = model.FunctionModel(
-            lambda q, i=i, contact=contact: (
-                q[f"m_eff{i}"]
-                / (np.pi * consts.H_BAR**2 * physics.BETA)
-                * torch.log(
-                    1
-                    + torch.exp(
-                        physics.BETA * (q[f"E_fermi_{contact}"] - q[f"E_{contact}"])
-                    )
-                )
-            ),
-        )
+    const_models: list[MultiModel] = []
 
     # Full device
     for model_name, model_ in layer_indep_const_models_dict.items():
@@ -172,10 +145,24 @@ def get_constant_models(
                         model.get_multi_model(model_, model_name, grid_name)
                     )
 
-    # Constant MultiModels
+    # Full device again
     for contact in device.contacts:
         const_models.append(
             model.get_multi_model(one_model, f"transmitted_coeff_{contact}", "bulk"),
+        )
+        const_models.append(
+            model.MultiModel(
+                trafos.E_fermi_trafo,
+                "E_fermi_{contact}",
+                kwargs={"contact": contact},
+            )
+        )
+        const_models.append(
+            model.MultiModel(
+                trafos.fermi_integral_trafo,
+                "fermi_integral_{contact}",
+                kwargs={"contact": contact},
+            )
         )
 
     # Promoting quantities to full grid

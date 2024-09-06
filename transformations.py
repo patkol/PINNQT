@@ -101,6 +101,10 @@ def get_dx_model(mode: str, quantity_name: str, grid_name: str):
 
 
 def get_E_fermi(q: QuantityDict, *, i: int):
+    """The potential V still has to be added."""
+    if params.CONSTANT_FERMI_LEVEL is not None:
+        return params.CONSTANT_FERMI_LEVEL
+
     dos = 8 * np.pi / consts.H**3 * torch.sqrt(2 * q[f"m_eff{i}"] ** 3 * q["DeltaE"])
 
     best_E_f = None
@@ -126,7 +130,7 @@ def get_E_fermi(q: QuantityDict, *, i: int):
         f"Best fermi energy: {best_E_f / consts.EV} eV with a relative remaining charge of {relative_remaining_charge}"
     )
 
-    return best_E_f + q[f"V_int{i}"] + q[f"V_el{i}"]
+    return best_E_f
 
 
 def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
@@ -198,6 +202,31 @@ def to_bulks_trafo(
     return qs
 
 
+def E_fermi_trafo(qs, *, contact: Contact):
+    q_in = qs[contact.grid_name]
+    i = contact.index
+    qs["bulk"][f"E_fermi_{contact}"] = (
+        get_E_fermi(q_in, i=i) + q_in[f"V_int{i}"] + q_in[f"V_el{i}"]
+    )
+
+    return qs
+
+
+def fermi_integral_trafo(qs, *, contact: Contact):
+    q = qs["bulk"]
+    q_in = qs[contact.grid_name]
+    i = contact.index
+    qs["bulk"][f"fermi_integral_{contact}"] = (
+        q_in[f"m_eff{i}"]
+        / (np.pi * consts.H_BAR**2 * physics.BETA)
+        * torch.log(
+            1 + torch.exp(physics.BETA * (q[f"E_fermi_{contact}"] - q[f"E_{contact}"]))
+        )
+    )
+
+    return qs
+
+
 def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
     q_out = qs[boundary_out]
@@ -254,8 +283,7 @@ def TR_trafo(qs, *, contact):
 
 def I_contact_trafo(qs, *, contact):
     q = qs["bulk"]
-    q_in = qs[contact.grid_name]
-    integrand = q[f"T_{contact}"] * q_in[f"fermi_integral_{contact}"]
+    integrand = q[f"T_{contact}"] * q[f"fermi_integral_{contact}"]
     integral = quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
     prefactor = -consts.Q_E / consts.H_BAR / (2 * np.pi) * contact.direction
     q[f"I_spectrum_{contact}"] = prefactor * integrand
@@ -302,9 +330,7 @@ def dos_trafo(qs, *, contact):
 def n_contact_trafo(qs, *, contact):
     """Density from one contact only"""
     q = qs["bulk"]
-    q_in = qs[contact.grid_name]
-
-    integrand = q[f"DOS_{contact}"] * q_in[f"fermi_integral_{contact}"]
+    integrand = q[f"DOS_{contact}"] * q[f"fermi_integral_{contact}"]
     q[f"n_{contact}"] = (
         quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
     )
