@@ -31,9 +31,16 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
             create_graph=with_grad,
         )
         hbar_phi_dx_over_m_dx = restrict(hbar_phi_dx_over_m_dx_full, q.grid)
-    residual = -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx / q[f"phi{i}_{contact}"] + (
-        q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"]
+    residual = (
+        -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx
+        + (q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"]) * q[f"phi{i}_{contact}"]
     )
+    # residual = -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx / q[f"phi{i}_{contact}"] + (
+    #     q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"]
+    # )
+    # incoming_amplitude = complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
+    # residual /= incoming_amplitude
+    residual /= qs["bulk"][f"incoming_coeff_{contact}"]
     residual /= params.V_OOM
     q[f"SE_loss{i}_{contact}"] = params.loss_function(residual)
 
@@ -45,8 +52,8 @@ def j_loss_trafo(qs, *, i, N, contact):
 
     prob_current = q[f"j{i}_{contact}"]
     residual = prob_current - mean_dimension("x", prob_current, q.grid)
-    # residual /= complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
-    residual /= mean_dimension("x", complex_abs2(q[f"phi{i}_{contact}"]), q.grid)
+    residual /= complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
+    # residual /= mean_dimension("x", complex_abs2(q[f"phi{i}_{contact}"]), q.grid)
     residual /= params.PROBABILITY_CURRENT_OOM
     # exact_prob_current = qs["bulk"][f"j_exact_{contact}"]
     # residual = torch.log(complex_abs2(prob_current / exact_prob_current))

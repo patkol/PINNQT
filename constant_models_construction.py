@@ -81,6 +81,7 @@ def get_constant_models(
                 ),
             )
             # b_phase explodes for large layers and imaginary smooth_k
+            # TODO: use x_in here, and swap x_in/x_out for contact R -> use x_left, x_right instead
             models_dict[f"b_phase{i}_{contact}"] = model.FunctionModel(
                 lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
                     -1j * q[f"smooth_k{i}_{contact}"] * (q["x"] - x_out)

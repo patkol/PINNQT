@@ -53,10 +53,30 @@ def get_dependent_models(
                         grid_name,
                     )
                 )
+                # TEMP
+                dependent_models.append(
+                    model.get_multi_model(
+                        model.FunctionModel(
+                            lambda q, *, i=i, contact=contact: trafos.get_phi_one(
+                                q, i=i, contact=contact
+                            )
+                        ),
+                        f"phi_one{i}_{contact}",
+                        grid_name,
+                    )
+                )
             dependent_models.append(
                 trafos.get_dx_model(
                     "multigrid" if params.fd_first_derivatives else "exact",
                     f"phi_zero{i}_{contact}",
+                    boundary_out,
+                )
+            )
+            # TEMP
+            dependent_models.append(
+                trafos.get_dx_model(
+                    "multigrid" if params.fd_first_derivatives else "exact",
+                    f"phi_one{i}_{contact}",
                     boundary_out,
                 )
             )

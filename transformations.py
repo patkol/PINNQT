@@ -133,11 +133,19 @@ def get_E_fermi(q: QuantityDict, *, i: int):
     return best_E_f
 
 
+# For u phi0 + v phi0_bar
+# def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
+#     return (
+#         q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
+#         + q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
+#     )
+# TEMP
 def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
-    return (
-        q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
-        + q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
-    )
+    return q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
+
+
+def get_phi_one(q: QuantityDict, *, i: int, contact: Contact):
+    return q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
 
 
 def get_phi_target(q: QuantityDict, *, i: int, contact: Contact):
@@ -227,24 +235,47 @@ def fermi_integral_trafo(qs, *, contact: Contact):
     return qs
 
 
+# def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
+#     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
+#     q_out = qs[boundary_out]
+#     phi_zero = q_out[f"phi_zero{i}_{contact}"]
+#     phi_zero_dx = q_out[f"phi_zero{i}_{contact}_dx"]
+#     phi_target, phi_dx_target = get_phi_target(q_out, i=i, contact=contact)
+#
+#     # phi = u * phi_zero + v * conj(phi_zero), find u & v s.t. this matches the target
+#     determinant = 2j * torch.imag(phi_zero * torch.conj(phi_zero_dx))
+#     u = (
+#         phi_target * torch.conj(phi_zero_dx) - torch.conj(phi_zero) * phi_dx_target
+#     ) / determinant
+#     v = -(phi_target * phi_zero_dx - phi_zero * phi_dx_target) / determinant
+#
+#     for grid_name in grid_names:
+#         q = qs[grid_name]
+#         phi_zero_full = q[f"phi_zero{i}_{contact}"]
+#         q[f"phi{i}_{contact}"] = u * phi_zero_full + v * torch.conj(phi_zero_full)
+#
+#     return qs
+
+
+# TEMP
 def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
     q_out = qs[boundary_out]
     phi_zero = q_out[f"phi_zero{i}_{contact}"]
     phi_zero_dx = q_out[f"phi_zero{i}_{contact}_dx"]
+    phi_one = q_out[f"phi_one{i}_{contact}"]
+    phi_one_dx = q_out[f"phi_one{i}_{contact}_dx"]
     phi_target, phi_dx_target = get_phi_target(q_out, i=i, contact=contact)
 
-    # phi = u * phi_zero + v * conj(phi_zero), find u & v s.t. this matches the target
-    determinant = 2j * torch.imag(phi_zero * torch.conj(phi_zero_dx))
-    u = (
-        phi_target * torch.conj(phi_zero_dx) - torch.conj(phi_zero) * phi_dx_target
-    ) / determinant
-    v = -(phi_target * phi_zero_dx - phi_zero * phi_dx_target) / determinant
+    determinant = phi_zero * phi_one_dx - phi_zero_dx * phi_one
+    d_zero = (phi_one_dx * phi_target - phi_one * phi_dx_target) / determinant
+    d_one = (-phi_zero_dx * phi_target + phi_zero * phi_dx_target) / determinant
 
     for grid_name in grid_names:
         q = qs[grid_name]
         phi_zero_full = q[f"phi_zero{i}_{contact}"]
-        q[f"phi{i}_{contact}"] = u * phi_zero_full + v * torch.conj(phi_zero_full)
+        phi_one_full = q[f"phi_one{i}_{contact}"]
+        q[f"phi{i}_{contact}"] = d_zero * phi_zero_full + d_one * phi_one_full
 
     return qs
 

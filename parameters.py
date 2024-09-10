@@ -11,31 +11,31 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "barrier1"
+simulated_device_name = "rtd1"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 212
+loaded_parameters_index = None
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 5
+n_hidden_layers = 3
 n_neurons_per_hidden_layer = 50
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = None
-min_loss = 10e-6
+min_loss = 200e-6
 report_each = 1
 Optimizer = torch.optim.LBFGS
-optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
+optimizer_kwargs = {"lr": 0.5, "tolerance_grad": 0, "tolerance_change": 0}
 optimizer_reset_tol = 100
 Scheduler = None
 scheduler_kwargs: Dict[str, Any] = {}
@@ -59,12 +59,12 @@ plot_each_energy = 12  # 500
 extra_plots = True
 
 # Resolution
-N_x = 1000
+N_x = 1124
 
 # Physical
-E_MIN = 0.3 * consts.EV
-E_STEP = 5e-3 * consts.EV
-E_MAX = 0.3 * consts.EV
+E_MIN = 0.05 * consts.EV
+E_STEP = 0.01 * consts.EV
+E_MAX = 0.4 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
