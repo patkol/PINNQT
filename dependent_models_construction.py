@@ -53,7 +53,7 @@ def get_dependent_models(
                         grid_name,
                     )
                 )
-                # TEMP
+                # For d0 phi0 + d1 phi1
                 dependent_models.append(
                     model.get_multi_model(
                         model.FunctionModel(
@@ -72,7 +72,7 @@ def get_dependent_models(
                     boundary_out,
                 )
             )
-            # TEMP
+            # For d0 phi0 + d1 phi1
             dependent_models.append(
                 trafos.get_dx_model(
                     "multigrid" if params.fd_first_derivatives else "exact",

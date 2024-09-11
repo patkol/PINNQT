@@ -133,13 +133,15 @@ def get_E_fermi(q: QuantityDict, *, i: int):
     return best_E_f
 
 
-# For u phi0 + v phi0_bar
+# For u phi0 + v conj(phi0)
 # def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
 #     return (
 #         q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
 #         + q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
 #     )
-# TEMP
+
+
+# For d0 phi0 + d1 phi1
 def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
     return q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
 
@@ -235,6 +237,7 @@ def fermi_integral_trafo(qs, *, contact: Contact):
     return qs
 
 
+# u phi0 + v conj(phi0)
 # def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
 #     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
 #     q_out = qs[boundary_out]
@@ -257,7 +260,7 @@ def fermi_integral_trafo(qs, *, contact: Contact):
 #     return qs
 
 
-# TEMP
+# d0 phi0 + d1 phi1
 def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
     q_out = qs[boundary_out]

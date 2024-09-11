@@ -74,14 +74,13 @@ def get_constant_models(
                 else trafos.smooth_k_function(q, i, contact),
             )
             # The shifts by x_out are important for
-            # energies smaller than V, it keeps them from exploding.
+            # energies smaller than V, it keeps them from exploding for layers
+            # far away from the contacts. It can still get large/tiny for thick layers.
             models_dict[f"a_phase{i}_{contact}"] = model.FunctionModel(
                 lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
                     1j * q[f"smooth_k{i}_{contact}"] * (q["x"] - x_out)
                 ),
             )
-            # b_phase explodes for large layers and imaginary smooth_k
-            # TODO: use x_in here, and swap x_in/x_out for contact R -> use x_left, x_right instead
             models_dict[f"b_phase{i}_{contact}"] = model.FunctionModel(
                 lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
                     -1j * q[f"smooth_k{i}_{contact}"] * (q["x"] - x_out)
