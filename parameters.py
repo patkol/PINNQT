@@ -52,6 +52,7 @@ batch_sizes: Dict[str, int] = {
     # "x": 1000,
     # "DeltaE": 100,
 }
+n_newton_raphson_steps = 1
 
 # Plotting
 plot_each_voltage = 1

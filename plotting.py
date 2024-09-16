@@ -19,9 +19,9 @@ import parameters as params
 from classes import Device
 
 
-def save_plots(trainer: Trainer, device: Device):
+def save_plots(trainer: Trainer, device: Device, *, prefix=""):
     plt.rcParams.update({"font.size": 22})
-    path_prefix = f"plots/{trainer.config.saved_parameters_index:04d}/"
+    path_prefix = f"plots/{trainer.config.saved_parameters_index:04d}/{prefix}"
 
     visualization.save_training_history_plot(trainer, path_prefix)
 

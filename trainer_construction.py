@@ -116,16 +116,14 @@ def get_trainer(
         loss_aggregate_function=loss_aggregate_function,
         saved_parameters_index=saved_parameters_index,
         save_optimizer=save_optimizer,
+        Optimizer=Optimizer,
+        optimizer_kwargs=optimizer_kwargs,
         max_n_steps=max_n_steps,
         max_time=max_time,
         min_loss=min_loss,
         optimizer_reset_tol=optimizer_reset_tol,
     )
-    optimizer = training.get_optimizer(
-        Optimizer,
-        trained_models,
-        **optimizer_kwargs,
-    )
+    optimizer = training.get_optimizer(config, trained_models=trained_models)
     scheduler = training.get_scheduler(
         Scheduler,
         optimizer,
