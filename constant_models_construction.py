@@ -2,9 +2,10 @@
 
 
 from collections.abc import Sequence
-from typing import Dict
+from typing import Dict, Callable
 import torch
 
+from kolpinn.quantities import QuantityDict
 from kolpinn import model
 from kolpinn.model import Model, MultiModel
 
@@ -18,8 +19,11 @@ def get_constant_models(
     device: Device,
     *,
     dx_dict: Dict[str, float],
+    V_el_function: Callable[[QuantityDict], torch.Tensor],  # Maps q to V_el
 ) -> Sequence[MultiModel]:
     N = device.n_layers
+    zero_model = model.ConstModel(0, model_dtype=params.si_real_dtype)
+    one_model = model.ConstModel(1, model_dtype=params.si_real_dtype)
 
     layer_indep_const_models_dict = {}
     layer_indep_const_models_dict["E_L"] = model.FunctionModel(
@@ -41,11 +45,8 @@ def get_constant_models(
             model_dtype=params.si_real_dtype,
             output_dtype=params.si_real_dtype,
         )
-        models_dict[f"V_el_approx{i}"] = model.FunctionModel(
-            lambda q, i=i: trafos.get_V_voltage(
-                q, device.device_start, device.device_end
-            ),
-        )
+        # Using an approximation of V_el initially
+        models_dict[f"V_el{i}"] = model.FunctionModel(V_el_function)
         models_dict[f"m_eff{i}"] = model.get_model(
             device.m_effs[i],
             model_dtype=params.si_real_dtype,
@@ -73,6 +74,8 @@ def get_constant_models(
                 if i in (0, N + 1)
                 else trafos.smooth_k_function(q, i, contact),
             )
+            if params.wkb:
+                continue
             # The shifts by x_out are important for
             # energies smaller than V, it keeps them from exploding for layers
             # far away from the contacts. It can still get large/tiny for thick layers.
@@ -86,9 +89,6 @@ def get_constant_models(
                     -1j * q[f"smooth_k{i}_{contact}"] * (q["x"] - x_out)
                 ),
             )
-
-    zero_model = model.ConstModel(0, model_dtype=params.si_real_dtype)
-    one_model = model.ConstModel(1, model_dtype=params.si_real_dtype)
 
     # Both contacts
     const_models_dict[0]["V_el0"] = zero_model
@@ -166,13 +166,52 @@ def get_constant_models(
         )
 
     # Promoting quantities to full grid
+    for contact in device.contacts:
+        const_models.append(
+            model.MultiModel(
+                trafos.to_full_trafo,
+                f"k_{contact}",
+                kwargs={
+                    "N": N,
+                    "label_fn": lambda i, *, contact=contact: f"k{i}_{contact}",
+                    "quantity_label": f"k_{contact}",
+                },
+            )
+        )
+
+        if not params.wkb:
+            continue
+
+        const_models.append(
+            model.MultiModel(
+                trafos.wkb_phase_trafo,
+                "wkb_phase",
+                kwargs={
+                    "contact": contact,
+                    "N": N,
+                    "dx_dict": dx_dict,
+                },
+            )
+        )
+
+    const_models.append(
+        model.MultiModel(
+            trafos.to_full_trafo,
+            "V_el",
+            kwargs={
+                "N": N,
+                "label_fn": lambda i: f"V_el{i}",
+                "quantity_label": "V_el",
+            },
+        )
+    )
     const_models.append(
         model.MultiModel(
             trafos.to_full_trafo,
             "m_eff",
             kwargs={
                 "N": N,
-                "label_fn": lambda i, *, contact=contact: f"m_eff{i}",
+                "label_fn": lambda i: f"m_eff{i}",
                 "quantity_label": "m_eff",
             },
         )
@@ -183,7 +222,7 @@ def get_constant_models(
             "V_int",
             kwargs={
                 "N": N,
-                "label_fn": lambda i, *, contact=contact: f"V_int{i}",
+                "label_fn": lambda i: f"V_int{i}",
                 "quantity_label": "V_int",
             },
         )
@@ -194,7 +233,7 @@ def get_constant_models(
             "doping",
             kwargs={
                 "N": N,
-                "label_fn": lambda i, *, contact=contact: f"doping{i}",
+                "label_fn": lambda i: f"doping{i}",
                 "quantity_label": "doping",
             },
         )
@@ -205,7 +244,7 @@ def get_constant_models(
             "permittivity",
             kwargs={
                 "N": N,
-                "label_fn": lambda i, *, contact=contact: f"permittivity{i}",
+                "label_fn": lambda i: f"permittivity{i}",
                 "quantity_label": "permittivity",
             },
         )

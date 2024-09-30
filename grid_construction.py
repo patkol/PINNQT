@@ -22,15 +22,14 @@ def get_energies(*, E_min: float, E_max: float, E_step: float) -> torch.Tensor:
     return energies
 
 
-def get_xs(device: Device, *, N_x: int) -> torch.Tensor:
+def get_xs(device: Device, *, x_step: float) -> torch.Tensor:
     x_left = device.boundaries[0]
     x_right = device.boundaries[-1]
     # We're excluding the left- and rightmost points to avoid special cases
-    x_step = (x_right - x_left) / (N_x + 2 - 1)
-    xs = torch.linspace(
-        x_left + x_step,
-        x_right - x_step,
-        N_x,
+    xs = torch.arange(
+        start=x_left + x_step / 2,
+        end=x_right - x_step / 2,
+        step=x_step,
     )
     return xs
 
@@ -71,12 +70,12 @@ def get_unbatched_grids(
     E_min: float,
     E_max: float,
     E_step: float,
-    N_x: int,
+    x_step: float,
     dx_dict: Dict[str, float],
 ) -> Dict[str, Grid]:
     voltages = get_voltages(V_min=V_min, V_max=V_max, V_step=V_step)
     energies = get_energies(E_min=E_min, E_max=E_max, E_step=E_step)
-    xs = get_xs(device, N_x=N_x)
+    xs = get_xs(device, x_step=x_step)
     grids: Dict[str, Grid] = {}
 
     # Bulk

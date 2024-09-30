@@ -53,26 +53,27 @@ batch_sizes: Dict[str, int] = {
     # "DeltaE": 100,
 }
 n_newton_raphson_steps = 1
+newton_raphson_rate = 0.1
+use_V_el_from_loaded = False
 
 # Plotting
 plot_each_voltage = 1
 plot_each_energy = 12
 extra_plots = True
 
-# Resolution
-N_x = 300
-
 # Physical
+VOLTAGE_MIN = 0.0 * consts.VOLT
+VOLTAGE_STEP = 0.01 * consts.VOLT
+VOLTAGE_MAX = 0.0 * consts.VOLT
+VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
+
 E_MIN = 0.05 * consts.EV
 E_STEP = 0.01 * consts.EV
 E_MAX = 0.4 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
-VOLTAGE_MIN = 0.0 * consts.VOLT
-VOLTAGE_STEP = 0.002 * consts.VOLT
-VOLTAGE_MAX = 0.0 * consts.VOLT
-VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
+X_STEP = 0.1 * consts.NM
 
 TEMPERATURE = 300 * consts.KELVIN
 
@@ -83,6 +84,8 @@ CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 energy_smoothing_range = 0.05 * consts.EV
 transition_distance = 0.5 * consts.NM
 dx = 0.01 * consts.NM  # Used for derivatives
+dV_poisson = 1e-4 * consts.EV
+wkb = True
 
 V_OOM = 0.3 * consts.EV
 M_EFF_OOM = 0.1 * consts.M_E

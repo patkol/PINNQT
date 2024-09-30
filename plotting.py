@@ -426,6 +426,7 @@ def save_plots(trainer: Trainer, device: Device, *, prefix=""):
 
             extra_prefix = voltage_path_prefix + "extra/"
             os.makedirs(extra_prefix, exist_ok=True)
+
             for i in range(1, device.n_layers + 1):
                 q_layer = qs[f"bulk{i}"]
                 grid_layer = Subgrid(q_layer.grid, voltage_index_dict, copy_all=False)
@@ -436,6 +437,37 @@ def save_plots(trainer: Trainer, device: Device, *, prefix=""):
                 q_layer_reduced = restrict_quantities(q_layer, grid_layer_reduced)
 
                 for c in ("a", "b"):
+                    save_lineplot(
+                        torch.real(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
+                        q_layer_reduced.grid,
+                        f"Re[{c}_phase{i}_{contact}]",
+                        "x",
+                        "DeltaE",
+                        x_unit=consts.NM,
+                        x_unit_name="nm",
+                        path_prefix=extra_prefix,
+                    )
+                    save_lineplot(
+                        torch.imag(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
+                        q_layer_reduced.grid,
+                        f"Im[{c}_phase{i}_{contact}]",
+                        "x",
+                        "DeltaE",
+                        x_unit=consts.NM,
+                        x_unit_name="nm",
+                        path_prefix=extra_prefix,
+                    )
+                    save_lineplot(
+                        complex_abs2(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
+                        q_layer_reduced.grid,
+                        f"|{c}_phase{i}_{contact}|^2",
+                        "x",
+                        "DeltaE",
+                        x_unit=consts.NM,
+                        x_unit_name="nm",
+                        path_prefix=extra_prefix,
+                    )
+
                     save_lineplot(
                         torch.real(q_layer_reduced[f"{c}_output{i}_{contact}"]),
                         q_layer_reduced.grid,

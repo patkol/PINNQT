@@ -9,14 +9,49 @@ from kolpinn.grids import Subgrid
 from kolpinn import quantities
 from kolpinn.quantities import QuantityDict
 from kolpinn import model
+from kolpinn.model import MultiModel
 from kolpinn import training
+from kolpinn.training import TrainerConfig, TrainerState
 
 import parameters as params
 from classes import Device
 import grid_construction
+import transformations as trafos
 from constant_models_construction import get_constant_models
 from trained_models_construction import get_trained_models
 from dependent_models_construction import get_dependent_models
+
+
+def get_dx_dict():
+    dx_dict = {"": 0.0}
+    if params.fd_first_derivatives:
+        dx_dict["_mdx"] = -params.dx
+        dx_dict["_pdx"] = params.dx
+
+    return dx_dict
+
+
+def get_trainer_state(
+    config: TrainerConfig,
+    const_qs: Dict[str, QuantityDict],
+    trained_models: Sequence[MultiModel],
+    dependent_models: Sequence[MultiModel],
+) -> TrainerState:
+    optimizer = training.get_optimizer(config, trained_models=trained_models)
+    scheduler = training.get_scheduler(
+        config.Scheduler,
+        optimizer,
+        **config.scheduler_kwargs,
+    )
+    state = training.TrainerState(
+        const_qs,
+        trained_models,
+        dependent_models,
+        optimizer,
+        scheduler,
+    )
+
+    return state
 
 
 def get_trainer(
@@ -34,12 +69,8 @@ def get_trainer(
     optimizer_kwargs: Dict[str, Any],
     Scheduler: Optional[type],
     scheduler_kwargs: Dict[str, Any],
-) -> training.Trainer:
-    dx_dict = {"": 0.0}
-    if params.fd_first_derivatives:
-        dx_dict["_mdx"] = -params.dx
-        dx_dict["_pdx"] = params.dx
-
+):
+    dx_dict = get_dx_dict()
     unbatched_grids = grid_construction.get_unbatched_grids(
         device,
         V_min=params.VOLTAGE_MIN,
@@ -48,7 +79,7 @@ def get_trainer(
         E_min=params.E_MIN,
         E_max=params.E_MAX,
         E_step=params.E_STEP,
-        N_x=params.N_x,
+        x_step=params.X_STEP,
         dx_dict=dx_dict,
     )
 
@@ -62,6 +93,9 @@ def get_trainer(
     constant_models = get_constant_models(
         device,
         dx_dict=dx_dict,
+        V_el_function=lambda q: trafos.get_V_voltage(
+            q, device.device_start, device.device_end
+        ),
     )
     trained_models, trained_models_labels = get_trained_models(
         device,
@@ -123,19 +157,12 @@ def get_trainer(
         min_loss=min_loss,
         optimizer_reset_tol=optimizer_reset_tol,
     )
-    optimizer = training.get_optimizer(config, trained_models=trained_models)
-    scheduler = training.get_scheduler(
-        Scheduler,
-        optimizer,
-        **scheduler_kwargs,
-    )
-    state = training.TrainerState(
+    state = get_trainer_state(
+        config,
         const_qs,
         trained_models,
         dependent_models,
-        optimizer,
-        scheduler,
     )
     trainer = training.Trainer(state, config)
 
-    return trainer
+    return trainer, unbatched_grids, quantities_requiring_grad

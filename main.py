@@ -12,12 +12,17 @@ import shutil
 import random
 import torch
 
+from kolpinn import quantities
+from kolpinn.quantities import QuantityDict
+from kolpinn import model
 from kolpinn import storage
 from kolpinn import training
 
 import parameters as params
 import physics
 from classes import Device
+import transformations as trafos
+from constant_models_construction import get_constant_models
 import trainer_construction
 
 # import saving
@@ -37,7 +42,7 @@ device = Device(**physics.device_kwargs)
 saved_parameters_index = storage.get_next_parameters_index()
 print("saved_parameters_index =", saved_parameters_index)
 
-trainer = trainer_construction.get_trainer(
+trainer, unbatched_grids, quantities_requiring_grad = trainer_construction.get_trainer(
     device=device,
     batch_sizes=params.batch_sizes,
     loss_aggregate_function=params.loss_aggregate_function,
@@ -66,7 +71,16 @@ if __name__ == "__main__":
     os.makedirs(saved_parameters_path, exist_ok=True)
     shutil.copy("parameters.py", saved_parameters_path)
 
-    for newton_raphson_step in range(params.n_newton_raphson_steps):
+    skip_first_training = (
+        params.use_V_el_from_loaded and params.loaded_parameters_index is not None
+    )
+    max_n_steps = trainer.config.max_n_steps
+    newton_raphson_step = 0
+    while True:
+        if newton_raphson_step == 0 and skip_first_training:
+            trainer.config.max_n_steps = 0
+        else:
+            trainer.config.max_n_steps = max_n_steps
         # Train
         training.train(trainer, report_each=params.report_each, save_if_best=True)
 
@@ -92,7 +106,43 @@ if __name__ == "__main__":
             trainer, device, prefix=f"newton_raphson{newton_raphson_step}/"
         )
 
-        if newton_raphson_step + 1 < params.n_newton_raphson_steps:
-            # Newton-Raphson step
-            training.reset_optimizer(trainer)
-            # trainer.const_qs["bulk"]["V_el"] =
+        newton_raphson_step += 1
+        if newton_raphson_step >= params.n_newton_raphson_steps:
+            break
+
+        print()
+        print("Newton-Raphson step", newton_raphson_step)
+        print()
+
+        # Newton-Raphson step: Set up a new trainer with an updated potential
+        # OPTIM: don't reevaluate extended_qs
+        extended_qs = training.get_extended_qs(trainer.state)
+        V_el, V_el_grid = trafos.get_V_electrostatic(
+            extended_qs, contacts=device.contacts
+        )
+        # Set V_el to zero on the left
+        V_el = V_el - quantities.interpolate(
+            V_el, V_el_grid, extended_qs["boundary0"].grid, dimension_label="x"
+        )
+
+        def V_el_function(q: QuantityDict):
+            return quantities.interpolate(V_el, V_el_grid, q.grid, dimension_label="x")
+
+        dx_dict = trainer_construction.get_dx_dict()
+        constant_models = get_constant_models(
+            device,
+            dx_dict=dx_dict,
+            V_el_function=V_el_function,
+        )
+        const_qs = model.get_qs(
+            unbatched_grids,
+            constant_models,
+            quantities_requiring_grad,
+        )
+        new_state = trainer_construction.get_trainer_state(
+            trainer.config,
+            const_qs,
+            trainer.state.trained_models,
+            trainer.state.dependent_models,
+        )
+        trainer = training.Trainer(new_state, trainer.config)

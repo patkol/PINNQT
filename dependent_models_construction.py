@@ -204,23 +204,6 @@ def get_dependent_models(
             kwargs={"contacts": device.contacts},
         )
     )
-    dependent_models.append(
-        MultiModel(
-            trafos.V_electrostatic_trafo,
-            "V_el",
-        )
-    )
-    dependent_models.append(
-        MultiModel(
-            trafos.to_bulks_trafo,
-            "V_el_distribution",
-            kwargs={
-                "N": N,
-                "label_fn": lambda i, *, contact=contact: f"V_el{i}",
-                "quantity_label": "V_el",
-            },
-        )
-    )
 
     # Bulk again
     for i in range(1, N + 1):

@@ -51,7 +51,7 @@ class Device:
     device_start: float = dataclasses.field(init=False)
     device_end: float = dataclasses.field(init=False)
     n_layers: int = dataclasses.field(init=False)
-    Contacts: Sequence[Contact] = dataclasses.field(init=False)
+    contacts: Sequence[Contact] = dataclasses.field(init=False)
 
     def __post_init__(self):
         self.device_start = self.boundaries[1 if self.includes_contacts else 0]

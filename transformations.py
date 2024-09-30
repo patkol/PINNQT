@@ -1,13 +1,16 @@
 # Copyright (c) 2024 ETH Zurich, Patrice Kolb
 
+# OPTIM: don't return qs in trafos
 
-from typing import Dict, Callable, Sequence
+
+from typing import Dict, Callable, Sequence, Optional
 import numpy as np
 import torch
 
 from kolpinn import mathematics
 from kolpinn.mathematics import complex_abs2
-from kolpinn.grids import Subgrid
+from kolpinn import grids
+from kolpinn.grids import Grid, Subgrid, Supergrid
 from kolpinn import quantities
 from kolpinn.quantities import QuantityDict
 from kolpinn import model
@@ -21,7 +24,7 @@ from classes import Contact
 def k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
     return physics.k_function(
         q[f"m_eff{i}"],
-        q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el_approx{i}"],
+        q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"],
     )
 
 
@@ -35,10 +38,11 @@ def smoother_function(x, smoothing_range):
 
 # smooth_k: Fixing the non-smoothness of k in V at E=V
 def smooth_k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
+    # IDEA: Do I need to remove V_el?
     return physics.k_function(
         q[f"m_eff{i}"],
         smoother_function(
-            q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el_approx{i}"],
+            q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"],
             params.energy_smoothing_range,
         ),
     )
@@ -164,6 +168,82 @@ def get_phi_target(q: QuantityDict, *, i: int, contact: Contact):
     return phi_target, phi_dx_target
 
 
+def get_fermi_integral(*, m_eff, E_fermi, E):
+    return (
+        m_eff
+        / (np.pi * consts.H_BAR**2 * physics.BETA)
+        * torch.log(1 + torch.exp(physics.BETA * (E_fermi - E)))
+    )
+
+
+def get_n_contact(*, dos, fermi_integral, grid: Grid):
+    integrand = dos * fermi_integral
+    n_contact = quantities.sum_dimension("DeltaE", integrand, grid) * params.E_STEP
+    return n_contact
+
+
+def get_V_electrostatic(qs, *, contacts) -> tuple[torch.Tensor, Grid]:
+    q = qs["bulk"]
+
+    assert q.grid.dimensions_labels[-1] == "x"
+
+    # Construct the discretized Laplace operator M assuming an
+    # equispaced x grid
+    # OPTIM: do this only once
+    Nx = q.grid.dim_size["x"]
+    dx = params.X_STEP
+    M = torch.zeros(Nx, Nx)
+    permittivity = quantities.squeeze_to(["x"], q["permittivity"], q.grid)
+    for i in range(1, Nx):
+        M[i, i - 1] = (permittivity[i] + permittivity[i - 1]) / (2 * dx**2)
+    for i in range(0, Nx - 1):
+        M[i, i + 1] = (permittivity[i] + permittivity[i + 1]) / (2 * dx**2)
+    for i in range(1, Nx - 1):
+        M[i, i] = -M[i, i - 1] - M[i, i + 1]
+
+    # Von Neumann BC
+    M[0, 0] = -(permittivity[0] + permittivity[1]) / (2 * dx**2)
+    M[-1, -1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
+
+    # TODO: implementation that works if x is not the last coordinate,
+    #       kolpinn function
+    #       Then remove the assertion above
+    rho = consts.Q_E * (q["doping"] - q["n"])
+    Phi = q["V_el"] / -consts.Q_E
+    F = torch.einsum("ij,...j->...i", M, Phi) + rho
+
+    # Get the density if the potential was shifted by dV
+    n_pdVs = []
+    for contact in contacts:
+        q_in = qs[contact.grid_name]
+        i = contact.index
+        fermi_integral_pdV = get_fermi_integral(
+            m_eff=q_in[f"m_eff{i}"],
+            E_fermi=q[f"E_fermi_{contact}"],
+            E=q[f"E_{contact}"] + params.dV_poisson,
+        )
+        n_pdV = get_n_contact(
+            dos=q[f"DOS_{contact}"],
+            fermi_integral=fermi_integral_pdV,
+            grid=q.grid,
+        )
+        n_pdVs.append(n_pdV)
+    n_pdV = sum(n_pdVs)
+
+    dn_dV = (n_pdV - q["n"]) / params.dV_poisson
+    drho_dV = -consts.Q_E * dn_dV
+    drho_dPhi = -consts.Q_E * drho_dV
+    torch.unsqueeze(M, 0)
+    torch.unsqueeze(M, 0)
+    J = M + torch.diag_embed(drho_dPhi)
+
+    dPhi = params.newton_raphson_rate * torch.linalg.solve(-J, F)
+    dV = dPhi * -consts.Q_E
+    V_el = q["V_el"] + dV
+
+    return V_el, q.grid
+
+
 def to_full_trafo(
     qs: Dict[str, QuantityDict],
     *,
@@ -201,13 +281,153 @@ def to_bulks_trafo(
     quantity_label: str,
 ):
     """
-    Inverse of 'to_full_trafo'
+    Inverse of `to_full_trafo`
     """
     full_quantity = qs["bulk"][quantity_label]
     for i in range(1, N + 1):
         q_layer = qs[f"bulk{i}"]
         assert isinstance(q_layer.grid, Subgrid)
         q_layer[label_fn(i)] = quantities.restrict(full_quantity, q_layer.grid)
+
+    return qs
+
+
+def _interpolating_to_boundaries_trafo(
+    qs: Dict[str, QuantityDict],
+    *,
+    N: int,
+    label_fn: Callable[[int], str],
+    quantity_label: str,
+    dx_dict: Dict[str, float],
+):
+    full_quantity = qs["bulk"][quantity_label]
+    full_grid = qs["bulk"].grid
+    for i in range(0, N + 1):
+        for dx_string in dx_dict.keys():
+            q = qs[f"boundary{i}" + dx_string]
+            boundary_quantity = quantities.interpolate(
+                full_quantity,
+                full_grid,
+                q.grid,
+                dimension_label="x",
+            )
+            q[label_fn(i)] = boundary_quantity
+            q[label_fn(i + 1)] = boundary_quantity
+
+    return qs
+
+
+def _extrapolating_to_boundaries_trafo(
+    qs: Dict[str, QuantityDict],
+    *,
+    N: int,
+    label_fn: Callable[[int], str],
+    dx_dict: Dict[str, float],
+):
+    for i_layer in range(1, N + 1):
+        q_bulk = qs[f"bulk{i_layer}"]
+        label = label_fn(i_layer)
+        for i_boundary in (i_layer - 1, i_layer):
+            for dx_string in dx_dict.keys():
+                q_boundary = qs[f"boundary{i_boundary}" + dx_string]
+                q_boundary[label] = quantities.interpolate(
+                    q_bulk[label],
+                    q_bulk.grid,
+                    q_boundary.grid,
+                    dimension_label="x",
+                )
+
+    return qs
+
+
+def to_boundaries_trafo(
+    qs: Dict[str, QuantityDict],
+    *,
+    N: int,
+    label_fn: Callable[[int], str],
+    quantity_label: Optional[str] = None,
+    dx_dict: Dict[str, float],
+    one_sided: bool,
+):
+    """
+    Interpolate from "bulk" to the boundaries.
+    If `one_sided`, we extrapolate from the "bulk{i}" individually, leading to possibly
+    different values for i and i+1 at the same boundary.
+    """
+
+    if one_sided:
+        return _extrapolating_to_boundaries_trafo(
+            qs, N=N, label_fn=label_fn, dx_dict=dx_dict
+        )
+
+    assert quantity_label is not None
+
+    return _interpolating_to_boundaries_trafo(
+        qs, N=N, label_fn=label_fn, quantity_label=quantity_label, dx_dict=dx_dict
+    )
+
+
+def to_bulks_and_boundaries_trafo(
+    qs: dict[str, QuantityDict],
+    *,
+    N: int,
+    label_fn: Callable[[int], str],
+    quantity_label: str,
+    dx_dict: Dict[str, float],
+    one_sided: bool,
+):
+    to_bulks_trafo(qs, N=N, label_fn=label_fn, quantity_label=quantity_label)
+    to_boundaries_trafo(
+        qs,
+        N=N,
+        label_fn=label_fn,
+        quantity_label=quantity_label,
+        dx_dict=dx_dict,
+        one_sided=one_sided,
+    )
+
+    return qs
+
+
+def wkb_phase_trafo(
+    qs: dict[str, QuantityDict],
+    *,
+    contact: Contact,
+    N: int,
+    dx_dict: Dict[str, float],
+):
+    integral_at_x_0 = torch.tensor(0)
+    layer_indices = range(N, 0, -1) if contact.direction == 1 else range(1, N + 1)
+    for i in layer_indices:
+        grid_names = [f"bulk{i}"]
+        for i_boundary in (i - 1, i):
+            for dx_string in dx_dict.keys():
+                grid_names.append(f"boundary{i_boundary}" + dx_string)
+        child_grids: dict[str, Grid] = dict(
+            (grid_name, qs[grid_name].grid) for grid_name in grid_names
+        )
+        supergrid = Supergrid(child_grids, "x", copy_all=False)
+        ks = [qs[grid_name][f"k{i}_{contact}"] for grid_name in grid_names]
+        integrand = quantities.combine_quantity(
+            ks, list(supergrid.subgrids.values()), supergrid
+        )
+        out_boundary_index = contact.get_out_boundary_index(i)
+        x_0 = qs[f"boundary{out_boundary_index}"].grid["x"].item()
+        integral = quantities.get_cumulative_integral(
+            "x", x_0, integrand, supergrid, start_value=integral_at_x_0
+        )
+
+        for grid_name in grid_names:
+            q = qs[grid_name]
+            q[f"k_integral{i}_{contact}"] = quantities.restrict(
+                integral, supergrid.subgrids[grid_name]
+            )
+            q[f"a_phase{i}_{contact}"] = torch.exp(1j * q[f"k_integral{i}_{contact}"])
+            q[f"b_phase{i}_{contact}"] = torch.exp(-1j * q[f"k_integral{i}_{contact}"])
+
+        # q_in_boundary = qs[f"boundary{contact.get_in_boundary_index(i)}"]
+        # boundary_slice = grids.get_nd_slice("x", 0, q_in_boundary.grid)
+        # integral_at_x_0 = q_in_boundary[f"k_integral{i}_{contact}"][boundary_slice]
 
     return qs
 
@@ -226,12 +446,8 @@ def fermi_integral_trafo(qs, *, contact: Contact):
     q = qs["bulk"]
     q_in = qs[contact.grid_name]
     i = contact.index
-    qs["bulk"][f"fermi_integral_{contact}"] = (
-        q_in[f"m_eff{i}"]
-        / (np.pi * consts.H_BAR**2 * physics.BETA)
-        * torch.log(
-            1 + torch.exp(physics.BETA * (q[f"E_fermi_{contact}"] - q[f"E_{contact}"]))
-        )
+    qs["bulk"][f"fermi_integral_{contact}"] = get_fermi_integral(
+        m_eff=q_in[f"m_eff{i}"], E_fermi=q[f"E_fermi_{contact}"], E=q[f"E_{contact}"]
     )
 
     return qs
@@ -364,9 +580,10 @@ def dos_trafo(qs, *, contact):
 def n_contact_trafo(qs, *, contact):
     """Density from one contact only"""
     q = qs["bulk"]
-    integrand = q[f"DOS_{contact}"] * q[f"fermi_integral_{contact}"]
-    q[f"n_{contact}"] = (
-        quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
+    q[f"n_{contact}"] = get_n_contact(
+        dos=q[f"DOS_{contact}"],
+        fermi_integral=q[f"fermi_integral_{contact}"],
+        grid=q.grid,
     )
     return qs
 
@@ -375,52 +592,5 @@ def n_trafo(qs, *, contacts):
     """Full density"""
     q = qs["bulk"]
     q["n"] = sum(q[f"n_{contact}"] for contact in contacts)
-
-    return qs
-
-
-def V_electrostatic_trafo(qs):
-    q = qs["bulk"]
-
-    # TEMP
-    q["V_el"] = torch.zeros((1, 1, 1))
-    return qs
-
-    assert q.grid.dimensions_labels[-1] == "x"
-
-    # Construct the discretized Laplace operator M assuming an
-    # equispaced x grid
-    # OPTIM: do this only once
-    Nx = q.grid.dim_size["x"]
-    dx = q.grid.dimensions["x"][1] - q.grid.dimensions["x"][0]
-    M = torch.zeros(Nx, Nx)
-    permittivity = quantities.squeeze_to(["x"], q["permittivity"], q.grid)
-    for i in range(1, Nx):
-        M[i, i - 1] = (permittivity[i] + permittivity[i - 1]) / (2 * dx**2)
-    for i in range(0, Nx - 1):
-        M[i, i + 1] = (permittivity[i] + permittivity[i + 1]) / (2 * dx**2)
-    for i in range(1, Nx - 1):
-        M[i, i] = -M[i, i - 1] - M[i, i + 1]
-
-    # Dirichlet BC
-    # Assuming constant permittivity at the outer boundaries
-    M[0, 0] = -2 * permittivity[0] / dx**2
-    M[-1, -1] = -2 * permittivity[-1] / dx**2
-
-    # TODO: implementation that works if x is not the last coordinate,
-    #       kolpinn function
-    #       Then remove the assertion above
-    rho = consts.Q_E * (q["doping"] - q["n"])
-    rhs = -consts.Q_E * rho
-    # Phi[-1] = 0, Phi[Nx] = -voltage * EV
-    # S[0] = -epsilon[-1/2] / dx^2 * Phi[-1],
-    # S[Nx-1] = -epsilon[Nx-1/2] / dx^2 * Phi[Nx]
-    Phi_Nx = q["voltage"].squeeze(-1) * consts.EV
-    rhs[:, :, Nx - 1] += -permittivity[-1] / dx**2 * Phi_Nx
-    # Permute: x must be the second last coordinate for torch.linalg.solve
-    rhs_permuted = torch.permute(rhs, (0, 2, 1))
-    Phi_permuted = torch.linalg.solve(M, rhs_permuted)
-    Phi = torch.permute(Phi_permuted, (0, 2, 1))
-    q["V_el"] = -consts.Q_E * Phi
 
     return qs
