@@ -27,10 +27,10 @@ def get_constant_models(
 
     layer_indep_const_models_dict = {}
     layer_indep_const_models_dict["E_L"] = model.FunctionModel(
-        lambda q: q["DeltaE"],
+        lambda q: q["DeltaE"] + 1j * params.energy_smoothing_range,
     )
     layer_indep_const_models_dict["E_R"] = model.FunctionModel(
-        lambda q: q["DeltaE"] - consts.Q_E * q["voltage"],
+        lambda q: q["DeltaE"] - consts.Q_E * q["voltage"] + 1j * params.energy_smoothing_range,
     )
 
     # const_models_dict[i][name] = model

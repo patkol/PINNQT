@@ -168,7 +168,8 @@ def get_dependent_models(
                     kwargs={"i": i, "N": N, "contact": contact},
                 )
             )
-            loss_quantities[bulk_name].append(f"j_loss{i}_{contact}")
+            # Ignoring the j loss due to complex energies
+            # loss_quantities[bulk_name].append(f"j_loss{i}_{contact}")
 
     for contact in device.contacts:
         dependent_models.append(

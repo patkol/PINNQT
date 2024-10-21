@@ -11,7 +11,7 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "rtd1"
+simulated_device_name = "barrier2"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
@@ -32,7 +32,7 @@ model_dtype = torch.float32
 # Training
 max_n_training_steps = None
 max_time = None
-min_loss = 200e-6
+min_loss = 20e-6
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -52,14 +52,16 @@ batch_sizes: Dict[str, int] = {
     # "x": 1000,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 1
-newton_raphson_rate = 0.1
+n_newton_raphson_steps = 10
+newton_raphson_rate = 1
+# The `newton_raphson_rate` will effectively be 1 in the first step if
+# `use_V_el_from_loaded`
 use_V_el_from_loaded = False
 
 # Plotting
 plot_each_voltage = 1
 plot_each_energy = 12
-extra_plots = True
+extra_plots = False
 
 # Physical
 VOLTAGE_MIN = 0.0 * consts.VOLT
@@ -67,13 +69,13 @@ VOLTAGE_STEP = 0.01 * consts.VOLT
 VOLTAGE_MAX = 0.0 * consts.VOLT
 VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
-E_MIN = 0.05 * consts.EV
-E_STEP = 0.01 * consts.EV
-E_MAX = 0.4 * consts.EV
+E_MIN = 1e-3 * consts.EV
+E_STEP = 1e-3 * consts.EV
+E_MAX = 0.6 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
-X_STEP = 0.1 * consts.NM
+X_STEP = 0.05 * consts.NM
 
 TEMPERATURE = 300 * consts.KELVIN
 
@@ -81,7 +83,7 @@ TEMPERATURE = 300 * consts.KELVIN
 #                       V_int and V_el are added.
 CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 
-energy_smoothing_range = 0.05 * consts.EV
+energy_smoothing_range = 0  # 1e-6 * consts.EV
 transition_distance = 0.5 * consts.NM
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV

@@ -19,6 +19,28 @@ import parameters as params
 from classes import Device
 
 
+def plot_V_el(trainer, *, prefix=""):
+    plt.rcParams.update({"font.size": 22})
+    path_prefix = f"plots/{trainer.config.saved_parameters_index:04d}/{prefix}"
+    os.makedirs(path_prefix, exist_ok=True)
+    q = trainer.state.const_qs["bulk"]
+
+    save_lineplot(
+        q["V_el"],
+        q.grid,
+        "V_el",
+        "x",
+        "voltage",
+        path_prefix=path_prefix,
+        quantity_unit=consts.EV,
+        quantity_unit_name="eV",
+        x_unit=consts.NM,
+        x_unit_name="nm",
+        lines_unit=consts.VOLT,
+        lines_unit_name="V",
+    )
+
+
 def save_plots(trainer: Trainer, device: Device, *, prefix=""):
     plt.rcParams.update({"font.size": 22})
     path_prefix = f"plots/{trainer.config.saved_parameters_index:04d}/{prefix}"

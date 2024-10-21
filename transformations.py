@@ -5,6 +5,7 @@
 
 from typing import Dict, Callable, Sequence, Optional
 import numpy as np
+from scipy import signal
 import torch
 
 from kolpinn import mathematics
@@ -28,24 +29,14 @@ def k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
     )
 
 
-def gaussian(x, sigma):
-    return torch.exp(-(x**2) / (2 * sigma**2))
-
-
-def smoother_function(x, smoothing_range):
-    return x * (1 - gaussian(x, smoothing_range))
-
-
-# smooth_k: Fixing the non-smoothness of k in V at E=V
-def smooth_k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
-    # IDEA: Do I need to remove V_el?
-    return physics.k_function(
-        q[f"m_eff{i}"],
-        smoother_function(
-            q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"],
-            params.energy_smoothing_range,
-        ),
-    )
+smooth_k_function = k_function
+# # smooth_k: Fixing the non-smoothness of k in V at E=V
+# def smooth_k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
+#     # IDEA: Do I need to remove V_el?
+#     return physics.k_function(
+#         q[f"m_eff{i}"],
+#         q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"] + 1j * params.energy_smoothing_range,
+#     )
 
 
 def transition_function(a, b, transition_exp):
@@ -396,9 +387,9 @@ def wkb_phase_trafo(
     N: int,
     dx_dict: Dict[str, float],
 ):
-    integral_at_x_0 = torch.tensor(0)
     layer_indices = range(N, 0, -1) if contact.direction == 1 else range(1, N + 1)
     for i in layer_indices:
+        # Set up the grid to integrate on
         grid_names = [f"bulk{i}"]
         for i_boundary in (i - 1, i):
             for dx_string in dx_dict.keys():
@@ -407,27 +398,25 @@ def wkb_phase_trafo(
             (grid_name, qs[grid_name].grid) for grid_name in grid_names
         )
         supergrid = Supergrid(child_grids, "x", copy_all=False)
-        ks = [qs[grid_name][f"k{i}_{contact}"] for grid_name in grid_names]
+        sorted_supergrid = grids.get_sorted_grid_along(["x"], supergrid, copy_all=False)
+        ks = [qs[grid_name][f"smooth_k{i}_{contact}"] for grid_name in grid_names]
         integrand = quantities.combine_quantity(
             ks, list(supergrid.subgrids.values()), supergrid
         )
+        sorted_integrand = quantities.restrict(integrand, sorted_supergrid)
         out_boundary_index = contact.get_out_boundary_index(i)
         x_0 = qs[f"boundary{out_boundary_index}"].grid["x"].item()
-        integral = quantities.get_cumulative_integral(
-            "x", x_0, integrand, supergrid, start_value=integral_at_x_0
-        )
+        sorted_k_integral = quantities.get_cumulative_integral("x", x_0, sorted_integrand, sorted_supergrid)
+        k_integral = quantities.combine_quantity([sorted_k_integral], [sorted_supergrid], supergrid)
 
         for grid_name in grid_names:
             q = qs[grid_name]
-            q[f"k_integral{i}_{contact}"] = quantities.restrict(
-                integral, supergrid.subgrids[grid_name]
+            k_integral_restricted = quantities.restrict(
+                k_integral, supergrid.subgrids[grid_name]
             )
-            q[f"a_phase{i}_{contact}"] = torch.exp(1j * q[f"k_integral{i}_{contact}"])
-            q[f"b_phase{i}_{contact}"] = torch.exp(-1j * q[f"k_integral{i}_{contact}"])
 
-        # q_in_boundary = qs[f"boundary{contact.get_in_boundary_index(i)}"]
-        # boundary_slice = grids.get_nd_slice("x", 0, q_in_boundary.grid)
-        # integral_at_x_0 = q_in_boundary[f"k_integral{i}_{contact}"][boundary_slice]
+            q[f"a_phase{i}_{contact}"] = torch.exp(1j * k_integral_restricted)
+            q[f"b_phase{i}_{contact}"] = torch.exp(-1j * k_integral_restricted)
 
     return qs
 
@@ -523,10 +512,13 @@ def TR_trafo(qs, *, contact):
     transmitted_amplitude = complex_abs2(q[f"transmitted_coeff_{contact}"])
     real_v_in = torch.real(q_in[f"v{contact.index}_{contact}"])
     real_v_out = torch.real(q_out[f"v{contact.out_index}_{contact}"])
-    q[f"T_{contact}"] = (
-        transmitted_amplitude / incoming_amplitude * real_v_out / real_v_in
-    )
-    q[f"R_{contact}"] = reflected_amplitude / incoming_amplitude
+    T = transmitted_amplitude / incoming_amplitude * real_v_out / real_v_in
+    R = reflected_amplitude / incoming_amplitude
+
+    # TEMP: Scaling T and R to counteract the decay
+    total_amplitude = T + R
+    q[f"T_{contact}"] = T / total_amplitude
+    q[f"R_{contact}"] = R / total_amplitude
 
     return qs
 
@@ -567,9 +559,9 @@ def dos_trafo(qs, *, contact):
 
     incoming_amplitude = complex_abs2(q[f"incoming_coeff_{contact}"])
     v = q_in[f"v{contact.index}_{contact}"]
-    assert torch.allclose(
-        torch.imag(v), torch.tensor(0, dtype=params.si_real_dtype)
-    ), "The energy in the input contact should be positive"
+    # assert torch.allclose(
+    #     torch.imag(v), torch.tensor(0, dtype=params.si_real_dtype)
+    # ), "The energy in the input contact should be positive"
     dE_dk = consts.H_BAR * torch.real(v)
     q[f"DOS_{contact}"] = (
         1 / (2 * np.pi) * complex_abs2(q[f"phi_{contact}"]) / dE_dk / incoming_amplitude

@@ -120,10 +120,10 @@ if __name__ == "__main__":
         V_el, V_el_grid = trafos.get_V_electrostatic(
             extended_qs, contacts=device.contacts
         )
-        # Set V_el to zero on the left
-        V_el = V_el - quantities.interpolate(
-            V_el, V_el_grid, extended_qs["boundary0"].grid, dimension_label="x"
-        )
+        # # Set V_el to zero on the left
+        # V_el = V_el - quantities.interpolate(
+        #     V_el, V_el_grid, extended_qs["boundary0"].grid, dimension_label="x"
+        # )
 
         def V_el_function(q: QuantityDict):
             return quantities.interpolate(V_el, V_el_grid, q.grid, dimension_label="x")
@@ -146,3 +146,5 @@ if __name__ == "__main__":
             trainer.state.dependent_models,
         )
         trainer = training.Trainer(new_state, trainer.config)
+
+        plotting.plot_V_el(trainer, prefix=f"newton_raphson{newton_raphson_step}/")
