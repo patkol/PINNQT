@@ -7,17 +7,21 @@
 Solving the 1D Schrödinger equation with open bc using PINN.
 """
 
+from typing import Dict
 import os
 import shutil
 import random
 import torch
 
+from kolpinn.grids import Grid
 from kolpinn import quantities
 from kolpinn.quantities import QuantityDict
 from kolpinn import model
 from kolpinn import storage
 from kolpinn import training
+from kolpinn.training import Trainer
 
+import physical_constants as consts
 import parameters as params
 import physics
 from classes import Device
@@ -42,6 +46,64 @@ device = Device(**physics.device_kwargs)
 saved_parameters_index = storage.get_next_parameters_index()
 print("saved_parameters_index =", saved_parameters_index)
 
+
+def get_updated_trainer(
+    trainer: Trainer, V_el: torch.Tensor, V_el_grid: Grid
+) -> Trainer:
+    assert quantities.compatible(V_el, V_el_grid)
+
+    def V_el_function(q: QuantityDict):
+        return quantities.interpolate(V_el, V_el_grid, q.grid, dimension_label="x")
+
+    dx_dict = trainer_construction.get_dx_dict()
+    constant_models = get_constant_models(
+        device,
+        dx_dict=dx_dict,
+        V_el_function=V_el_function,
+    )
+    const_qs = model.get_qs(
+        unbatched_grids,
+        constant_models,
+        quantities_requiring_grad,
+    )
+    new_state = trainer_construction.get_trainer_state(
+        trainer.config,
+        const_qs,
+        trainer.state.trained_models,
+        trainer.state.dependent_models,
+    )
+
+    return training.Trainer(new_state, trainer.config)
+
+
+def correct_V_el(V_el: torch.Tensor, V_el_grid: Grid, qs: Dict[str, QuantityDict]):
+    # Add a linear potential gradient to V_el s.t. it matches the boundary potentials
+    assert V_el_grid is qs["bulk"].grid
+    V_el_target_left = 0
+    V_el_target_right = -qs["bulk"]["voltage"] * consts.EV
+    V_el_left = quantities.interpolate(
+        V_el, V_el_grid, qs["boundary0"].grid, dimension_label="x"
+    )
+    V_el_right = quantities.interpolate(
+        V_el,
+        V_el_grid,
+        qs[f"boundary{device.n_layers}"].grid,
+        dimension_label="x",
+    )
+    x_left = qs["boundary0"]["x"]
+    x_right = qs[f"boundary{device.n_layers}"]["x"]
+    device_length = x_right - x_left
+    left_factor = (x_right - qs["bulk"]["x"]) / device_length
+    right_factor = (qs["bulk"]["x"] - x_left) / device_length
+    corrected_V_el = (
+        V_el
+        + (V_el_target_left - V_el_left) * left_factor
+        + (V_el_target_right - V_el_right) * right_factor
+    )
+
+    return corrected_V_el
+
+
 trainer, unbatched_grids, quantities_requiring_grad = trainer_construction.get_trainer(
     device=device,
     batch_sizes=params.batch_sizes,
@@ -63,6 +125,17 @@ training.load(
     load_optimizer=False,
     load_scheduler=False,
 )
+# Load V_el
+if params.loaded_parameters_index is not None:
+    V_el_path = storage.get_parameters_path(params.loaded_parameters_index) + "V_el.pth"
+    if os.path.isfile(V_el_path):
+        print("Loading V_el...")
+        V_el = torch.load(V_el_path)
+        trainer = get_updated_trainer(
+            trainer,
+            V_el,
+            trainer.state.const_qs["bulk"].grid,
+        )
 
 
 if __name__ == "__main__":
@@ -71,16 +144,15 @@ if __name__ == "__main__":
     os.makedirs(saved_parameters_path, exist_ok=True)
     shutil.copy("parameters.py", saved_parameters_path)
 
-    skip_first_training = (
-        params.use_V_el_from_loaded and params.loaded_parameters_index is not None
-    )
-    max_n_steps = trainer.config.max_n_steps
     newton_raphson_step = 0
     while True:
-        if newton_raphson_step == 0 and skip_first_training:
-            trainer.config.max_n_steps = 0
-        else:
-            trainer.config.max_n_steps = max_n_steps
+        # Save V_el
+        V_el_path = saved_parameters_path + "V_el.pth"
+        print("Saving V_el...")
+        V_el = trainer.state.const_qs["bulk"]["V_el"]
+        print(V_el_path)
+        torch.save(V_el, V_el_path)
+
         # Train
         training.train(trainer, report_each=params.report_each, save_if_best=True)
 
@@ -120,31 +192,7 @@ if __name__ == "__main__":
         V_el, V_el_grid = trafos.get_V_electrostatic(
             extended_qs, contacts=device.contacts
         )
-        # # Set V_el to zero on the left
-        # V_el = V_el - quantities.interpolate(
-        #     V_el, V_el_grid, extended_qs["boundary0"].grid, dimension_label="x"
-        # )
-
-        def V_el_function(q: QuantityDict):
-            return quantities.interpolate(V_el, V_el_grid, q.grid, dimension_label="x")
-
-        dx_dict = trainer_construction.get_dx_dict()
-        constant_models = get_constant_models(
-            device,
-            dx_dict=dx_dict,
-            V_el_function=V_el_function,
-        )
-        const_qs = model.get_qs(
-            unbatched_grids,
-            constant_models,
-            quantities_requiring_grad,
-        )
-        new_state = trainer_construction.get_trainer_state(
-            trainer.config,
-            const_qs,
-            trainer.state.trained_models,
-            trainer.state.dependent_models,
-        )
-        trainer = training.Trainer(new_state, trainer.config)
+        V_el = correct_V_el(V_el, V_el_grid, extended_qs)
+        trainer = get_updated_trainer(trainer, V_el, V_el_grid)
 
         plotting.plot_V_el(trainer, prefix=f"newton_raphson{newton_raphson_step}/")

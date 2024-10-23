@@ -232,7 +232,7 @@ def get_V_electrostatic(qs, *, contacts) -> tuple[torch.Tensor, Grid]:
     dV = dPhi * -consts.Q_E
     V_el = q["V_el"] + dV
 
-    return V_el, q.grid
+    return torch.real(V_el), q.grid  # TEMP: real
 
 
 def to_full_trafo(
@@ -406,8 +406,12 @@ def wkb_phase_trafo(
         sorted_integrand = quantities.restrict(integrand, sorted_supergrid)
         out_boundary_index = contact.get_out_boundary_index(i)
         x_0 = qs[f"boundary{out_boundary_index}"].grid["x"].item()
-        sorted_k_integral = quantities.get_cumulative_integral("x", x_0, sorted_integrand, sorted_supergrid)
-        k_integral = quantities.combine_quantity([sorted_k_integral], [sorted_supergrid], supergrid)
+        sorted_k_integral = quantities.get_cumulative_integral(
+            "x", x_0, sorted_integrand, sorted_supergrid
+        )
+        k_integral = quantities.combine_quantity(
+            [sorted_k_integral], [sorted_supergrid], supergrid
+        )
 
         for grid_name in grid_names:
             q = qs[grid_name]
