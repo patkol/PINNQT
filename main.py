@@ -47,8 +47,37 @@ saved_parameters_index = storage.get_next_parameters_index()
 print("saved_parameters_index =", saved_parameters_index)
 
 
+def get_trainer():
+    (
+        trainer,
+        unbatched_grids,
+        quantities_requiring_grad,
+    ) = trainer_construction.get_trainer(
+        device=device,
+        batch_sizes=params.batch_sizes,
+        loss_aggregate_function=params.loss_aggregate_function,
+        saved_parameters_index=saved_parameters_index,
+        save_optimizer=params.save_optimizer,
+        max_n_steps=params.max_n_training_steps,
+        max_time=params.max_time,
+        min_loss=params.min_loss,
+        optimizer_reset_tol=params.optimizer_reset_tol,
+        Optimizer=params.Optimizer,
+        optimizer_kwargs=params.optimizer_kwargs,
+        Scheduler=params.Scheduler,
+        scheduler_kwargs=params.scheduler_kwargs,
+    )
+
+    return trainer, unbatched_grids, quantities_requiring_grad
+
+
 def get_updated_trainer(
-    trainer: Trainer, V_el: torch.Tensor, V_el_grid: Grid
+    trainer: Trainer,
+    *,
+    V_el: torch.Tensor,
+    V_el_grid: Grid,
+    unbatched_grids,
+    quantities_requiring_grad,
 ) -> Trainer:
     assert quantities.compatible(V_el, V_el_grid)
 
@@ -104,21 +133,7 @@ def correct_V_el(V_el: torch.Tensor, V_el_grid: Grid, qs: Dict[str, QuantityDict
     return corrected_V_el
 
 
-trainer, unbatched_grids, quantities_requiring_grad = trainer_construction.get_trainer(
-    device=device,
-    batch_sizes=params.batch_sizes,
-    loss_aggregate_function=params.loss_aggregate_function,
-    saved_parameters_index=saved_parameters_index,
-    save_optimizer=params.save_optimizer,
-    max_n_steps=params.max_n_training_steps,
-    max_time=params.max_time,
-    min_loss=params.min_loss,
-    optimizer_reset_tol=params.optimizer_reset_tol,
-    Optimizer=params.Optimizer,
-    optimizer_kwargs=params.optimizer_kwargs,
-    Scheduler=params.Scheduler,
-    scheduler_kwargs=params.scheduler_kwargs,
-)
+trainer, unbatched_grids, quantities_requiring_grad = get_trainer()
 training.load(
     params.loaded_parameters_index,
     trainer,
@@ -133,8 +148,10 @@ if params.loaded_parameters_index is not None:
         V_el = torch.load(V_el_path)
         trainer = get_updated_trainer(
             trainer,
-            V_el,
-            trainer.state.const_qs["bulk"].grid,
+            V_el=V_el,
+            V_el_grid=trainer.state.const_qs["bulk"].grid,
+            unbatched_grids=unbatched_grids,
+            quantities_requiring_grad=quantities_requiring_grad,
         )
 
 
@@ -150,7 +167,6 @@ if __name__ == "__main__":
         V_el_path = saved_parameters_path + "V_el.pth"
         print("Saving V_el...")
         V_el = trainer.state.const_qs["bulk"]["V_el"]
-        print(V_el_path)
         torch.save(V_el, V_el_path)
 
         # Train
@@ -193,6 +209,14 @@ if __name__ == "__main__":
             extended_qs, contacts=device.contacts
         )
         V_el = correct_V_el(V_el, V_el_grid, extended_qs)
-        trainer = get_updated_trainer(trainer, V_el, V_el_grid)
+        if params.reset_weights_per_nr_step:
+            trainer, unbatched_grids, quantities_requiring_grad = get_trainer()
+        trainer = get_updated_trainer(
+            trainer,
+            V_el=V_el,
+            V_el_grid=V_el_grid,
+            unbatched_grids=unbatched_grids,
+            quantities_requiring_grad=quantities_requiring_grad,
+        )
 
         plotting.plot_V_el(trainer, prefix=f"newton_raphson{newton_raphson_step}/")

@@ -86,8 +86,8 @@ def save_plots(trainer: Trainer, device: Device, *, prefix=""):
             "x",
             "voltage",
             path_prefix=path_prefix,
-            x_unit=consts.EV,
-            x_unit_name="eV",
+            x_unit=consts.NM,
+            x_unit_name="nm",
             lines_unit=consts.VOLT,
             lines_unit_name="V",
         )

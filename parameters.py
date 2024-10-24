@@ -32,7 +32,7 @@ model_dtype = torch.float32
 # Training
 max_n_training_steps = None
 max_time = None
-min_loss = 200e-6
+min_loss = 50e-6
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -53,10 +53,8 @@ batch_sizes: Dict[str, int] = {
     # "DeltaE": 100,
 }
 n_newton_raphson_steps = 10
-newton_raphson_rate = 0.1
-# The `newton_raphson_rate` will effectively be 1 in the first step if
-# `use_V_el_from_loaded`
-use_V_el_from_loaded = False  # unused
+newton_raphson_rate = 1
+reset_weights_per_nr_step = True
 
 # Plotting
 plot_each_voltage = 1
@@ -83,7 +81,7 @@ TEMPERATURE = 300 * consts.KELVIN
 #                       V_int and V_el are added.
 CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 
-energy_smoothing_range = 1e-3 * consts.EV
+energy_smoothing_range = 1e-4 * consts.EV
 transition_distance = 0.5 * consts.NM
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
