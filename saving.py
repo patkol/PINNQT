@@ -4,17 +4,32 @@
 import os
 import torch
 
+from kolpinn import quantities
 from kolpinn import training
 from kolpinn.training import Trainer
 
 
-def save_q_full(trainer: Trainer, *, excluded_quantities_labels=None):
+def save_q_bulk(
+    trainer: Trainer,
+    subpath: str,
+    *,
+    included_quantities_labels=None,
+    excluded_quantities_labels=None,
+) -> None:
     if excluded_quantities_labels is None:
         excluded_quantities_labels = []
-    path_prefix = f"data/{trainer.config.saved_parameters_index:04d}/"
-    os.makedirs(path_prefix, exist_ok=True)
+
     qs = training.get_extended_qs(trainer.state)
-    q_full = qs["full"]
-    for excluded_quantity_label in excluded_quantities_labels:
-        q_full.pop(excluded_quantity_label)
-    torch.save(q_full, path_prefix + "q_full.pkl")
+    q_bulk = qs["bulk"]
+
+    if included_quantities_labels is not None:
+        q_bulk = quantities.QuantityDict(
+            q_bulk.grid,
+            dict((label, q_bulk[label]) for label in included_quantities_labels),
+        )
+    for quantity_label in excluded_quantities_labels:
+        q_bulk.pop(quantity_label)
+
+    path_prefix = f"data/{trainer.config.saved_parameters_index:04d}/" + subpath
+    os.makedirs(path_prefix, exist_ok=True)
+    torch.save(q_bulk, path_prefix + "q_bulk.pkl")

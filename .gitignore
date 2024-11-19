@@ -4,6 +4,7 @@
 *.code-workspace
 deprecated.txt
 matlab_results/
+tests/
 old/
 plots/
 data/

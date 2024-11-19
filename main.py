@@ -29,7 +29,7 @@ import transformations as trafos
 from constant_models_construction import get_constant_models
 import trainer_construction
 
-# import saving
+import saving
 import plotting
 
 
@@ -137,12 +137,17 @@ trainer, unbatched_grids, quantities_requiring_grad = get_trainer()
 training.load(
     params.loaded_parameters_index,
     trainer,
+    subpath="newton_step0000/",
     load_optimizer=False,
     load_scheduler=False,
 )
 # Load V_el
 if params.loaded_parameters_index is not None:
-    V_el_path = storage.get_parameters_path(params.loaded_parameters_index) + "V_el.pth"
+    V_el_path = (
+        storage.get_parameters_path(params.loaded_parameters_index)
+        + "newton_step0001/"
+        + "V_el.pth"
+    )
     if os.path.isfile(V_el_path):
         print("Loading V_el...")
         V_el = torch.load(V_el_path)
@@ -163,14 +168,23 @@ if __name__ == "__main__":
 
     newton_raphson_step = 0
     while True:
+        save_subpath = f"newton_step{newton_raphson_step:04d}/"
+        save_path = saved_parameters_path + save_subpath
+        os.makedirs(save_path, exist_ok=True)
+
         # Save V_el
-        V_el_path = saved_parameters_path + "V_el.pth"
+        V_el_path = save_path + "V_el.pth"
         print("Saving V_el...")
         V_el = trainer.state.const_qs["bulk"]["V_el"]
         torch.save(V_el, V_el_path)
 
         # Train
-        training.train(trainer, report_each=params.report_each, save_if_best=True)
+        training.train(
+            trainer,
+            report_each=params.report_each,
+            save_if_best=True,
+            save_subpath=save_subpath,
+        )
 
         # Print evaluation times
         eval_times = dict(
@@ -189,10 +203,24 @@ if __name__ == "__main__":
             print(f"{eval_relatives[model_name]:.1%} {model_name}")
 
         # Save quantities and plots
-        # saving.save_q_full(device, excluded_quantities_labels=['phi_L', 'phi_R'])
-        plotting.save_plots(
-            trainer, device, prefix=f"newton_raphson{newton_raphson_step}/"
+        saving.save_q_bulk(
+            trainer,
+            subpath=save_subpath,
+            included_quantities_labels=[
+                "voltage",
+                "DeltaE",
+                "x",
+                "E_L",
+                "E_R",
+                "V_el",
+                "n",
+                "T_L",
+                "T_R",
+                "R_L",
+                "R_R",
+            ],
         )
+        plotting.save_plots(trainer, device, prefix=save_subpath)
 
         newton_raphson_step += 1
         if newton_raphson_step >= params.n_newton_raphson_steps:
@@ -219,4 +247,4 @@ if __name__ == "__main__":
             quantities_requiring_grad=quantities_requiring_grad,
         )
 
-        plotting.plot_V_el(trainer, prefix=f"newton_raphson{newton_raphson_step}/")
+        plotting.plot_V_el(trainer, prefix=save_subpath)

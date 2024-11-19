@@ -52,7 +52,7 @@ batch_sizes: Dict[str, int] = {
     # "x": 1000,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 10
+n_newton_raphson_steps = 2
 newton_raphson_rate = 1
 reset_weights_per_nr_step = True
 
