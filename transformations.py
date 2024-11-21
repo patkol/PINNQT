@@ -4,8 +4,10 @@
 
 
 from typing import Dict, Callable, Sequence, Optional
+import copy
+import itertools
 import numpy as np
-from scipy import signal
+import scipy.interpolate  # type: ignore
 import torch
 
 from kolpinn import mathematics
@@ -47,6 +49,46 @@ def transition_function(a, b, transition_exp):
     transition_exp(x) = torch.exp(-(x-x_left) / transition_distance)
     """
     return transition_exp * a + (1 - transition_exp) * b
+
+
+def smoothen(quantity: torch.Tensor, grid: Grid, dim_label: str):
+    """Smoothen `quantity` on `grid` along `dim_label`"""
+
+    assert quantities.compatible(quantity, grid)
+
+    other_dim_labels = copy.copy(grid.dimensions_labels)
+    other_dim_labels.remove(dim_label)
+    other_ranges = [
+        range(quantity.size(grid.index[other_dim_label]))
+        for other_dim_label in other_dim_labels
+    ]
+
+    smoothened_quantity = torch.zeros_like(quantity)
+
+    # scipy.interpolate.UnivariateSpline only works with 1D data, so we have to
+    # call it for all combinations of the other dimensions.
+    for other_indices in itertools.product(*other_ranges):
+        # Get current slice
+        slices = [slice(None)] * grid.n_dim
+        for other_dim_label, other_index in zip(other_dim_labels, other_indices):
+            slices[grid.index[other_dim_label]] = other_index
+
+        # Smoothen slice
+        real_spline = scipy.interpolate.UnivariateSpline(
+            grid[dim_label].cpu(),
+            torch.real(quantity[slices]).cpu(),
+            s=1,  # TODO: make adjustable
+        )
+        imag_spline = scipy.interpolate.UnivariateSpline(
+            grid[dim_label].cpu(),
+            torch.imag(quantity[slices]).cpu(),
+            s=1,  # TODO: make adjustable
+        )
+        smoothened_quantity[slices] = torch.from_numpy(
+            real_spline(grid[dim_label].cpu()) + 1j * imag_spline(grid[dim_label].cpu())
+        )
+
+    return smoothened_quantity
 
 
 def get_V_voltage(q: QuantityDict, device_start, device_end):
@@ -411,6 +453,8 @@ def wkb_phase_trafo(
         sorted_k_integral = quantities.get_cumulative_integral(
             "x", x_0, sorted_integrand, sorted_supergrid
         )
+        # TODO: shoothen phases instead to allow non-smoothness between layers
+        sorted_k_integral = smoothen(sorted_k_integral, sorted_supergrid, "x")
         k_integral = quantities.combine_quantity(
             [sorted_k_integral], [sorted_supergrid], supergrid
         )
@@ -421,9 +465,12 @@ def wkb_phase_trafo(
                 k_integral, supergrid.subgrids[grid_name]
             )
 
-            q[f"a_phase{i}_{contact}"] = torch.exp(1j * k_integral_restricted)
-            q[f"b_phase{i}_{contact}"] = torch.exp(-1j * k_integral_restricted)
-
+            a_phase = torch.exp(1j * k_integral_restricted)
+            b_phase = torch.exp(-1j * k_integral_restricted)
+            # a_phase = smoothen(a_phase, q.grid, "x")
+            # b_phase = smoothen(b_phase, q.grid, "x")
+            q[f"a_phase{i}_{contact}"] = a_phase
+            q[f"b_phase{i}_{contact}"] = b_phase
     return qs
 
 
