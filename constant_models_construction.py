@@ -27,10 +27,10 @@ def get_constant_models(
 
     layer_indep_const_models_dict = {}
     layer_indep_const_models_dict["E_L"] = model.FunctionModel(
-        lambda q: q["DeltaE"] + 1j * params.energy_smoothing_range,
+        lambda q: q["DeltaE"],
     )
     layer_indep_const_models_dict["E_R"] = model.FunctionModel(
-        lambda q: q["DeltaE"] - consts.Q_E * q["voltage"] + 1j * params.energy_smoothing_range,
+        lambda q: q["DeltaE"] - consts.Q_E * q["voltage"],
     )
 
     # const_models_dict[i][name] = model
@@ -103,7 +103,7 @@ def get_constant_models(
                 / q[f"m_eff{i}"]
             )
 
-    # Output contact: Initial conditions
+    # Output contact: Boundary conditions
     for contact in device.contacts:
         i = contact.out_index
         const_models_dict[i][f"phi{i}_{contact}"] = one_model

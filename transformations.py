@@ -29,14 +29,16 @@ def k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
     )
 
 
-smooth_k_function = k_function
-# # smooth_k: Fixing the non-smoothness of k in V at E=V
-# def smooth_k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
-#     # IDEA: Do I need to remove V_el?
-#     return physics.k_function(
-#         q[f"m_eff{i}"],
-#         q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"] + 1j * params.energy_smoothing_range,
-#     )
+# smooth_k: Fixing the non-smoothness of k in V at E=V
+def smooth_k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
+    # IDEA: Do I need to remove V_el?
+    return physics.k_function(
+        q[f"m_eff{i}"],
+        q[f"E_{contact}"]
+        - q[f"V_int{i}"]
+        - q[f"V_el{i}"]
+        + 1j * params.energy_smoothing_range,
+    )
 
 
 def transition_function(a, b, transition_exp):

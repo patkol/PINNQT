@@ -141,23 +141,23 @@ training.load(
     load_optimizer=False,
     load_scheduler=False,
 )
-# Load V_el
-if params.loaded_parameters_index is not None:
-    V_el_path = (
-        storage.get_parameters_path(params.loaded_parameters_index)
-        + "newton_step0001/"
-        + "V_el.pth"
-    )
-    if os.path.isfile(V_el_path):
-        print("Loading V_el...")
-        V_el = torch.load(V_el_path)
-        trainer = get_updated_trainer(
-            trainer,
-            V_el=V_el,
-            V_el_grid=trainer.state.const_qs["bulk"].grid,
-            unbatched_grids=unbatched_grids,
-            quantities_requiring_grad=quantities_requiring_grad,
-        )
+# # Load V_el
+# if params.loaded_parameters_index is not None:
+#     V_el_path = (
+#         storage.get_parameters_path(params.loaded_parameters_index)
+#         + "newton_step0001/"
+#         + "V_el.pth"
+#     )
+#     if os.path.isfile(V_el_path):
+#         print("Loading V_el...")
+#         V_el = torch.load(V_el_path)
+#         trainer = get_updated_trainer(
+#             trainer,
+#             V_el=V_el,
+#             V_el_grid=trainer.state.const_qs["bulk"].grid,
+#             unbatched_grids=unbatched_grids,
+#             quantities_requiring_grad=quantities_requiring_grad,
+#         )
 
 
 if __name__ == "__main__":
@@ -218,6 +218,7 @@ if __name__ == "__main__":
                 "T_R",
                 "R_L",
                 "R_R",
+                "phi_L",
             ],
         )
         plotting.save_plots(trainer, device, prefix=save_subpath)

@@ -24,15 +24,15 @@ loaded_parameters_index = None
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 5
-n_neurons_per_hidden_layer = 50
+n_hidden_layers = 8
+n_neurons_per_hidden_layer = 80
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 40
 max_time = None
-min_loss = 50e-6
+min_loss = None
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -52,7 +52,7 @@ batch_sizes: Dict[str, int] = {
     # "x": 1000,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 2
+n_newton_raphson_steps = 1
 newton_raphson_rate = 1
 reset_weights_per_nr_step = True
 
@@ -81,7 +81,7 @@ TEMPERATURE = 300 * consts.KELVIN
 #                       V_int and V_el are added.
 CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 
-energy_smoothing_range = 1e-4 * consts.EV
+energy_smoothing_range = 1e-3 * consts.EV
 transition_distance = 0.5 * consts.NM
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV

@@ -22,11 +22,13 @@ def save_q_bulk(
     qs = training.get_extended_qs(trainer.state)
     q_bulk = qs["bulk"]
 
-    if included_quantities_labels is not None:
-        q_bulk = quantities.QuantityDict(
-            q_bulk.grid,
-            dict((label, q_bulk[label]) for label in included_quantities_labels),
-        )
+    # Put on CPU & filter
+    if included_quantities_labels is None:
+        included_quantities_labels = q_bulk.keys()
+    q_bulk = quantities.QuantityDict(
+        q_bulk.grid,
+        dict((label, q_bulk[label].cpu()) for label in included_quantities_labels),
+    )
     for quantity_label in excluded_quantities_labels:
         q_bulk.pop(quantity_label)
 

@@ -2,11 +2,14 @@
 
 # IDEA: turn these into single models (q_full is now passed through)
 
+import torch
+
 from kolpinn.mathematics import complex_abs2, grad
 from kolpinn.quantities import get_fd_second_derivative, mean_dimension, restrict
 
 import physical_constants as consts
 import parameters as params
+import physics
 
 
 def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
@@ -42,6 +45,10 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     # residual /= incoming_amplitude
     residual /= qs["bulk"][f"incoming_coeff_{contact}"]
     residual /= params.V_OOM
+    # TEMP Fermi-Dirac weighting
+    residual *= 1 / (
+        1 + torch.exp(physics.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
+    )
     q[f"SE_loss{i}_{contact}"] = params.loss_function(residual)
 
     return qs
