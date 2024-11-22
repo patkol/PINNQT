@@ -82,7 +82,6 @@ TEMPERATURE = 300 * consts.KELVIN
 #                       V_int and V_el are added.
 CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 
-energy_smoothing_range = 0 * 1e-4 * consts.EV
 transition_distance = 0.5 * consts.NM
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV

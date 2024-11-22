@@ -38,7 +38,6 @@ torch.set_default_device(params.device)
 torch.set_default_dtype(params.si_real_dtype)
 # torch.autograd.set_detect_anomaly(True)  # For debugging, very expensive
 
-
 device = Device(**physics.device_kwargs)
 eval_models = get_eval_models(device)
 saved_parameters_index = storage.get_next_parameters_index()

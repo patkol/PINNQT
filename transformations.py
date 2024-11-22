@@ -36,10 +36,7 @@ def smooth_k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor
     # IDEA: Do I need to remove V_el?
     return physics.k_function(
         q[f"m_eff{i}"],
-        q[f"E_{contact}"]
-        - q[f"V_int{i}"]
-        - q[f"V_el{i}"]
-        + 1j * params.energy_smoothing_range,
+        q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"],
     )
 
 
