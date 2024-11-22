@@ -217,68 +217,6 @@ def get_n_contact(*, dos, fermi_integral, grid: Grid):
     return n_contact
 
 
-def get_V_electrostatic(qs, *, contacts) -> tuple[torch.Tensor, Grid]:
-    q = qs["bulk"]
-
-    assert q.grid.dimensions_labels[-1] == "x"
-
-    # Construct the discretized Laplace operator M assuming an
-    # equispaced x grid
-    # OPTIM: do this only once
-    Nx = q.grid.dim_size["x"]
-    dx = params.X_STEP
-    M = torch.zeros(Nx, Nx)
-    permittivity = quantities.squeeze_to(["x"], q["permittivity"], q.grid)
-    for i in range(1, Nx):
-        M[i, i - 1] = (permittivity[i] + permittivity[i - 1]) / (2 * dx**2)
-    for i in range(0, Nx - 1):
-        M[i, i + 1] = (permittivity[i] + permittivity[i + 1]) / (2 * dx**2)
-    for i in range(1, Nx - 1):
-        M[i, i] = -M[i, i - 1] - M[i, i + 1]
-
-    # Von Neumann BC
-    M[0, 0] = -(permittivity[0] + permittivity[1]) / (2 * dx**2)
-    M[-1, -1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
-
-    # TODO: implementation that works if x is not the last coordinate,
-    #       kolpinn function
-    #       Then remove the assertion above
-    rho = consts.Q_E * (q["doping"] - q["n"])
-    Phi = q["V_el"] / -consts.Q_E
-    F = torch.einsum("ij,...j->...i", M, Phi) + rho
-
-    # Get the density if the potential was shifted by dV
-    n_pdVs = []
-    for contact in contacts:
-        q_in = qs[contact.grid_name]
-        i = contact.index
-        fermi_integral_pdV = get_fermi_integral(
-            m_eff=q_in[f"m_eff{i}"],
-            E_fermi=q[f"E_fermi_{contact}"],
-            E=q[f"E_{contact}"] + params.dV_poisson,
-        )
-        n_pdV = get_n_contact(
-            dos=q[f"DOS_{contact}"],
-            fermi_integral=fermi_integral_pdV,
-            grid=q.grid,
-        )
-        n_pdVs.append(n_pdV)
-    n_pdV = sum(n_pdVs)
-
-    dn_dV = (n_pdV - q["n"]) / params.dV_poisson
-    drho_dV = -consts.Q_E * dn_dV
-    drho_dPhi = -consts.Q_E * drho_dV
-    torch.unsqueeze(M, 0)
-    torch.unsqueeze(M, 0)
-    J = M + torch.diag_embed(drho_dPhi)
-
-    dPhi = params.newton_raphson_rate * torch.linalg.solve(-J, F)
-    dV = dPhi * -consts.Q_E
-    V_el = q["V_el"] + dV
-
-    return torch.real(V_el), q.grid  # TEMP: real
-
-
 def to_full_trafo(
     qs: Dict[str, QuantityDict],
     *,
@@ -637,5 +575,93 @@ def n_trafo(qs, *, contacts):
     """Full density"""
     q = qs["bulk"]
     q["n"] = sum(q[f"n_{contact}"] for contact in contacts)
+
+    return qs
+
+
+def V_electrostatic_trafo(qs, *, contacts, N: int):
+    q = qs["bulk"]
+
+    assert q.grid.dimensions_labels[-1] == "x"
+
+    # Construct the discretized Laplace operator M assuming an
+    # equispaced x grid
+    # OPTIM: do this only once
+    Nx = q.grid.dim_size["x"]
+    dx = params.X_STEP
+    M = torch.zeros(Nx, Nx)
+    permittivity = quantities.squeeze_to(["x"], q["permittivity"], q.grid)
+    for i in range(1, Nx):
+        M[i, i - 1] = (permittivity[i] + permittivity[i - 1]) / (2 * dx**2)
+    for i in range(0, Nx - 1):
+        M[i, i + 1] = (permittivity[i] + permittivity[i + 1]) / (2 * dx**2)
+    for i in range(1, Nx - 1):
+        M[i, i] = -M[i, i - 1] - M[i, i + 1]
+
+    # Von Neumann BC
+    M[0, 0] = -(permittivity[0] + permittivity[1]) / (2 * dx**2)
+    M[-1, -1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
+
+    # TODO: implementation that works if x is not the last coordinate,
+    #       kolpinn function
+    #       Then remove the assertion above
+    rho = consts.Q_E * (q["doping"] - q["n"])
+    Phi = q["V_el"] / -consts.Q_E
+    F = torch.einsum("ij,...j->...i", M, Phi) + rho
+
+    # Get the density if the potential was shifted by dV
+    n_pdVs = []
+    for contact in contacts:
+        q_in = qs[contact.grid_name]
+        i = contact.index
+        fermi_integral_pdV = get_fermi_integral(
+            m_eff=q_in[f"m_eff{i}"],
+            E_fermi=q[f"E_fermi_{contact}"],
+            E=q[f"E_{contact}"] + params.dV_poisson,
+        )
+        n_pdV = get_n_contact(
+            dos=q[f"DOS_{contact}"],
+            fermi_integral=fermi_integral_pdV,
+            grid=q.grid,
+        )
+        n_pdVs.append(n_pdV)
+    n_pdV = sum(n_pdVs)
+
+    dn_dV = (n_pdV - q["n"]) / params.dV_poisson
+    drho_dV = -consts.Q_E * dn_dV
+    drho_dPhi = -consts.Q_E * drho_dV
+    torch.unsqueeze(M, 0)
+    torch.unsqueeze(M, 0)
+    J = M + torch.diag_embed(drho_dPhi)
+
+    dPhi = params.newton_raphson_rate * torch.linalg.solve(-J, F)
+    dV = dPhi * -consts.Q_E
+    V_el = q["V_el"] + dV
+
+    # Correct V_el: Add a linear potential gradient to V_el s.t.
+    # it matches the boundary potentials
+    V_el_target_left = 0
+    V_el_target_right = -q["voltage"] * consts.EV
+    V_el_left = quantities.interpolate(
+        V_el, q.grid, qs["boundary0"].grid, dimension_label="x"
+    )
+    V_el_right = quantities.interpolate(
+        V_el,
+        q.grid,
+        qs[f"boundary{N}"].grid,
+        dimension_label="x",
+    )
+    x_left = qs["boundary0"]["x"]
+    x_right = qs[f"boundary{N}"]["x"]
+    device_length = x_right - x_left
+    left_factor = (x_right - q["x"]) / device_length
+    right_factor = (q["x"] - x_left) / device_length
+    corrected_V_el = (
+        V_el
+        + (V_el_target_left - V_el_left) * left_factor
+        + (V_el_target_right - V_el_right) * right_factor
+    )
+
+    q["V_el_new"] = corrected_V_el
 
     return qs

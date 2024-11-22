@@ -45,7 +45,7 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     # residual /= incoming_amplitude
     residual /= qs["bulk"][f"incoming_coeff_{contact}"]
     residual /= params.V_OOM
-    # TEMP Fermi-Dirac weighting
+    # Fermi-Dirac weighting
     residual *= 1 / (
         1 + torch.exp(physics.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
     )

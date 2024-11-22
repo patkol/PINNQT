@@ -18,7 +18,8 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 420
+loaded_NR_step = 4
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -30,9 +31,9 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 40
-max_time = None
-min_loss = None
+max_n_training_steps = 0
+max_time = 10800  # 3h
+min_loss = 200e-9
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -59,7 +60,7 @@ reset_weights_per_nr_step = True
 # Plotting
 plot_each_voltage = 1
 plot_each_energy = 12
-extra_plots = True
+extra_plots = False
 
 # Physical
 VOLTAGE_MIN = 0.0 * consts.VOLT

@@ -19,7 +19,7 @@ import grid_construction
 import transformations as trafos
 from constant_models_construction import get_constant_models
 from trained_models_construction import get_trained_models
-from dependent_models_construction import get_dependent_models
+from loss_models_construction import get_loss_models
 
 
 def get_dx_dict():
@@ -101,7 +101,7 @@ def get_trainer(
         device,
         dx_dict=dx_dict,
     )
-    dependent_models, loss_quantities = get_dependent_models(
+    dependent_models, loss_quantities = get_loss_models(
         device,
         dx_dict=dx_dict,
     )

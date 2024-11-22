@@ -1,6 +1,7 @@
 # Copyright (c) 2024 ETH Zurich, Patrice Kolb
 
 
+from typing import Dict
 import os
 import numpy as np
 import matplotlib.pyplot as plt  # type: ignore
@@ -8,8 +9,7 @@ import torch
 
 from kolpinn.mathematics import complex_abs2
 from kolpinn.grids import Subgrid
-from kolpinn.quantities import restrict_quantities
-from kolpinn import training
+from kolpinn.quantities import restrict_quantities, QuantityDict
 from kolpinn.training import Trainer
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
@@ -19,35 +19,17 @@ import parameters as params
 from classes import Device
 
 
-def plot_V_el(trainer, *, prefix=""):
-    plt.rcParams.update({"font.size": 22})
-    path_prefix = f"plots/{trainer.config.saved_parameters_index:04d}/{prefix}"
-    os.makedirs(path_prefix, exist_ok=True)
-    q = trainer.state.const_qs["bulk"]
-
-    save_lineplot(
-        q["V_el"],
-        q.grid,
-        "V_el",
-        "x",
-        "voltage",
-        path_prefix=path_prefix,
-        quantity_unit=consts.EV,
-        quantity_unit_name="eV",
-        x_unit=consts.NM,
-        x_unit_name="nm",
-        lines_unit=consts.VOLT,
-        lines_unit_name="V",
-    )
-
-
-def save_plots(trainer: Trainer, device: Device, *, prefix=""):
+def save_plots(
+    qs: Dict[str, QuantityDict],
+    trainer: Trainer,
+    device: Device,
+    *,
+    prefix="",
+):
     plt.rcParams.update({"font.size": 22})
     path_prefix = f"plots/{trainer.config.saved_parameters_index:04d}/{prefix}"
 
     visualization.save_training_history_plot(trainer, path_prefix)
-
-    qs = training.get_extended_qs(trainer.state)
 
     # Loss vs. E plots
     for grid_name, loss_names in trainer.config.loss_quantities.items():
@@ -110,6 +92,36 @@ def save_plots(trainer: Trainer, device: Device, *, prefix=""):
         q["V_int"] + q["V_el"],
         q.grid,
         "V",
+        "x",
+        "voltage",
+        path_prefix=path_prefix,
+        quantity_unit=consts.EV,
+        quantity_unit_name="eV",
+        x_unit=consts.NM,
+        x_unit_name="nm",
+        lines_unit=consts.VOLT,
+        lines_unit_name="V",
+    )
+
+    save_lineplot(
+        q["V_el"],
+        q.grid,
+        "V_el_old",
+        "x",
+        "voltage",
+        path_prefix=path_prefix,
+        quantity_unit=consts.EV,
+        quantity_unit_name="eV",
+        x_unit=consts.NM,
+        x_unit_name="nm",
+        lines_unit=consts.VOLT,
+        lines_unit_name="V",
+    )
+
+    save_lineplot(
+        q["V_el_new"],
+        q.grid,
+        "V_el_new",
         "x",
         "voltage",
         path_prefix=path_prefix,

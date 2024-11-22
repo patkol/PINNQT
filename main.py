@@ -7,7 +7,6 @@
 Solving the 1D Schrödinger equation with open bc using PINN.
 """
 
-from typing import Dict
 import os
 import shutil
 import random
@@ -21,14 +20,12 @@ from kolpinn import storage
 from kolpinn import training
 from kolpinn.training import Trainer
 
-import physical_constants as consts
 import parameters as params
 import physics
 from classes import Device
-import transformations as trafos
 from constant_models_construction import get_constant_models
+from eval_models_construction import get_eval_models
 import trainer_construction
-
 import saving
 import plotting
 
@@ -43,6 +40,7 @@ torch.set_default_dtype(params.si_real_dtype)
 
 
 device = Device(**physics.device_kwargs)
+eval_models = get_eval_models(device)
 saved_parameters_index = storage.get_next_parameters_index()
 print("saved_parameters_index =", saved_parameters_index)
 
@@ -79,8 +77,6 @@ def get_updated_trainer(
     unbatched_grids,
     quantities_requiring_grad,
 ) -> Trainer:
-    assert quantities.compatible(V_el, V_el_grid)
-
     def V_el_function(q: QuantityDict):
         return quantities.interpolate(V_el, V_el_grid, q.grid, dimension_label="x")
 
@@ -105,59 +101,26 @@ def get_updated_trainer(
     return training.Trainer(new_state, trainer.config)
 
 
-def correct_V_el(V_el: torch.Tensor, V_el_grid: Grid, qs: Dict[str, QuantityDict]):
-    # Add a linear potential gradient to V_el s.t. it matches the boundary potentials
-    assert V_el_grid is qs["bulk"].grid
-    V_el_target_left = 0
-    V_el_target_right = -qs["bulk"]["voltage"] * consts.EV
-    V_el_left = quantities.interpolate(
-        V_el, V_el_grid, qs["boundary0"].grid, dimension_label="x"
-    )
-    V_el_right = quantities.interpolate(
-        V_el,
-        V_el_grid,
-        qs[f"boundary{device.n_layers}"].grid,
-        dimension_label="x",
-    )
-    x_left = qs["boundary0"]["x"]
-    x_right = qs[f"boundary{device.n_layers}"]["x"]
-    device_length = x_right - x_left
-    left_factor = (x_right - qs["bulk"]["x"]) / device_length
-    right_factor = (qs["bulk"]["x"] - x_left) / device_length
-    corrected_V_el = (
-        V_el
-        + (V_el_target_left - V_el_left) * left_factor
-        + (V_el_target_right - V_el_right) * right_factor
-    )
-
-    return corrected_V_el
-
-
 trainer, unbatched_grids, quantities_requiring_grad = get_trainer()
 training.load(
     params.loaded_parameters_index,
     trainer,
-    subpath="newton_step0000/",
+    subpath=f"newton_step{params.loaded_NR_step:04d}/",
     load_optimizer=False,
     load_scheduler=False,
 )
-# # Load V_el
-# if params.loaded_parameters_index is not None:
-#     V_el_path = (
-#         storage.get_parameters_path(params.loaded_parameters_index)
-#         + "newton_step0001/"
-#         + "V_el.pth"
-#     )
-#     if os.path.isfile(V_el_path):
-#         print("Loading V_el...")
-#         V_el = torch.load(V_el_path)
-#         trainer = get_updated_trainer(
-#             trainer,
-#             V_el=V_el,
-#             V_el_grid=trainer.state.const_qs["bulk"].grid,
-#             unbatched_grids=unbatched_grids,
-#             quantities_requiring_grad=quantities_requiring_grad,
-#         )
+# Replace V_el by the one from the loaded file
+loaded_q_bulk = torch.load(
+    f"data/{params.loaded_parameters_index:04d}/newton_step{params.loaded_NR_step:04d}/q_bulk.pkl"
+)
+trainer = get_updated_trainer(
+    trainer,
+    V_el=loaded_q_bulk["V_el"].to(params.device),
+    V_el_grid=loaded_q_bulk.grid,
+    unbatched_grids=unbatched_grids,
+    quantities_requiring_grad=quantities_requiring_grad,
+)
+del loaded_q_bulk
 
 
 if __name__ == "__main__":
@@ -166,17 +129,13 @@ if __name__ == "__main__":
     os.makedirs(saved_parameters_path, exist_ok=True)
     shutil.copy("parameters.py", saved_parameters_path)
 
-    newton_raphson_step = 0
+    newton_raphson_step = (
+        0 if params.loaded_parameters_index is None else params.loaded_NR_step
+    )
     while True:
         save_subpath = f"newton_step{newton_raphson_step:04d}/"
         save_path = saved_parameters_path + save_subpath
         os.makedirs(save_path, exist_ok=True)
-
-        # Save V_el
-        V_el_path = save_path + "V_el.pth"
-        print("Saving V_el...")
-        V_el = trainer.state.const_qs["bulk"]["V_el"]
-        torch.save(V_el, V_el_path)
 
         # Train
         training.train(
@@ -202,10 +161,16 @@ if __name__ == "__main__":
         for _, model_name in zip(range(25), eval_relatives):
             print(f"{eval_relatives[model_name]:.1%} {model_name}")
 
+        # Get all quantities
+        extended_qs = training.get_extended_qs(
+            trainer.state, additional_models=eval_models
+        )
+
         # Save quantities and plots
         saving.save_q_bulk(
-            trainer,
-            subpath=save_subpath,
+            extended_qs["bulk"],
+            path_prefix=f"data/{trainer.config.saved_parameters_index:04d}/"
+            + save_subpath,
             included_quantities_labels=[
                 "voltage",
                 "DeltaE",
@@ -213,6 +178,7 @@ if __name__ == "__main__":
                 "E_L",
                 "E_R",
                 "V_el",
+                "V_el_new",
                 "n",
                 "T_L",
                 "T_R",
@@ -221,8 +187,9 @@ if __name__ == "__main__":
                 "phi_L",
             ],
         )
-        plotting.save_plots(trainer, device, prefix=save_subpath)
+        plotting.save_plots(extended_qs, trainer, device, prefix=save_subpath)
 
+        # Set up the next Newton-Raphson step
         newton_raphson_step += 1
         if newton_raphson_step >= params.n_newton_raphson_steps:
             break
@@ -231,21 +198,13 @@ if __name__ == "__main__":
         print("Newton-Raphson step", newton_raphson_step)
         print()
 
-        # Newton-Raphson step: Set up a new trainer with an updated potential
-        # OPTIM: don't reevaluate extended_qs
-        extended_qs = training.get_extended_qs(trainer.state)
-        V_el, V_el_grid = trafos.get_V_electrostatic(
-            extended_qs, contacts=device.contacts
-        )
-        V_el = correct_V_el(V_el, V_el_grid, extended_qs)
+        # Set up a new trainer with the updated V_el
         if params.reset_weights_per_nr_step:
             trainer, unbatched_grids, quantities_requiring_grad = get_trainer()
         trainer = get_updated_trainer(
             trainer,
-            V_el=V_el,
-            V_el_grid=V_el_grid,
+            V_el=extended_qs["bulk"]["V_el_new"],
+            V_el_grid=extended_qs["bulk"].grid,
             unbatched_grids=unbatched_grids,
             quantities_requiring_grad=quantities_requiring_grad,
         )
-
-        plotting.plot_V_el(trainer, prefix=save_subpath)
