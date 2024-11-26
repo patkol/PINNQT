@@ -18,8 +18,10 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 420
-loaded_NR_step = 4
+loaded_parameters_index = 427
+loaded_NR_step = 1
+load_parameters = False
+load_V_el = True
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -33,7 +35,7 @@ model_dtype = torch.float32
 # Training
 max_n_training_steps = 0
 max_time = 10800  # 3h
-min_loss = 200e-9
+min_loss = 500e-9
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -53,14 +55,14 @@ batch_sizes: Dict[str, int] = {
     # "x": 1000,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 1
+n_newton_raphson_steps = 2
 newton_raphson_rate = 1
 reset_weights_per_nr_step = True
 
 # Plotting
 plot_each_voltage = 1
 plot_each_energy = 12
-extra_plots = False
+extra_plots = True
 
 # Physical
 VOLTAGE_MIN = 0.0 * consts.VOLT
@@ -68,9 +70,12 @@ VOLTAGE_STEP = 0.01 * consts.VOLT
 VOLTAGE_MAX = 0.0 * consts.VOLT
 VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
-E_MIN = 1e-3 * consts.EV
-E_STEP = 1e-3 * consts.EV
-E_MAX = 0.6 * consts.EV
+# E_MIN = 1e-3 * consts.EV
+# E_STEP = 1e-3 * consts.EV
+# E_MAX = 0.6 * consts.EV
+E_MIN = 0.165 * consts.EV
+E_STEP = 1 * consts.EV
+E_MAX = 0.165 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 

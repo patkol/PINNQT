@@ -64,6 +64,10 @@ def j_loss_trafo(qs, *, i, N, contact):
     residual /= params.PROBABILITY_CURRENT_OOM
     # exact_prob_current = qs["bulk"][f"j_exact_{contact}"]
     # residual = torch.log(complex_abs2(prob_current / exact_prob_current))
+    # Fermi-Dirac weighting
+    residual *= 1 / (
+        1 + torch.exp(physics.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
+    )
     q[f"j_loss{i}_{contact}"] = params.loss_function(residual)
 
     return qs

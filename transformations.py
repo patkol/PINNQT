@@ -49,7 +49,10 @@ def transition_function(a, b, transition_exp):
 
 
 def smoothen(quantity: torch.Tensor, grid: Grid, dim_label: str):
-    """Smoothen `quantity` on `grid` along `dim_label`"""
+    """
+    Smoothen `quantity` on `grid` along `dim_label`.
+    `grid` must be sorted along `dim_label`.
+    """
 
     assert quantities.compatible(quantity, grid)
 
@@ -388,7 +391,7 @@ def wkb_phase_trafo(
         sorted_k_integral = quantities.get_cumulative_integral(
             "x", x_0, sorted_integrand, sorted_supergrid
         )
-        # TODO: shoothen phases instead to allow non-smoothness between layers
+        # TODO: smoothen phases instead to allow non-smoothness between layers
         sorted_k_integral = smoothen(sorted_k_integral, sorted_supergrid, "x")
         k_integral = quantities.combine_quantity(
             [sorted_k_integral], [sorted_supergrid], supergrid
@@ -502,11 +505,8 @@ def TR_trafo(qs, *, contact):
     real_v_out = torch.real(q_out[f"v{contact.out_index}_{contact}"])
     T = transmitted_amplitude / incoming_amplitude * real_v_out / real_v_in
     R = reflected_amplitude / incoming_amplitude
-
-    # TEMP: Scaling T and R to counteract the decay
-    total_amplitude = T + R
-    q[f"T_{contact}"] = T / total_amplitude
-    q[f"R_{contact}"] = R / total_amplitude
+    q[f"T_{contact}"] = T
+    q[f"R_{contact}"] = R
 
     return qs
 

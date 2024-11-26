@@ -146,8 +146,7 @@ def get_loss_models(
                     kwargs={"i": i, "N": N, "contact": contact},
                 )
             )
-            # Ignoring the j loss due to complex energies
-            # loss_quantities[bulk_name].append(f"j_loss{i}_{contact}")
+            loss_quantities[bulk_name].append(f"j_loss{i}_{contact}")
 
             loss_models.append(
                 MultiModel(

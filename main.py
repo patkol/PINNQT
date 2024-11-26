@@ -101,25 +101,29 @@ def get_updated_trainer(
 
 
 trainer, unbatched_grids, quantities_requiring_grad = get_trainer()
-training.load(
-    params.loaded_parameters_index,
-    trainer,
-    subpath=f"newton_step{params.loaded_NR_step:04d}/",
-    load_optimizer=False,
-    load_scheduler=False,
-)
-# Replace V_el by the one from the loaded file
-loaded_q_bulk = torch.load(
-    f"data/{params.loaded_parameters_index:04d}/newton_step{params.loaded_NR_step:04d}/q_bulk.pkl"
-)
-trainer = get_updated_trainer(
-    trainer,
-    V_el=loaded_q_bulk["V_el"].to(params.device),
-    V_el_grid=loaded_q_bulk.grid,
-    unbatched_grids=unbatched_grids,
-    quantities_requiring_grad=quantities_requiring_grad,
-)
-del loaded_q_bulk
+
+if params.load_parameters:
+    training.load(
+        params.loaded_parameters_index,
+        trainer,
+        subpath=f"newton_step{params.loaded_NR_step:04d}/",
+        load_optimizer=False,
+        load_scheduler=False,
+    )
+
+if params.load_V_el:
+    # Replace V_el by the one from the loaded file
+    loaded_q_bulk = torch.load(
+        f"data/{params.loaded_parameters_index:04d}/newton_step{params.loaded_NR_step:04d}/q_bulk.pkl"
+    )
+    trainer = get_updated_trainer(
+        trainer,
+        V_el=loaded_q_bulk["V_el"].to(params.device),
+        V_el_grid=loaded_q_bulk.grid,
+        unbatched_grids=unbatched_grids,
+        quantities_requiring_grad=quantities_requiring_grad,
+    )
+    del loaded_q_bulk
 
 
 if __name__ == "__main__":
@@ -128,9 +132,7 @@ if __name__ == "__main__":
     os.makedirs(saved_parameters_path, exist_ok=True)
     shutil.copy("parameters.py", saved_parameters_path)
 
-    newton_raphson_step = (
-        0 if params.loaded_parameters_index is None else params.loaded_NR_step
-    )
+    newton_raphson_step = params.loaded_NR_step if params.load_V_el else 0
     while True:
         save_subpath = f"newton_step{newton_raphson_step:04d}/"
         save_path = saved_parameters_path + save_subpath
