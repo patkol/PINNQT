@@ -391,24 +391,25 @@ def wkb_phase_trafo(
         sorted_k_integral = quantities.get_cumulative_integral(
             "x", x_0, sorted_integrand, sorted_supergrid
         )
-        # TODO: smoothen phases instead to allow non-smoothness between layers
         sorted_k_integral = smoothen(sorted_k_integral, sorted_supergrid, "x")
-        k_integral = quantities.combine_quantity(
-            [sorted_k_integral], [sorted_supergrid], supergrid
+        sorted_a_phase = torch.exp(1j * sorted_k_integral)
+        sorted_b_phase = torch.exp(-1j * sorted_k_integral)
+        a_phase = quantities.combine_quantity(
+            [sorted_a_phase], [sorted_supergrid], supergrid
+        )
+        b_phase = quantities.combine_quantity(
+            [sorted_b_phase], [sorted_supergrid], supergrid
         )
 
         for grid_name in grid_names:
             q = qs[grid_name]
-            k_integral_restricted = quantities.restrict(
-                k_integral, supergrid.subgrids[grid_name]
+            q[f"a_phase{i}_{contact}"] = quantities.restrict(
+                a_phase, supergrid.subgrids[grid_name]
+            )
+            q[f"b_phase{i}_{contact}"] = quantities.restrict(
+                b_phase, supergrid.subgrids[grid_name]
             )
 
-            a_phase = torch.exp(1j * k_integral_restricted)
-            b_phase = torch.exp(-1j * k_integral_restricted)
-            # a_phase = smoothen(a_phase, q.grid, "x")
-            # b_phase = smoothen(b_phase, q.grid, "x")
-            q[f"a_phase{i}_{contact}"] = a_phase
-            q[f"b_phase{i}_{contact}"] = b_phase
     return qs
 
 

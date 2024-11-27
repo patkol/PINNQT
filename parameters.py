@@ -18,10 +18,10 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 427
-loaded_NR_step = 1
-load_parameters = False
-load_V_el = True
+loaded_parameters_index = 435
+loaded_parameters_NR_step = 1
+loaded_V_el_index = 427  # loaded_parameters_index
+loaded_V_el_NR_step = 1  # loaded_parameters_NR_step
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -73,9 +73,9 @@ VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 # E_MIN = 1e-3 * consts.EV
 # E_STEP = 1e-3 * consts.EV
 # E_MAX = 0.6 * consts.EV
-E_MIN = 0.165 * consts.EV
+E_MIN = 0.01 * consts.EV
 E_STEP = 1 * consts.EV
-E_MAX = 0.165 * consts.EV
+E_MAX = 0.01 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 

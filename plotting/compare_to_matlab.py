@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt  # type: ignore
 
 torch.set_default_device("cpu")
 
-q_bulk = torch.load("../data/0427/newton_step0000/q_bulk.pkl")
+q_bulk = torch.load("../data/0425/newton_step0000/q_bulk.pkl")
 matlab_path = "../matlab_results/barrier/0V/newton_step0000/"
 matlab_data = {}
 for name in ("E", "x", "n", "Vact_old", "Vact_new"):
@@ -31,16 +31,17 @@ matlab_data["phiLs"] /= matlab_data["phiLs"][:, 0:1]
 q_bulk.overwrite("phi_L", q_bulk["phi_L"] / q_bulk["phi_L"][:, :, 0:1])
 
 voltage_index = 0
-energy_index = 0
+energy_index = 164
 energy_index_matlab = energy_index
 grid = q_bulk.grid
 
 energy_PINNQT = q_bulk["E_L"][voltage_index, energy_index, 0]
 energy_MATLAB = matlab_data["E"][energy_index_matlab]
-
+MATLAB_energy_offset = matlab_data["Vact_old"][0]
+energy_MATLAB -= MATLAB_energy_offset
 print(f"Energy: {energy_PINNQT:.10f} / {energy_MATLAB:.10f} eV")
 
-plt.title("Re(phiL)")
+plt.title("phiL")
 plt.plot(
     grid["x"].cpu(),
     torch.real(q_bulk["phi_L"][voltage_index, energy_index, :]).cpu(),
@@ -76,7 +77,7 @@ plt.legend()
 plt.grid()
 plt.show()
 
-plt.title("V_el")
+plt.title("V_el_new")
 plt.plot(grid["x"].cpu(), q_bulk["V_el_new"][voltage_index, 0, :].cpu(), label="PINNQT")
 plt.plot(matlab_data["x"], matlab_data["Vact_new"], label="MATLAB")
 plt.legend()
