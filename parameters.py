@@ -18,7 +18,7 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 435
+loaded_parameters_index = None
 loaded_parameters_NR_step = 1
 loaded_V_el_index = 427  # loaded_parameters_index
 loaded_V_el_NR_step = 1  # loaded_parameters_NR_step
@@ -33,7 +33,7 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = 10800  # 3h
 min_loss = 500e-9
 report_each = 1
