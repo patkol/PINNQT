@@ -69,11 +69,6 @@ def get_constant_models(
             models_dict[f"k{i}_{contact}"] = model.FunctionModel(
                 lambda q, i=i, contact=contact: trafos.k_function(q, i, contact),
             )
-            models_dict[f"smooth_k{i}_{contact}"] = model.FunctionModel(
-                lambda q, i=i, contact=contact: q[f"k{i}_{contact}"]
-                if i in (0, N + 1)
-                else trafos.smooth_k_function(q, i, contact),
-            )
             if params.wkb:
                 continue
             # The shifts by x_out are important for

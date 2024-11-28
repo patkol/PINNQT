@@ -31,15 +31,6 @@ def k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
     )
 
 
-# smooth_k: Fixing the non-smoothness of k in V at E=V
-def smooth_k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
-    # IDEA: Do I need to remove V_el?
-    return physics.k_function(
-        q[f"m_eff{i}"],
-        q[f"E_{contact}"] - q[f"V_int{i}"] - q[f"V_el{i}"],
-    )
-
-
 def transition_function(a, b, transition_exp):
     """
     Smoothly transition from a at x=0 to b at x->inf.
@@ -381,7 +372,7 @@ def wkb_phase_trafo(
         )
         supergrid = Supergrid(child_grids, "x", copy_all=False)
         sorted_supergrid = grids.get_sorted_grid_along(["x"], supergrid, copy_all=False)
-        ks = [qs[grid_name][f"smooth_k{i}_{contact}"] for grid_name in grid_names]
+        ks = [qs[grid_name][f"k{i}_{contact}"] for grid_name in grid_names]
         integrand = quantities.combine_quantity(
             ks, list(supergrid.subgrids.values()), supergrid
         )

@@ -14,8 +14,10 @@ class Contact:
     out_index: int
     direction: int  # i +/- direction gives the next/previous layer index.
     grid_name: str
-    get_in_boundary_index: Callable[[int], int]
+    get_in_boundary_index: Callable[[int], int]  # layer -> boundary
     get_out_boundary_index: Callable[[int], int]
+    get_in_layer_index: Callable[[int], int]  # boundary -> layer
+    get_out_layer_index: Callable[[int], int]
 
     in_boundary_index: int = dataclasses.field(init=False)
     out_boundary_index: int = dataclasses.field(init=False)
@@ -69,6 +71,10 @@ class Device:
         assert len(self.boundaries) == N + 1
         assert sorted(self.boundaries) == self.boundaries, self.boundaries
 
+        """
+        Layers:    0 | 1 | 2 | 3
+        Boundaries:  0   1   2
+        """
         left_contact = Contact(
             name="L",
             index=0,
@@ -77,6 +83,8 @@ class Device:
             grid_name=f"boundary{0}",
             get_in_boundary_index=lambda i: max(0, i - 1),
             get_out_boundary_index=lambda i: min(N, i),
+            get_in_layer_index=lambda i: i,
+            get_out_layer_index=lambda i: i + 1,
         )
         right_contact = Contact(
             name="R",
@@ -86,6 +94,8 @@ class Device:
             grid_name=f"boundary{N}",
             get_in_boundary_index=lambda i: min(N, i),
             get_out_boundary_index=lambda i: max(0, i - 1),
+            get_in_layer_index=lambda i: i + 1,
+            get_out_layer_index=lambda i: i,
         )
 
         self.contacts = [left_contact, right_contact]

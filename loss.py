@@ -74,6 +74,7 @@ def j_loss_trafo(qs, *, i, N, contact):
 
 
 def wc_loss_trafo(qs, *, i, contact):
+    # Satisfied at the contacts by definition
     q = qs[f"boundary{i}"]
 
     left_index = str(i)
@@ -87,12 +88,21 @@ def wc_loss_trafo(qs, *, i, contact):
 def cc_loss_trafo(qs, *, i, contact):
     q = qs[f"boundary{i}"]
 
-    left_index = str(i)
-    right_index = str(i + 1)
-    residual = (
-        q[f"phi{right_index}_{contact}_dx"] / q["m_eff" + left_index]
-        - q[f"phi{left_index}_{contact}_dx"] / q["m_eff" + right_index]
-    )
+    in_index = contact.get_in_layer_index(i)
+    out_index = contact.get_out_layer_index(i)
+
+    if i == contact.in_boundary_index:
+        r = q[f"phi{out_index}_{contact}"] - 1
+        phi_dx_in = 1j * q["k" + in_index] * (1 - r)
+    else:
+        phi_dx_in = q[f"phi{in_index}_{contact}_dx"]
+    if i == contact.out_boundary_index:
+        t = q[f"phi{in_index}_{contact}"]
+        phi_dx_out = 1j * q["k" + in_index] * t
+    else:
+        phi_dx_out = q[f"phi{out_index}_{contact}_dx"]
+
+    residual = phi_dx_in / q["m_eff" + in_index] - phi_dx_out / q["m_eff" + out_index]
     residual /= params.CURRENT_CONTINUITY_OOM
     q[f"cc_loss{i}_{contact}"] = params.loss_function(residual)
 
