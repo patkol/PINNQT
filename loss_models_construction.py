@@ -30,6 +30,11 @@ def get_loss_models(
 
     N = device.n_layers
 
+    for i in range(0, N + 1):
+        loss_quantities[f"boundary{i}"] = []
+    for i in range(1, N + 1):
+        loss_quantities[f"bulk{i}"] = []
+
     # Propagate from the output to the input, layer by layer
     layer_indices_dict = {"L": range(N, 0, -1), "R": range(1, N + 1)}
     for contact in device.contacts:
@@ -65,21 +70,21 @@ def get_loss_models(
                         grid_name,
                     )
                 )
-            loss_models.append(
-                trafos.get_dx_model(
-                    "multigrid" if params.fd_first_derivatives else "exact",
-                    f"phi_zero{i}_{contact}",
-                    boundary_out,
-                )
-            )
-            # For d0 phi0 + d1 phi1
-            loss_models.append(
-                trafos.get_dx_model(
-                    "multigrid" if params.fd_first_derivatives else "exact",
-                    f"phi_one{i}_{contact}",
-                    boundary_out,
-                )
-            )
+            # loss_models.append(
+            #     trafos.get_dx_model(
+            #         "multigrid" if params.fd_first_derivatives else "exact",
+            #         f"phi_zero{i}_{contact}",
+            #         boundary_out,
+            #     )
+            # )
+            # # For d0 phi0 + d1 phi1
+            # loss_models.append(
+            #     trafos.get_dx_model(
+            #         "multigrid" if params.fd_first_derivatives else "exact",
+            #         f"phi_one{i}_{contact}",
+            #         boundary_out,
+            #     )
+            # )
             loss_models.append(
                 MultiModel(
                     trafos.phi_trafo,
@@ -87,15 +92,8 @@ def get_loss_models(
                     kwargs={
                         "i": i,
                         "contact": contact,
-                        "grid_names": boundaries_in + bulks,
+                        "grid_names": boundaries_in + bulks + boundaries_out,
                     },
-                )
-            )
-            loss_models.append(
-                trafos.get_dx_model(
-                    "multigrid" if params.fd_first_derivatives else "exact",
-                    f"phi{i}_{contact}",
-                    boundary_in,
                 )
             )
             # phi_dx in bulk for current density
@@ -107,9 +105,6 @@ def get_loss_models(
                 )
             )
 
-    # Derived quantities
-    # Input contact (includes global quantities)
-    for contact in device.contacts:
         loss_models.append(
             MultiModel(
                 trafos.contact_coeffs_trafo,
@@ -118,12 +113,10 @@ def get_loss_models(
             )
         )
 
-    # Bulk
-    for i in range(1, N + 1):
-        bulk_name = f"bulk{i}"
-        loss_quantities[bulk_name] = []
+        # Bulk
+        for i in range(1, N + 1):
+            bulk_name = f"bulk{i}"
 
-        for contact in device.contacts:
             loss_models.append(
                 model.get_multi_model(
                     model.FunctionModel(
@@ -162,6 +155,55 @@ def get_loss_models(
                 )
             )
             loss_quantities[bulk_name].append(f"SE_loss{i}_{contact}")
+
+        # Boundaries
+        for i in range(0, N + 1):
+            boundary_name = f"boundary{i}"
+            in_index = contact.get_in_layer_index(i)
+            out_index = contact.get_out_layer_index(i)
+
+            if in_index != contact.index:
+                loss_models.append(
+                    trafos.get_dx_model(
+                        "multigrid" if params.fd_first_derivatives else "exact",
+                        f"phi{in_index}_{contact}",
+                        boundary_name,
+                    )
+                )
+            if out_index != contact.out_index:
+                loss_models.append(
+                    trafos.get_dx_model(
+                        "multigrid" if params.fd_first_derivatives else "exact",
+                        f"phi{out_index}_{contact}",
+                        boundary_name,
+                    )
+                )
+            loss_models.append(
+                MultiModel(
+                    loss.cc_loss_trafo,
+                    f"cc_loss{i}_{contact}",
+                    kwargs={
+                        "i": i,
+                        "contact": contact,
+                    },
+                )
+            )
+            loss_quantities[boundary_name].append(f"cc_loss{i}_{contact}")
+
+        # Inner boundaries
+        for i in range(1, N):
+            boundary_name = f"boundary{i}"
+            loss_models.append(
+                MultiModel(
+                    loss.wc_loss_trafo,
+                    f"wc_loss{i}_{contact}",
+                    kwargs={
+                        "i": i,
+                        "contact": contact,
+                    },
+                )
+            )
+            loss_quantities[boundary_name].append(f"wc_loss{i}_{contact}")
 
     # TODO: type "widening"
     # assert type(loss_models) is Sequence[MultiModel], type(loss_models)

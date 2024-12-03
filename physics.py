@@ -233,6 +233,44 @@ device_kwargs_dict: dict[str, dict] = {
         ],
         "includes_contacts": False,
     },
+    # Large barrier
+    "barrier4": {
+        "boundaries": [
+            0 * NM,
+            25 * NM,
+            75 * NM,
+            100 * NM,
+        ],
+        "potentials": [
+            0 * EV,
+            0 * EV,
+            1 * EV,
+            0 * EV,
+            0 * EV,
+        ],
+        "m_effs": [
+            0.065 * M_E,
+            0.065 * M_E,
+            0.1 * M_E,
+            0.065 * M_E,
+            0.065 * M_E,
+        ],
+        "dopings": [
+            1e19 / CM**3,
+            0,
+            0,
+            0,
+            1e19 / CM**3,
+        ],
+        "permittivities": [
+            12 * EPSILON_0,
+            12 * EPSILON_0,
+            6 * EPSILON_0,
+            12 * EPSILON_0,
+            12 * EPSILON_0,
+        ],
+        "includes_contacts": False,
+    },
     "rtd1": {
         "boundaries": [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
         "potentials": [0 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0.3 * EV, 0 * EV, 0 * EV],

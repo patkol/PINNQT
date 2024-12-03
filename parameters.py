@@ -19,9 +19,9 @@ si_complex_dtype = torch.complex128
 
 # Models
 loaded_parameters_index = None
-loaded_parameters_NR_step = 1
-loaded_V_el_index = 427  # loaded_parameters_index
-loaded_V_el_NR_step = 1  # loaded_parameters_NR_step
+loaded_parameters_NR_step = None
+loaded_V_el_index = 427  # loaded_parameters_index  # 427
+loaded_V_el_NR_step = 1  # loaded_parameters_NR_step  # 1
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False

@@ -31,14 +31,6 @@ def k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
     )
 
 
-def transition_function(a, b, transition_exp):
-    """
-    Smoothly transition from a at x=0 to b at x->inf.
-    transition_exp(x) = torch.exp(-(x-x_left) / transition_distance)
-    """
-    return transition_exp * a + (1 - transition_exp) * b
-
-
 def smoothen(quantity: torch.Tensor, grid: Grid, dim_label: str):
     """
     Smoothen `quantity` on `grid` along `dim_label`.
@@ -180,18 +172,19 @@ def get_phi_one(q: QuantityDict, *, i: int, contact: Contact):
     return q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
 
 
-def get_phi_target(q: QuantityDict, *, i: int, contact: Contact):
-    """
-    Boundary conditions: Given phi{next_i}, find phi{i} at the boundary between
-    i and next_i.
-    """
-    next_i = i + contact.direction
-    phi_target = q[f"phi{next_i}_{contact}"]
-    phi_dx_target = (
-        q[f"m_eff{i}"] / q[f"m_eff{next_i}"] * q[f"phi{next_i}_{contact}_dx"]
-    )
-
-    return phi_target, phi_dx_target
+# TODO: remove?
+# def get_phi_target(q: QuantityDict, *, i: int, contact: Contact):
+#     """
+#     Boundary conditions: Given phi{next_i}, find phi{i} at the boundary between
+#     i and next_i.
+#     """
+#     next_i = i + contact.direction
+#     phi_target = q[f"phi{next_i}_{contact}"]
+#     phi_dx_target = (
+#         q[f"m_eff{i}"] / q[f"m_eff{next_i}"] * q[f"phi{next_i}_{contact}_dx"]
+#     )
+#
+#     return phi_target, phi_dx_target
 
 
 def get_fermi_integral(*, m_eff, E_fermi, E):
@@ -377,14 +370,21 @@ def wkb_phase_trafo(
             ks, list(supergrid.subgrids.values()), supergrid
         )
         sorted_integrand = quantities.restrict(integrand, sorted_supergrid)
-        out_boundary_index = contact.get_out_boundary_index(i)
-        x_0 = qs[f"boundary{out_boundary_index}"].grid["x"].item()
+
+        left_boundary_index = i - 1
+        right_boundary_index = i
+        x_L = qs[f"boundary{left_boundary_index}"].grid["x"].item()
+
         sorted_k_integral = quantities.get_cumulative_integral(
-            "x", x_0, sorted_integrand, sorted_supergrid
+            "x", x_L, sorted_integrand, sorted_supergrid
         )
         sorted_k_integral = smoothen(sorted_k_integral, sorted_supergrid, "x")
         sorted_a_phase = torch.exp(1j * sorted_k_integral)
-        sorted_b_phase = torch.exp(-1j * sorted_k_integral)
+
+        right_k_integral = quantities.restrict(
+            sorted_k_integral, supergrid.subgrids[f"boundary{right_boundary_index}"]
+        )
+        sorted_b_phase = torch.exp(-1j * (sorted_k_integral - right_k_integral))
         a_phase = quantities.combine_quantity(
             [sorted_a_phase], [sorted_supergrid], supergrid
         )
@@ -449,38 +449,52 @@ def fermi_integral_trafo(qs, *, contact: Contact):
 
 
 # d0 phi0 + d1 phi1
+# def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
+#     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
+#     q_out = qs[boundary_out]
+#     phi_zero = q_out[f"phi_zero{i}_{contact}"]
+#     phi_zero_dx = q_out[f"phi_zero{i}_{contact}_dx"]
+#     phi_one = q_out[f"phi_one{i}_{contact}"]
+#     phi_one_dx = q_out[f"phi_one{i}_{contact}_dx"]
+#     phi_target, phi_dx_target = get_phi_target(q_out, i=i, contact=contact)
+#
+#     determinant = phi_zero * phi_one_dx - phi_zero_dx * phi_one
+#     d_zero = (phi_one_dx * phi_target - phi_one * phi_dx_target) / determinant
+#     d_one = (-phi_zero_dx * phi_target + phi_zero * phi_dx_target) / determinant
+#
+#     for grid_name in grid_names:
+#         q = qs[grid_name]
+#         phi_zero_full = q[f"phi_zero{i}_{contact}"]
+#         phi_one_full = q[f"phi_one{i}_{contact}"]
+#         q[f"phi{i}_{contact}"] = d_zero * phi_zero_full + d_one * phi_one_full
+#
+#     return qs
+
+
+# phi0 + phi1 (BC not forced)
 def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
-    boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
-    q_out = qs[boundary_out]
-    phi_zero = q_out[f"phi_zero{i}_{contact}"]
-    phi_zero_dx = q_out[f"phi_zero{i}_{contact}_dx"]
-    phi_one = q_out[f"phi_one{i}_{contact}"]
-    phi_one_dx = q_out[f"phi_one{i}_{contact}_dx"]
-    phi_target, phi_dx_target = get_phi_target(q_out, i=i, contact=contact)
-
-    determinant = phi_zero * phi_one_dx - phi_zero_dx * phi_one
-    d_zero = (phi_one_dx * phi_target - phi_one * phi_dx_target) / determinant
-    d_one = (-phi_zero_dx * phi_target + phi_zero * phi_dx_target) / determinant
-
     for grid_name in grid_names:
         q = qs[grid_name]
-        phi_zero_full = q[f"phi_zero{i}_{contact}"]
-        phi_one_full = q[f"phi_one{i}_{contact}"]
-        q[f"phi{i}_{contact}"] = d_zero * phi_zero_full + d_one * phi_one_full
+        q[f"phi{i}_{contact}"] = (
+            q[f"phi_zero{i}_{contact}"] + q[f"phi_one{i}_{contact}"]
+        )
 
     return qs
 
 
 def contact_coeffs_trafo(qs, *, contact):
     q_in = qs[contact.grid_name]
-    i = contact.index
-    phi_target, phi_dx_target = get_phi_target(q_in, i=i, contact=contact)
-    k = q_in[f"k{i}_{contact}"]
     q = qs["bulk"]
-    q[f"incoming_coeff_{contact}"] = 0.5 * (
-        phi_target + phi_dx_target / (1j * contact.direction * k)
+    q_in = qs[f"boundary{contact.in_boundary_index}"]
+    q_out = qs[f"boundary{contact.out_boundary_index}"]
+    # Finding the reflected wave through the wave continuity 1 + r = phi_out
+    q[f"reflected_coeff_{contact}"] = (
+        q_in[f"phi{contact.index + contact.direction}_{contact}"] - 1
     )
-    q[f"reflected_coeff_{contact}"] = phi_target - q[f"incoming_coeff_{contact}"]
+    # Finding the transmitted wave through the wave continuity phi_in = t
+    q[f"transmitted_coeff_{contact}"] = q_out[
+        f"phi{contact.out_index - contact.direction}_{contact}"
+    ]
 
     return qs
 
