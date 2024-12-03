@@ -30,10 +30,11 @@ def get_loss_models(
 
     N = device.n_layers
 
-    for i in range(0, N + 1):
-        loss_quantities[f"boundary{i}"] = []
     for i in range(1, N + 1):
         loss_quantities[f"bulk{i}"] = []
+    if params.soft_bc:
+        for i in range(0, N + 1):
+            loss_quantities[f"boundary{i}"] = []
 
     # Propagate from the output to the input, layer by layer
     layer_indices_dict = {"L": range(N, 0, -1), "R": range(1, N + 1)}
@@ -70,21 +71,34 @@ def get_loss_models(
                         grid_name,
                     )
                 )
-            # loss_models.append(
-            #     trafos.get_dx_model(
-            #         "multigrid" if params.fd_first_derivatives else "exact",
-            #         f"phi_zero{i}_{contact}",
-            #         boundary_out,
-            #     )
-            # )
-            # # For d0 phi0 + d1 phi1
-            # loss_models.append(
-            #     trafos.get_dx_model(
-            #         "multigrid" if params.fd_first_derivatives else "exact",
-            #         f"phi_one{i}_{contact}",
-            #         boundary_out,
-            #     )
-            # )
+            if params.hard_bc_dir != 0:
+                bc_boundary = boundary_in if params.hard_bc_dir == 1 else boundary_out
+                loss_models.append(
+                    trafos.get_dx_model(
+                        "multigrid" if params.fd_first_derivatives else "exact",
+                        f"phi_zero{i}_{contact}",
+                        bc_boundary,
+                    )
+                )
+                loss_models.append(
+                    trafos.get_dx_model(
+                        "multigrid" if params.fd_first_derivatives else "exact",
+                        f"phi_one{i}_{contact}",
+                        bc_boundary,
+                    )
+                )
+                i_prev = i - contact.direction * params.hard_bc_dir
+                if i_prev not in (contact.index, contact.out_index):
+                    loss_models.append(
+                        trafos.get_dx_model(
+                            "multigrid" if params.fd_first_derivatives else "exact",
+                            f"phi{i_prev}_{contact}",
+                            bc_boundary,
+                        )
+                    )
+
+            # OPTIM: only evaluate where necessary (don't need to take derivatives
+            # of phi on one side with hard BC)
             loss_models.append(
                 MultiModel(
                     trafos.phi_trafo,
@@ -102,6 +116,17 @@ def get_loss_models(
                     "singlegrid" if params.fd_first_derivatives else "exact",
                     f"phi{i}_{contact}",
                     bulk,
+                )
+            )
+
+        if params.hard_bc_dir == -1:
+            in_boundary_index = contact.in_boundary_index
+            first_layer_index = contact.get_out_layer_index(in_boundary_index)
+            loss_models.append(
+                trafos.get_dx_model(
+                    "multigrid" if params.fd_first_derivatives else "exact",
+                    f"phi{first_layer_index}_{contact}",
+                    f"boundary{in_boundary_index}",
                 )
             )
 
@@ -155,6 +180,9 @@ def get_loss_models(
                 )
             )
             loss_quantities[bulk_name].append(f"SE_loss{i}_{contact}")
+
+        if not params.soft_bc:
+            continue
 
         # Boundaries
         for i in range(0, N + 1):

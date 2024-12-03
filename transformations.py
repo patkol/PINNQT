@@ -172,19 +172,32 @@ def get_phi_one(q: QuantityDict, *, i: int, contact: Contact):
     return q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
 
 
-# TODO: remove?
-# def get_phi_target(q: QuantityDict, *, i: int, contact: Contact):
-#     """
-#     Boundary conditions: Given phi{next_i}, find phi{i} at the boundary between
-#     i and next_i.
-#     """
-#     next_i = i + contact.direction
-#     phi_target = q[f"phi{next_i}_{contact}"]
-#     phi_dx_target = (
-#         q[f"m_eff{i}"] / q[f"m_eff{next_i}"] * q[f"phi{next_i}_{contact}_dx"]
-#     )
-#
-#     return phi_target, phi_dx_target
+def get_phi_target(
+    q: QuantityDict,
+    *,
+    i: int,
+    contact: Contact,
+    direction: int,
+    get_derivative: bool = True,
+):
+    """
+    Boundary conditions: Given phi{i_prev}, find phi{i} at the boundary between
+    i and i_prev.
+    i_prev is towards the input contact if direction == 1 and towards the output
+    if direction == -1.
+    """
+    assert direction in (1, -1)
+
+    i_prev = i - contact.direction * direction
+    phi_target = q[f"phi{i_prev}_{contact}"]
+    if get_derivative:
+        phi_dx_target = (
+            q[f"m_eff{i}"] / q[f"m_eff{i_prev}"] * q[f"phi{i_prev}_{contact}_dx"]
+        )
+    else:
+        phi_dx_target = None
+
+    return phi_target, phi_dx_target
 
 
 def get_fermi_integral(*, m_eff, E_fermi, E):
@@ -353,6 +366,7 @@ def wkb_phase_trafo(
     N: int,
     dx_dict: Dict[str, float],
 ):
+    # TODO: direction does not matter, remove line below
     layer_indices = range(N, 0, -1) if contact.direction == 1 else range(1, N + 1)
     for i in layer_indices:
         # Set up the grid to integrate on
@@ -449,30 +463,41 @@ def fermi_integral_trafo(qs, *, contact: Contact):
 
 
 # d0 phi0 + d1 phi1
-# def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
-#     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
-#     q_out = qs[boundary_out]
-#     phi_zero = q_out[f"phi_zero{i}_{contact}"]
-#     phi_zero_dx = q_out[f"phi_zero{i}_{contact}_dx"]
-#     phi_one = q_out[f"phi_one{i}_{contact}"]
-#     phi_one_dx = q_out[f"phi_one{i}_{contact}_dx"]
-#     phi_target, phi_dx_target = get_phi_target(q_out, i=i, contact=contact)
-#
-#     determinant = phi_zero * phi_one_dx - phi_zero_dx * phi_one
-#     d_zero = (phi_one_dx * phi_target - phi_one * phi_dx_target) / determinant
-#     d_one = (-phi_zero_dx * phi_target + phi_zero * phi_dx_target) / determinant
-#
-#     for grid_name in grid_names:
-#         q = qs[grid_name]
-#         phi_zero_full = q[f"phi_zero{i}_{contact}"]
-#         phi_one_full = q[f"phi_one{i}_{contact}"]
-#         q[f"phi{i}_{contact}"] = d_zero * phi_zero_full + d_one * phi_one_full
-#
-#     return qs
+def hard_bc_phi_trafo(
+    qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
+):
+    assert direction in (1, -1)
+
+    boundary_index = (
+        contact.get_in_boundary_index(i)
+        if direction == 1
+        else contact.get_out_boundary_index(i)
+    )
+    q_boundary = qs[f"boundary{boundary_index}"]
+
+    phi_zero = q_boundary[f"phi_zero{i}_{contact}"]
+    phi_zero_dx = q_boundary[f"phi_zero{i}_{contact}_dx"]
+    phi_one = q_boundary[f"phi_one{i}_{contact}"]
+    phi_one_dx = q_boundary[f"phi_one{i}_{contact}_dx"]
+    phi_target, phi_dx_target = get_phi_target(
+        q_boundary, i=i, contact=contact, direction=direction
+    )
+
+    determinant = phi_zero * phi_one_dx - phi_zero_dx * phi_one
+    d_zero = (phi_one_dx * phi_target - phi_one * phi_dx_target) / determinant
+    d_one = (-phi_zero_dx * phi_target + phi_zero * phi_dx_target) / determinant
+
+    for grid_name in grid_names:
+        q = qs[grid_name]
+        phi_zero_full = q[f"phi_zero{i}_{contact}"]
+        phi_one_full = q[f"phi_one{i}_{contact}"]
+        q[f"phi{i}_{contact}"] = d_zero * phi_zero_full + d_one * phi_one_full
+
+    return qs
 
 
 # phi0 + phi1 (BC not forced)
-def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
+def simple_phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
     for grid_name in grid_names:
         q = qs[grid_name]
         q[f"phi{i}_{contact}"] = (
@@ -482,19 +507,47 @@ def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
     return qs
 
 
+def phi_trafo(qs, **kwargs):
+    if params.hard_bc_dir == 0:
+        return simple_phi_trafo(qs, **kwargs)
+
+    return hard_bc_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
+
+
 def contact_coeffs_trafo(qs, *, contact):
     q_in = qs[contact.grid_name]
     q = qs["bulk"]
     q_in = qs[f"boundary{contact.in_boundary_index}"]
     q_out = qs[f"boundary{contact.out_boundary_index}"]
-    # Finding the reflected wave through the wave continuity 1 + r = phi_out
-    q[f"reflected_coeff_{contact}"] = (
-        q_in[f"phi{contact.index + contact.direction}_{contact}"] - 1
+
+    # phi_in, phi_dx_in: The contact's phi and its derivative at the input boundary
+    phi_in, phi_dx_in = get_phi_target(
+        q_in,
+        i=contact.index,
+        contact=contact,
+        direction=-1,
+        get_derivative=params.hard_bc_dir == -1,
     )
-    # Finding the transmitted wave through the wave continuity phi_in = t
-    q[f"transmitted_coeff_{contact}"] = q_out[
-        f"phi{contact.out_index - contact.direction}_{contact}"
-    ]
+
+    if params.hard_bc_dir == -1:
+        # transmitted_coeff is fixed
+        k_in = q_in[f"k{contact.index}_{contact}"]
+        q[f"incoming_coeff_{contact}"] = 0.5 * (
+            phi_in + phi_dx_in / (1j * contact.direction * k_in)
+        )
+    else:
+        # incoming_coeff is fixed
+        phi_out, phi_dx_out = get_phi_target(
+            q_out,
+            i=contact.out_index,
+            contact=contact,
+            direction=1,
+            get_derivative=False,
+        )
+        q[f"transmitted_coeff_{contact}"] = phi_out
+
+    # incoming_coeff + reflected_coeff = phi_in
+    q[f"reflected_coeff_{contact}"] = phi_in - q[f"incoming_coeff_{contact}"]
 
     return qs
 

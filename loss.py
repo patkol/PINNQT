@@ -4,7 +4,7 @@
 
 import torch
 
-from kolpinn.mathematics import grad
+from kolpinn.mathematics import complex_abs2, grad
 from kolpinn.quantities import get_fd_second_derivative, mean_dimension, restrict
 
 import physical_constants as consts
@@ -43,7 +43,7 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     # )
     # incoming_amplitude = complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
     # residual /= incoming_amplitude
-    # residual /= qs["bulk"][f"incoming_coeff_{contact}"]
+    residual /= qs["bulk"][f"incoming_coeff_{contact}"]
     residual /= params.V_OOM
     # Fermi-Dirac weighting
     residual *= 1 / (
@@ -59,7 +59,7 @@ def j_loss_trafo(qs, *, i, N, contact):
 
     prob_current = q[f"j{i}_{contact}"]
     residual = prob_current - mean_dimension("x", prob_current, q.grid)
-    # residual /= complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
+    residual /= complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
     # residual /= mean_dimension("x", complex_abs2(q[f"phi{i}_{contact}"]), q.grid)
     residual /= params.PROBABILITY_CURRENT_OOM
     # exact_prob_current = qs["bulk"][f"j_exact_{contact}"]
@@ -73,6 +73,7 @@ def j_loss_trafo(qs, *, i, N, contact):
     return qs
 
 
+# IDEA: Fermi-Dirac weight the boundary losses
 def wc_loss_trafo(qs, *, i, contact):
     # Satisfied at the contacts by definition
     q = qs[f"boundary{i}"]
