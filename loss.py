@@ -105,7 +105,6 @@ def cc_loss_trafo(qs, *, i, contact):
 
     residual = phi_dx_in / q[f"m_eff{in_index}"] - phi_dx_out / q[f"m_eff{out_index}"]
     residual /= params.CURRENT_CONTINUITY_OOM
-    residual *= 1e1
     q[f"cc_loss{i}_{contact}"] = params.loss_function(residual)
 
     return qs
