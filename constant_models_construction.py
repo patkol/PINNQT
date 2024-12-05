@@ -98,15 +98,16 @@ def get_constant_models(
                 / q[f"m_eff{i}"]
             )
 
-    # Output contact: Boundary conditions
-    for contact in device.contacts:
-        i = contact.out_index
-        const_models_dict[i][f"phi{i}_{contact}"] = one_model
-        const_models_dict[i][f"phi{i}_{contact}_dx"] = model.FunctionModel(
-            lambda q, i=i, contact=contact: contact.direction
-            * 1j
-            * q[f"k{i}_{contact}"]
-        )
+    if params.hard_bc_dir == -1:
+        # Output contact: Boundary conditions
+        for contact in device.contacts:
+            i = contact.out_index
+            const_models_dict[i][f"phi{i}_{contact}"] = one_model
+            const_models_dict[i][f"phi{i}_{contact}_dx"] = model.FunctionModel(
+                lambda q, i=i, contact=contact: contact.direction
+                * 1j
+                * q[f"k{i}_{contact}"]
+            )
 
     const_models: list[MultiModel] = []
 

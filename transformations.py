@@ -439,6 +439,17 @@ def fermi_integral_trafo(qs, *, contact: Contact):
     return qs
 
 
+# phi0 + phi1 (BC not forced)
+def simple_phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
+    for grid_name in grid_names:
+        q = qs[grid_name]
+        q[f"phi{i}_{contact}"] = (
+            q[f"phi_zero{i}_{contact}"] + q[f"phi_one{i}_{contact}"]
+        )
+
+    return qs
+
+
 # u phi0 + v conj(phi0)
 # def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
 #     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
@@ -493,16 +504,85 @@ def hard_bc_phi_trafo(
         phi_one_full = q[f"phi_one{i}_{contact}"]
         q[f"phi{i}_{contact}"] = d_zero * phi_zero_full + d_one * phi_one_full
 
+        if direction == 1 and i == contact.get_in_layer_index(
+            contact.out_boundary_index
+        ):
+            # In the last layer for hard BC I->O:
+            # Satisfy the BC on the output boundary: There can only be an
+            # outgoing wave there. The criterion for that is i*k*phi = phi_dx,
+            # which should be satisfied by the a/b_phase (the one going out)
+            q_out_boundary = qs[f"boundary{contact.get_out_boundary_index(i)}"]
+            d_out, c_out = (d_zero, "a") if contact.direction == 1 else (d_one, "b")
+            phi_out = (
+                d_out
+                * q_out_boundary[f"{c_out}_output{i}_{contact}"]
+                * q[f"{c_out}_phase{i}_{contact}"]
+            )
+
+            # Force the magnitude of the transmitted wave to 1 -|r|^2
+            q_first_boundary = qs[f"boundary{contact.in_boundary_index}"]
+            first_layer_index = contact.get_out_layer_index(contact.in_boundary_index)
+            incoming_coeff = qs["bulk"][f"incoming_coeff_{contact}"]
+            r = q_first_boundary[f"phi{first_layer_index}_{contact}"] - incoming_coeff
+            t_squared = torch.maximum(torch.tensor(0), 1 - complex_abs2(r))
+            t_phaseless = torch.sqrt(t_squared)
+            phi_out_boundary = (
+                d_out
+                * q_out_boundary[f"{c_out}_output{i}_{contact}"]
+                * q_out_boundary[f"{c_out}_phase{i}_{contact}"]
+            )
+            phi_out *= t_phaseless / torch.abs(phi_out_boundary)
+
+            # Transition to phi_out
+            # IDEA: try cos to make it vanish fully at the boundaries - the BC are not
+            # exactly fulfilled right now!
+            x_in, x_out = q_boundary["x"], q_out_boundary["x"]
+            turning_point = (x_in + x_out) / 2
+            transition_distance = torch.abs(x_out - x_in) / 10
+            sigmoid = 1 / (
+                torch.exp(
+                    contact.direction * (q["x"] - turning_point) / transition_distance
+                )
+                + 1
+            )
+            q.overwrite(
+                f"phi{i}_{contact}",
+                sigmoid * q[f"phi{i}_{contact}"] + (1 - sigmoid) * phi_out,
+            )
+
     return qs
 
 
-# phi0 + phi1 (BC not forced)
-def simple_phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
+# d (phi0 + phi1) at the input boundary
+def hard_bc_in_phi_trafo(
+    qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
+):
+    assert direction == 1  # Don't need this special trafo for output -> input
+    assert i == contact.get_out_layer_index(contact.in_boundary_index)
+
+    boundary_index = contact.in_boundary_index
+    q_boundary = qs[f"boundary{boundary_index}"]
+
+    phi_zero = q_boundary[f"phi_zero{i}_{contact}"]
+    phi_zero_dx = q_boundary[f"phi_zero{i}_{contact}_dx"]
+    phi_one = q_boundary[f"phi_one{i}_{contact}"]
+    phi_one_dx = q_boundary[f"phi_one{i}_{contact}_dx"]
+    phi_sum = phi_zero + phi_one
+    phi_sum_dx = phi_zero_dx + phi_one_dx
+    gamma = (
+        q_boundary[f"m_eff{i}"]
+        / q_boundary[f"m_eff{contact.index}"]
+        * 1j
+        * q_boundary[f"k{contact.index}_{contact}"]
+    )
+    d = 2 / (phi_sum_dx / gamma + phi_sum)
+
     for grid_name in grid_names:
         q = qs[grid_name]
-        q[f"phi{i}_{contact}"] = (
-            q[f"phi_zero{i}_{contact}"] + q[f"phi_one{i}_{contact}"]
-        )
+        phi_zero_full = q[f"phi_zero{i}_{contact}"]
+        phi_one_full = q[f"phi_one{i}_{contact}"]
+        phi_sum_full = phi_zero_full + phi_one_full
+        q[f"phi{i}_{contact}"] = d * phi_sum_full
 
     return qs
 
@@ -510,6 +590,12 @@ def simple_phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str])
 def phi_trafo(qs, **kwargs):
     if params.hard_bc_dir == 0:
         return simple_phi_trafo(qs, **kwargs)
+
+    if params.hard_bc_dir == 1 and kwargs["i"] == kwargs["contact"].get_out_layer_index(
+        kwargs["contact"].in_boundary_index
+    ):
+        # Input boundary
+        return hard_bc_in_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
 
     return hard_bc_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
 
@@ -537,7 +623,7 @@ def contact_coeffs_trafo(qs, *, contact):
         )
     else:
         # incoming_coeff is fixed
-        phi_out, phi_dx_out = get_phi_target(
+        phi_out, _ = get_phi_target(
             q_out,
             i=contact.out_index,
             contact=contact,
