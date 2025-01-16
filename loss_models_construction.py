@@ -70,7 +70,10 @@ def get_loss_models(
                         grid_name,
                     )
                 )
-                # For d0 phi0 + d1 phi1
+
+                if not params.use_phi_one:
+                    continue
+
                 loss_models.append(
                     model.get_multi_model(
                         model.FunctionModel(
@@ -91,13 +94,14 @@ def get_loss_models(
                         bc_boundary,
                     )
                 )
-                loss_models.append(
-                    trafos.get_dx_model(
-                        "multigrid" if params.fd_first_derivatives else "exact",
-                        f"phi_one{i}_{contact}",
-                        bc_boundary,
+                if params.use_phi_one:
+                    loss_models.append(
+                        trafos.get_dx_model(
+                            "multigrid" if params.fd_first_derivatives else "exact",
+                            f"phi_one{i}_{contact}",
+                            bc_boundary,
+                        )
                     )
-                )
 
             # OPTIM: only evaluate where necessary (don't need to take derivatives
             # of phi on one side with hard BC)
@@ -130,17 +134,6 @@ def get_loss_models(
                         boundary,
                     )
                 )
-
-        if params.hard_bc_dir == -1:
-            in_boundary_index = contact.in_boundary_index
-            first_layer_index = contact.get_out_layer_index(in_boundary_index)
-            loss_models.append(
-                trafos.get_dx_model(
-                    "multigrid" if params.fd_first_derivatives else "exact",
-                    f"phi{first_layer_index}_{contact}",
-                    f"boundary{in_boundary_index}",
-                )
-            )
 
         loss_models.append(
             MultiModel(

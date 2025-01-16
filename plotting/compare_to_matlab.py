@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt  # type: ignore
 
 torch.set_default_device("cpu")
 
-q_bulk = torch.load("../data/0471/newton_step0000/q_bulk.pkl")
-matlab_path = "../matlab_results/barrier/0V/newton_step0000/"
+q_bulk = torch.load("../data/0493/newton_step0001/q_bulk.pkl")
+matlab_path = "../matlab_results/barrier/0V/newton_step0001/"
 matlab_data = {}
 for name in ("E", "x", "n", "Vact_old", "Vact_new"):
     matlab_data[name] = np.loadtxt(
@@ -27,12 +27,12 @@ matlab_data["phiLs"] = np.loadtxt(
 matlab_data["n"] *= 1e-21
 
 # Scale WF to be 1 at the input contact
-# matlab_data["phiLs"] /= matlab_data["phiLs"][:, 0:1]
-# q_bulk.overwrite("phi_L", q_bulk["phi_L"] / q_bulk["phi_L"][:, :, 0:1])
+matlab_data["phiLs"] /= matlab_data["phiLs"][:, 0:1]
+q_bulk.overwrite("phi_L", q_bulk["phi_L"] / q_bulk["phi_L"][:, :, 0:1])
 
 voltage_index = 0
-energy_index = 0
-energy_index_matlab = 9  # energy_index
+energy_index = 100
+energy_index_matlab = energy_index  # 9 for 0.01eV
 grid = q_bulk.grid
 
 energy_PINNQT = q_bulk["E_L"][voltage_index, energy_index, 0]

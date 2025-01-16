@@ -48,7 +48,8 @@ def get_trained_models(
         }
 
         for contact in device.contacts:
-            for c in ("a", "b"):
+            cs = ("a", "b") if params.use_phi_one else ("a",)
+            for c in cs:
                 nn_model = model.SimpleNNModel(
                     inputs_labels,
                     params.activation_function,

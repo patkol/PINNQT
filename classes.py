@@ -21,12 +21,14 @@ class Contact:
 
     in_boundary_index: int = dataclasses.field(init=False)
     out_boundary_index: int = dataclasses.field(init=False)
-    out_boundary_name: str = dataclasses.field(init=False)
+    in_layer_index: int = dataclasses.field(init=False)  # First layer of the device
+    out_layer_index: int = dataclasses.field(init=False)  # Last layer of the device
 
     def __post_init__(self):
         self.in_boundary_index = self.get_out_boundary_index(self.index)
         self.out_boundary_index = self.get_in_boundary_index(self.out_index)
-        self.out_boundary_name = f"boundary{self.out_boundary_index}"
+        self.in_layer_index = self.get_out_layer_index(self.in_boundary_index)
+        self.out_layer_index = self.get_in_layer_index(self.out_boundary_index)
 
     def __repr__(self):
         return self.name

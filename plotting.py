@@ -258,7 +258,7 @@ def save_plots(
             )
             q_in_reduced = restrict_quantities(q_in, in_boundary_grid_reduced)
 
-            q_out = qs[contact.out_boundary_name]
+            q_out = qs[f"boundary{contact.out_boundary_index}"]
             out_boundary_grid = Subgrid(q_out.grid, voltage_index_dict, copy_all=False)
             q_out = restrict_quantities(q_out, out_boundary_grid)
             out_boundary_grid_reduced = Subgrid(
@@ -470,7 +470,8 @@ def save_plots(
                 )
                 q_layer_reduced = restrict_quantities(q_layer, grid_layer_reduced)
 
-                for c in ("a", "b"):
+                cs = ("a", "b") if params.use_phi_one else ("a",)
+                for c in cs:
                     save_lineplot(
                         torch.real(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
                         q_layer_reduced.grid,

@@ -34,7 +34,7 @@ def get_constant_models(
     )
 
     # const_models_dict[i][name] = model
-    const_models_dict: Dict[int, Dict[str, model.Model]] = dict(
+    const_models_dict: Dict[int, Dict[str, Model]] = dict(
         (i, {}) for i in range(0, N + 2)
     )
 
@@ -69,21 +69,35 @@ def get_constant_models(
             models_dict[f"k{i}_{contact}"] = model.FunctionModel(
                 lambda q, i=i, contact=contact: trafos.k_function(q, i, contact),
             )
-            if params.wkb:
+
+            if params.ansatz == "none":
+                models_dict[f"a_phase{i}_{contact}"] = one_model
+            elif params.ansatz == "plane":
+                # The shifts by x_out are important for
+                # energies smaller than V, it keeps them from exploding for layers
+                # far away from the contacts. It can still get large/tiny for
+                # thick layers.
+                models_dict[f"a_phase{i}_{contact}"] = model.FunctionModel(
+                    lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
+                        contact.direction
+                        * 1j
+                        * q[f"smooth_k{i}_{contact}"]
+                        * (q["x"] - x_out)  # TODO: x_in?
+                    ),
+                )
+            if not params.use_phi_one:
                 continue
-            # The shifts by x_out are important for
-            # energies smaller than V, it keeps them from exploding for layers
-            # far away from the contacts. It can still get large/tiny for thick layers.
-            models_dict[f"a_phase{i}_{contact}"] = model.FunctionModel(
-                lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
-                    1j * q[f"smooth_k{i}_{contact}"] * (q["x"] - x_out)
-                ),
-            )
-            models_dict[f"b_phase{i}_{contact}"] = model.FunctionModel(
-                lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
-                    -1j * q[f"smooth_k{i}_{contact}"] * (q["x"] - x_out)
-                ),
-            )
+            if params.ansatz == "none":
+                models_dict[f"b_phase{i}_{contact}"] = one_model
+            elif params.ansatz == "plane":
+                models_dict[f"b_phase{i}_{contact}"] = model.FunctionModel(
+                    lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
+                        -contact.direction
+                        * 1j
+                        * q[f"smooth_k{i}_{contact}"]
+                        * (q["x"] - x_out)
+                    ),
+                )
 
     # Both contacts
     const_models_dict[0]["V_el0"] = zero_model
@@ -120,10 +134,10 @@ def get_constant_models(
     # Layers
     for i in range(1, N + 1):
         grid_name = f"bulk{i}"
-        models_dict: Dict[str, Model] = dict(
+        layer_models_dict: Dict[str, Model] = dict(
             layer_indep_const_models_dict, **const_models_dict[i]
         )
-        for model_name, model_ in models_dict.items():
+        for model_name, model_ in layer_models_dict.items():
             const_models.append(model.get_multi_model(model_, model_name, grid_name))
 
     # Boundaries
@@ -176,7 +190,7 @@ def get_constant_models(
             )
         )
 
-        if not params.wkb:
+        if params.ansatz != "wkb":
             continue
 
         const_models.append(

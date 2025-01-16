@@ -24,6 +24,37 @@ import physics
 from classes import Contact
 
 
+def transition_f(x: torch.Tensor):
+    """
+    Smooth transition from 0 at x <= 0 to 1 at x -> inf
+    https://en.wikipedia.org/wiki/Bump_function#Examples
+    """
+    # Assert that we don't ignore nonfinite x due to the nan_to_num
+    assert torch.all(torch.isfinite(x)), x
+
+    exp = torch.exp(-1 / x)
+    clean_exp = torch.nan_to_num(exp)  # 0 at x=0
+
+    return clean_exp * (x > 0)
+
+
+def transition_g(x: torch.Tensor):
+    """
+    Smooth transition from 0 at x <= 0 to 1 at x >= 1
+    https://en.wikipedia.org/wiki/Bump_function#Examples
+    """
+    f_x = transition_f(x)
+    return f_x / (f_x + transition_f(1 - x))
+
+
+def smooth_transition(x: torch.Tensor, x0: float, x1: float, y0: float, y1: float):
+    """
+    Smooth transition from y0 at x0 to y1 at x1
+    """
+    g = transition_g((x - x0) / (x1 - x0))
+    return (y1 - y0) * g + y0
+
+
 def k_function(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
     return physics.k_function(
         q[f"m_eff{i}"],
@@ -117,7 +148,7 @@ def get_dx_model(mode: str, quantity_name: str, grid_name: str):
             return qs
 
     else:
-        raise ValueError("Unknown dx mode:", mode)
+        raise ValueError("Unknown dx mode: ", mode)
 
     return model.MultiModel(dx_qs_trafo, name)
 
@@ -155,15 +186,6 @@ def get_E_fermi(q: QuantityDict, *, i: int):
     return best_E_f
 
 
-# For u phi0 + v conj(phi0)
-# def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
-#     return (
-#         q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
-#         + q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
-#     )
-
-
-# For d0 phi0 + d1 phi1
 def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
     return q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
 
@@ -189,7 +211,7 @@ def get_phi_target(
     assert direction in (1, -1)
 
     i_prev = i - contact.direction * direction
-    phi_target = q[f"phi{i_prev}_{contact}"]
+    phi_target = torch.clone(q[f"phi{i_prev}_{contact}"])
     if get_derivative:
         phi_dx_target = (
             q[f"m_eff{i}"] / q[f"m_eff{i_prev}"] * q[f"phi{i_prev}_{contact}_dx"]
@@ -212,6 +234,24 @@ def get_n_contact(*, dos, fermi_integral, grid: Grid):
     integrand = dos * fermi_integral
     n_contact = quantities.sum_dimension("DeltaE", integrand, grid) * params.E_STEP
     return n_contact
+
+
+def get_simple_phi(q: QuantityDict, *, i: int, contact: Contact):
+    """Adapt get_simple_phi_dx when changing this!"""
+    phi = torch.clone(q[f"phi_zero{i}_{contact}"])
+    if params.use_phi_one:
+        phi += q[f"phi_one{i}_{contact}"]
+
+    return phi
+
+
+def get_simple_phi_dx(q: QuantityDict, *, i: int, contact: Contact):
+    """Dependent on get_simple_phi - not ideal, might be solved with lazy eval"""
+    phi_dx = torch.clone(q[f"phi_zero{i}_{contact}_dx"])
+    if params.use_phi_one:
+        phi_dx += q[f"phi_one{i}_{contact}_dx"]
+
+    return phi_dx
 
 
 def to_full_trafo(
@@ -366,9 +406,7 @@ def wkb_phase_trafo(
     N: int,
     dx_dict: Dict[str, float],
 ):
-    # TODO: direction does not matter, remove line below
-    layer_indices = range(N, 0, -1) if contact.direction == 1 else range(1, N + 1)
-    for i in layer_indices:
+    for i in range(1, N + 1):
         # Set up the grid to integrate on
         grid_names = [f"bulk{i}"]
         for i_boundary in (i - 1, i):
@@ -394,23 +432,29 @@ def wkb_phase_trafo(
         )
         sorted_k_integral = smoothen(sorted_k_integral, sorted_supergrid, "x")
         sorted_a_phase = torch.exp(1j * sorted_k_integral)
+        a_phase = quantities.combine_quantity(
+            [sorted_a_phase], [sorted_supergrid], supergrid
+        )
 
         right_k_integral = quantities.restrict(
             sorted_k_integral, supergrid.subgrids[f"boundary{right_boundary_index}"]
         )
         sorted_b_phase = torch.exp(-1j * (sorted_k_integral - right_k_integral))
-        a_phase = quantities.combine_quantity(
-            [sorted_a_phase], [sorted_supergrid], supergrid
-        )
         b_phase = quantities.combine_quantity(
             [sorted_b_phase], [sorted_supergrid], supergrid
         )
+
+        if contact.direction == -1:
+            # Make a the in and b the out direction
+            a_phase, b_phase = b_phase, a_phase
 
         for grid_name in grid_names:
             q = qs[grid_name]
             q[f"a_phase{i}_{contact}"] = quantities.restrict(
                 a_phase, supergrid.subgrids[grid_name]
             )
+            if not params.use_phi_one:
+                continue
             q[f"b_phase{i}_{contact}"] = quantities.restrict(
                 b_phase, supergrid.subgrids[grid_name]
             )
@@ -439,44 +483,56 @@ def fermi_integral_trafo(qs, *, contact: Contact):
     return qs
 
 
-# phi0 + phi1 (BC not forced)
 def simple_phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
+    """phi0 + phi1 (BC not forced)"""
+
     for grid_name in grid_names:
         q = qs[grid_name]
-        q[f"phi{i}_{contact}"] = (
-            q[f"phi_zero{i}_{contact}"] + q[f"phi_one{i}_{contact}"]
-        )
+        q[f"phi{i}_{contact}"] = get_simple_phi(q, i=i, contact=contact)
 
     return qs
 
 
-# u phi0 + v conj(phi0)
-# def phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
-#     boundary_out = f"boundary{contact.get_out_boundary_index(i)}"
-#     q_out = qs[boundary_out]
-#     phi_zero = q_out[f"phi_zero{i}_{contact}"]
-#     phi_zero_dx = q_out[f"phi_zero{i}_{contact}_dx"]
-#     phi_target, phi_dx_target = get_phi_target(q_out, i=i, contact=contact)
-#
-#     # phi = u * phi_zero + v * conj(phi_zero), find u & v s.t. this matches the target
-#     determinant = 2j * torch.imag(phi_zero * torch.conj(phi_zero_dx))
-#     u = (
-#         phi_target * torch.conj(phi_zero_dx) - torch.conj(phi_zero) * phi_dx_target
-#     ) / determinant
-#     v = -(phi_target * phi_zero_dx - phi_zero * phi_dx_target) / determinant
-#
-#     for grid_name in grid_names:
-#         q = qs[grid_name]
-#         phi_zero_full = q[f"phi_zero{i}_{contact}"]
-#         q[f"phi{i}_{contact}"] = u * phi_zero_full + v * torch.conj(phi_zero_full)
-#
-#     return qs
-
-
-# d0 phi0 + d1 phi1
-def hard_bc_phi_trafo(
+def hard_bc_phi_trafo_conj(
     qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
 ):
+    """d0 phi0 + d1 conj(phi0)"""
+
+    assert direction in (1, -1)
+
+    boundary_index = (
+        contact.get_in_boundary_index(i)
+        if direction == 1
+        else contact.get_out_boundary_index(i)
+    )
+    q_boundary = qs[f"boundary{boundary_index}"]
+
+    phi_zero = q_boundary[f"phi_zero{i}_{contact}"]
+    phi_zero_dx = q_boundary[f"phi_zero{i}_{contact}_dx"]
+    phi_target, phi_dx_target = get_phi_target(
+        q_boundary, i=i, contact=contact, direction=direction
+    )
+
+    # phi = u * phi_zero + v * conj(phi_zero), find u & v s.t. this matches the target
+    determinant = 2j * torch.imag(phi_zero * torch.conj(phi_zero_dx))
+    u = (
+        phi_target * torch.conj(phi_zero_dx) - torch.conj(phi_zero) * phi_dx_target
+    ) / determinant
+    v = -(phi_target * phi_zero_dx - phi_zero * phi_dx_target) / determinant
+
+    for grid_name in grid_names:
+        q = qs[grid_name]
+        phi_zero_full = q[f"phi_zero{i}_{contact}"]
+        q[f"phi{i}_{contact}"] = u * phi_zero_full + v * torch.conj(phi_zero_full)
+
+    return qs
+
+
+def hard_bc_phi_trafo_with_phi_one(
+    qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
+):
+    """d0 phi0 + d1 phi1"""
+
     assert direction in (1, -1)
 
     boundary_index = (
@@ -504,85 +560,79 @@ def hard_bc_phi_trafo(
         phi_one_full = q[f"phi_one{i}_{contact}"]
         q[f"phi{i}_{contact}"] = d_zero * phi_zero_full + d_one * phi_one_full
 
-        if direction == 1 and i == contact.get_in_layer_index(
-            contact.out_boundary_index
-        ):
-            # In the last layer for hard BC I->O:
-            # Satisfy the BC on the output boundary: There can only be an
-            # outgoing wave there. The criterion for that is i*k*phi = phi_dx,
-            # which should be satisfied by the a/b_phase (the one going out)
-            q_out_boundary = qs[f"boundary{contact.get_out_boundary_index(i)}"]
-            d_out, c_out = (d_zero, "a") if contact.direction == 1 else (d_one, "b")
-            phi_out = (
-                d_out
-                * q_out_boundary[f"{c_out}_output{i}_{contact}"]
-                * q[f"{c_out}_phase{i}_{contact}"]
-            )
-
-            # Force the magnitude of the transmitted wave to 1 -|r|^2
-            q_first_boundary = qs[f"boundary{contact.in_boundary_index}"]
-            first_layer_index = contact.get_out_layer_index(contact.in_boundary_index)
-            incoming_coeff = qs["bulk"][f"incoming_coeff_{contact}"]
-            r = q_first_boundary[f"phi{first_layer_index}_{contact}"] - incoming_coeff
-            t_squared = torch.maximum(torch.tensor(0), 1 - complex_abs2(r))
-            t_phaseless = torch.sqrt(t_squared)
-            phi_out_boundary = (
-                d_out
-                * q_out_boundary[f"{c_out}_output{i}_{contact}"]
-                * q_out_boundary[f"{c_out}_phase{i}_{contact}"]
-            )
-            phi_out *= t_phaseless / torch.abs(phi_out_boundary)
-
-            # Transition to phi_out
-            # IDEA: try cos to make it vanish fully at the boundaries - the BC are not
-            # exactly fulfilled right now!
-            x_in, x_out = q_boundary["x"], q_out_boundary["x"]
-            turning_point = (x_in + x_out) / 2
-            transition_distance = torch.abs(x_out - x_in) / 10
-            sigmoid = 1 / (
-                torch.exp(
-                    contact.direction * (q["x"] - turning_point) / transition_distance
-                )
-                + 1
-            )
-            q.overwrite(
-                f"phi{i}_{contact}",
-                sigmoid * q[f"phi{i}_{contact}"] + (1 - sigmoid) * phi_out,
-            )
-
     return qs
 
 
-# d (phi0 + phi1) at the input boundary
 def hard_bc_in_phi_trafo(
     qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
 ):
+    """
+    d * (phi0 [+ phi1]) at the input boundary.
+    Condition: phi' = gamma * (2 - phi) at the input contact.
+    with gamma := m_eff_device / m_eff_contact * i * k_contact.
+    Solved by d * phi_old
+    with d = 2 / (phi_old_contact' / gamma + phi_old_contact)
+    """
+
     assert direction == 1  # Don't need this special trafo for output -> input
-    assert i == contact.get_out_layer_index(contact.in_boundary_index)
+    assert i == contact.in_layer_index
 
     boundary_index = contact.in_boundary_index
     q_boundary = qs[f"boundary{boundary_index}"]
 
-    phi_zero = q_boundary[f"phi_zero{i}_{contact}"]
-    phi_zero_dx = q_boundary[f"phi_zero{i}_{contact}_dx"]
-    phi_one = q_boundary[f"phi_one{i}_{contact}"]
-    phi_one_dx = q_boundary[f"phi_one{i}_{contact}_dx"]
-    phi_sum = phi_zero + phi_one
-    phi_sum_dx = phi_zero_dx + phi_one_dx
+    phi_boundary = get_simple_phi(q_boundary, i=i, contact=contact)
+    phi_dx_boundary = get_simple_phi_dx(q_boundary, i=i, contact=contact)
     gamma = (
         q_boundary[f"m_eff{i}"]
         / q_boundary[f"m_eff{contact.index}"]
         * 1j
         * q_boundary[f"k{contact.index}_{contact}"]
     )
-    d = 2 / (phi_sum_dx / gamma + phi_sum)
+    d = 2 / (phi_dx_boundary / gamma + phi_boundary)
 
     for grid_name in grid_names:
         q = qs[grid_name]
-        phi_zero_full = q[f"phi_zero{i}_{contact}"]
-        phi_one_full = q[f"phi_one{i}_{contact}"]
-        phi_sum_full = phi_zero_full + phi_one_full
-        q[f"phi{i}_{contact}"] = d * phi_sum_full
+        phi = get_simple_phi(q, i=i, contact=contact)
+        q[f"phi{i}_{contact}"] = d * phi
+
+    return qs
+
+
+def hard_bc_out_phi_trafo(
+    qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
+):
+    """
+    Force the output BC at the output boundary without affecting the WF
+    at the input boundary.
+    BC on the output boundary: There can only be an
+    outgoing wave there. The criterion for that is i*k*phi = phi_dx.
+    Assuming that there the eff mass & potential plateau towards the
+    contacts - then the solution should approach e^{ikx}.
+    """
+
+    assert direction == 1  # Don't need this special trafo for output -> input
+    assert i == contact.out_layer_index
+
+    q_in_boundary = qs[f"boundary{contact.get_in_boundary_index(i)}"]
+    q_out_boundary = qs[f"boundary{contact.get_out_boundary_index(i)}"]
+    x_in, x_out = q_in_boundary["x"], q_out_boundary["x"]
+
+    for grid_name in grid_names:
+        q = qs[grid_name]
+        delta_x = q["x"] - q_out_boundary["x"]
+        plane_wave_phase = torch.exp(1j * q_out_boundary[f"k{i}_{contact}"] * delta_x)
+        phi_out = q_out_boundary[f"phi{i}_{contact}"] * plane_wave_phase
+
+        # Transition to phi_out
+        # transition_function = torch.cos((q["x"] - x_in) / (x_out - x_in) * np.pi)
+        x_in = q_in_boundary["x"].item()
+        x_out = q_out_boundary["x"].item()
+        transition_function = smooth_transition(q["x"], x_in, x_out, 1, 0)
+        q.overwrite(
+            f"phi{i}_{contact}",
+            transition_function * q[f"phi{i}_{contact}"]
+            + (1 - transition_function) * phi_out,
+        )
 
     return qs
 
@@ -591,13 +641,22 @@ def phi_trafo(qs, **kwargs):
     if params.hard_bc_dir == 0:
         return simple_phi_trafo(qs, **kwargs)
 
-    if params.hard_bc_dir == 1 and kwargs["i"] == kwargs["contact"].get_out_layer_index(
-        kwargs["contact"].in_boundary_index
-    ):
-        # Input boundary
-        return hard_bc_in_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
+    # Input layer
+    if params.hard_bc_dir == 1 and kwargs["i"] == kwargs["contact"].in_layer_index:
+        hard_bc_in_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
 
-    return hard_bc_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
+    # Non-input layers
+    else:
+        if params.use_phi_one:
+            hard_bc_phi_trafo_with_phi_one(qs, **kwargs, direction=params.hard_bc_dir)
+        else:
+            hard_bc_phi_trafo_conj(qs, **kwargs, direction=params.hard_bc_dir)
+
+    # Output layer
+    if params.hard_bc_dir == 1 and kwargs["i"] == kwargs["contact"].out_layer_index:
+        hard_bc_out_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
+
+    return qs
 
 
 def contact_coeffs_trafo(qs, *, contact):
@@ -642,7 +701,7 @@ def TR_trafo(qs, *, contact):
     """Transmission probability"""
     q = qs["bulk"]
     q_in = qs[contact.grid_name]
-    q_out = qs[contact.out_boundary_name]
+    q_out = qs[f"boundary{contact.out_boundary_index}"]
     incoming_amplitude = complex_abs2(q[f"incoming_coeff_{contact}"])
     reflected_amplitude = complex_abs2(q[f"reflected_coeff_{contact}"])
     transmitted_amplitude = complex_abs2(q[f"transmitted_coeff_{contact}"])
