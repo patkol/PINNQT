@@ -448,6 +448,9 @@ def wkb_phase_trafo(
             # Make a the in and b the out direction
             a_phase, b_phase = b_phase, a_phase
 
+        if params.ansatz == "half_wkb":
+            b_phase = torch.ones_like(b_phase)
+
         for grid_name in grid_names:
             q = qs[grid_name]
             q[f"a_phase{i}_{contact}"] = quantities.restrict(
@@ -615,18 +618,16 @@ def hard_bc_out_phi_trafo(
 
     q_in_boundary = qs[f"boundary{contact.get_in_boundary_index(i)}"]
     q_out_boundary = qs[f"boundary{contact.get_out_boundary_index(i)}"]
-    x_in, x_out = q_in_boundary["x"], q_out_boundary["x"]
+    x_in, x_out = q_in_boundary["x"].item(), q_out_boundary["x"].item()
 
     for grid_name in grid_names:
         q = qs[grid_name]
         delta_x = q["x"] - q_out_boundary["x"]
         plane_wave_phase = torch.exp(1j * q_out_boundary[f"k{i}_{contact}"] * delta_x)
+        # TODO: Force the correct transmitted amplitude based on the reflected one
         phi_out = q_out_boundary[f"phi{i}_{contact}"] * plane_wave_phase
 
         # Transition to phi_out
-        # transition_function = torch.cos((q["x"] - x_in) / (x_out - x_in) * np.pi)
-        x_in = q_in_boundary["x"].item()
-        x_out = q_out_boundary["x"].item()
         transition_function = smooth_transition(q["x"], x_in, x_out, 1, 0)
         q.overwrite(
             f"phi{i}_{contact}",

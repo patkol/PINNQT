@@ -69,7 +69,7 @@ use_phi_one = True
 # Plotting
 plot_each_voltage = 1
 plot_each_energy = 12
-extra_plots = False
+extra_plots = True
 
 # Physical
 VOLTAGE_MIN = 0.0 * consts.VOLT
@@ -96,7 +96,12 @@ CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
-ansatz = "wkb"  # "none", "plane", "wkb"
+# ansatz: determines how a/b_phase are calculated.
+#   none: Unity
+#   plane: Plane wave
+#   wkb: WKB solution
+#   half_wkb: a (input-output) is WKB, b unity
+ansatz = "half_wkb"  # "none", "plane", "wkb", "half_wkb"
 
 V_OOM = 0.3 * consts.EV
 M_EFF_OOM = 0.1 * consts.M_E
@@ -106,4 +111,4 @@ PROBABILITY_CURRENT_OOM = consts.H_BAR * K_OOM / M_EFF_OOM
 
 
 assert hard_bc_dir in (1, -1, 0)
-assert ansatz in ("none", "plane", "wkb")
+assert ansatz in ("none", "plane", "wkb", "half_wkb")

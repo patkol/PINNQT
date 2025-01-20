@@ -190,7 +190,7 @@ def get_constant_models(
             )
         )
 
-        if params.ansatz != "wkb":
+        if params.ansatz not in ("wkb", "half_wkb"):
             continue
 
         const_models.append(
