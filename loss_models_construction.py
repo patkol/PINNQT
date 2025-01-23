@@ -58,33 +58,18 @@ def get_loss_models(
             boundaries_in = [boundary_in + dx_string for dx_string in dx_dict.keys()]
             boundaries_out = [boundary_out + dx_string for dx_string in dx_dict.keys()]
 
-            for grid_name in boundaries_in + bulks + boundaries_out:
-                loss_models.append(
-                    model.get_multi_model(
-                        model.FunctionModel(
-                            lambda q, *, i=i, contact=contact: trafos.get_phi_zero(
-                                q, i=i, contact=contact
-                            )
-                        ),
-                        f"phi_zero{i}_{contact}",
-                        grid_name,
-                    )
+            loss_models.append(
+                MultiModel(
+                    trafos.phi_zero_one_trafo,
+                    f"phi_zero/one{i}_{contact}",
+                    kwargs={
+                        "i": i,
+                        "contact": contact,
+                        "grid_names": boundaries_in + bulks + boundaries_out,
+                    },
                 )
+            )
 
-                if not params.use_phi_one:
-                    continue
-
-                loss_models.append(
-                    model.get_multi_model(
-                        model.FunctionModel(
-                            lambda q, *, i=i, contact=contact: trafos.get_phi_one(
-                                q, i=i, contact=contact
-                            )
-                        ),
-                        f"phi_one{i}_{contact}",
-                        grid_name,
-                    )
-                )
             if params.hard_bc_dir != 0:
                 bc_boundary = boundary_in if params.hard_bc_dir == 1 else boundary_out
                 loss_models.append(

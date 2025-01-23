@@ -186,14 +186,6 @@ def get_E_fermi(q: QuantityDict, *, i: int):
     return best_E_f
 
 
-def get_phi_zero(q: QuantityDict, *, i: int, contact: Contact):
-    return q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
-
-
-def get_phi_one(q: QuantityDict, *, i: int, contact: Contact):
-    return q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
-
-
 def get_phi_target(
     q: QuantityDict,
     *,
@@ -431,22 +423,27 @@ def wkb_phase_trafo(
             "x", x_L, sorted_integrand, sorted_supergrid
         )
         sorted_k_integral = smoothen(sorted_k_integral, sorted_supergrid, "x")
-        sorted_a_phase = torch.exp(1j * sorted_k_integral)
-        a_phase = quantities.combine_quantity(
-            [sorted_a_phase], [sorted_supergrid], supergrid
+
+        # Propagation left -> right
+        sorted_LR_phase = torch.exp(1j * sorted_k_integral)
+        LR_phase = quantities.combine_quantity(
+            [sorted_LR_phase], [sorted_supergrid], supergrid
         )
 
+        # Propagation right -> left
         right_k_integral = quantities.restrict(
             sorted_k_integral, supergrid.subgrids[f"boundary{right_boundary_index}"]
         )
-        sorted_b_phase = torch.exp(-1j * (sorted_k_integral - right_k_integral))
-        b_phase = quantities.combine_quantity(
-            [sorted_b_phase], [sorted_supergrid], supergrid
+        sorted_RL_phase = torch.exp(-1j * (sorted_k_integral - right_k_integral))
+        RL_phase = quantities.combine_quantity(
+            [sorted_RL_phase], [sorted_supergrid], supergrid
         )
 
-        if contact.direction == -1:
-            # Make a the in and b the out direction
-            a_phase, b_phase = b_phase, a_phase
+        # Make a the in and b the out direction
+        if contact.direction == 1:
+            a_phase, b_phase = LR_phase, RL_phase
+        else:
+            a_phase, b_phase = RL_phase, LR_phase
 
         if params.ansatz == "half_wkb":
             b_phase = torch.ones_like(b_phase)
@@ -482,6 +479,50 @@ def fermi_integral_trafo(qs, *, contact: Contact):
     qs["bulk"][f"fermi_integral_{contact}"] = get_fermi_integral(
         m_eff=q_in[f"m_eff{i}"], E_fermi=q[f"E_fermi_{contact}"], E=q[f"E_{contact}"]
     )
+
+    return qs
+
+
+def phi_zero_one_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
+    """
+    Add phi_zero and phi_one.
+    If force_output_bc:
+    Force a_output to a constant and b_output to zero at the output contact.
+    The constant is taken to be the current value of a_output at the output contact.
+    This makes sure that the wave function approaches a scaled version of the ansatz
+    at the output contact.
+    """
+
+    force_output_bc = (
+        params.hard_bc_dir == 1
+        and i == contact.out_layer_index
+        and params.ansatz in ("half_wkb", "wkb")
+        and params.hard_bc_output
+    )
+    if force_output_bc:
+        q_in_boundary = qs[f"boundary{contact.get_in_boundary_index(i)}"]
+        q_out_boundary = qs[f"boundary{contact.get_out_boundary_index(i)}"]
+        x_in, x_out = q_in_boundary["x"].item(), q_out_boundary["x"].item()
+        a_output_out = q_out_boundary[f"a_output{i}_{contact}"]
+
+    for grid_name in grid_names:
+        q = qs[grid_name]
+        a_output = q[f"a_output{i}_{contact}"]
+        if params.use_phi_one:
+            b_output = q[f"b_output{i}_{contact}"]
+
+        if force_output_bc:
+            transition_function = smooth_transition(q["x"], x_in, x_out, 1, 0)
+            a_output = (
+                transition_function * a_output
+                + (1 - transition_function) * a_output_out
+            )
+            if params.use_phi_one:
+                b_output = transition_function * b_output
+
+        q[f"phi_zero{i}_{contact}"] = a_output * q[f"a_phase{i}_{contact}"]
+        if params.use_phi_one:
+            q[f"phi_one{i}_{contact}"] = b_output * q[f"b_phase{i}_{contact}"]
 
     return qs
 
@@ -653,8 +694,13 @@ def phi_trafo(qs, **kwargs):
         else:
             hard_bc_phi_trafo_conj(qs, **kwargs, direction=params.hard_bc_dir)
 
-    # Output layer
-    if params.hard_bc_dir == 1 and kwargs["i"] == kwargs["contact"].out_layer_index:
+    # Output layer (not WKB, other case handled in phi_zero_one_trafo)
+    if (
+        params.hard_bc_dir == 1
+        and kwargs["i"] == kwargs["contact"].out_layer_index
+        and params.ansatz not in ("half_wkb", "wkb")
+        and params.hard_bc_output
+    ):
         hard_bc_out_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
 
     return qs

@@ -18,7 +18,7 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 531
 loaded_parameters_NR_step = 1
 loaded_V_el_index = 427  # loaded_parameters_index  # 427
 loaded_V_el_NR_step = 1  # loaded_parameters_NR_step  # 1
@@ -33,9 +33,9 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
-max_time = 10000
-min_loss = 1000e-9
+max_n_training_steps = 0
+max_time = 50000
+min_loss = 10000e-9
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -64,6 +64,9 @@ soft_bc = False
 # -1: vice versa
 # 0: no hard BC
 hard_bc_dir = 1
+# hard_bc_output: Whether to enforce hard BC on the output contact,
+# only has an effect if hard_bc_dir == 1
+hard_bc_output = True
 use_phi_one = True
 
 # Plotting
@@ -79,7 +82,7 @@ VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
 E_MIN = 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
-E_MAX = 0.1 * consts.EV
+E_MAX = 0.3 * consts.EV
 # E_MIN = 0.01 * consts.EV
 # E_STEP = 1 * consts.EV
 # E_MAX = 0.01 * consts.EV
