@@ -32,8 +32,9 @@ def get_loss_models(
 
     for i in range(1, N + 1):
         loss_quantities[f"bulk{i}"] = []
-    if params.soft_bc:
-        for i in range(0, N + 1):
+    if params.soft_bc or params.soft_bc_output:
+        boundary_indices = range(0, N + 1) if params.soft_bc else (0, N)
+        for i in boundary_indices:
             loss_quantities[f"boundary{i}"] = []
 
     # Propagate from the input to the output / output to the input, layer by layer
@@ -171,11 +172,15 @@ def get_loss_models(
             )
             loss_quantities[bulk_name].append(f"SE_loss{i}_{contact}")
 
-        if not params.soft_bc:
+        if not params.soft_bc and not params.soft_bc_output:
             continue
 
+        boundary_indices = (
+            range(0, N + 1) if params.soft_bc else (contact.out_boundary_index,)
+        )
+
         # Boundaries
-        for i in range(0, N + 1):
+        for i in boundary_indices:
             boundary_name = f"boundary{i}"
             loss_models.append(
                 MultiModel(
@@ -188,6 +193,9 @@ def get_loss_models(
                 )
             )
             loss_quantities[boundary_name].append(f"cc_loss{i}_{contact}")
+
+        if not params.soft_bc:
+            continue
 
         # Inner boundaries
         for i in range(1, N):
