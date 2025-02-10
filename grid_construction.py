@@ -1,12 +1,11 @@
 # Copyright (c) 2024 ETH Zurich, Patrice Kolb
 
 
-from typing import Dict
+from typing import Dict, Callable, Any
 import torch
 
 from kolpinn import grids
 from kolpinn.grids import Grid, Subgrid
-from kolpinn import batching
 
 import parameters as params
 from classes import Device
@@ -107,18 +106,23 @@ def get_unbatched_grids(
 
 
 def get_batched_grids(
-    unbatched_grids: dict[str, Grid],
-    batch_sizes: Dict[str, int] = {},
+    unbatched_grids: Dict[str, Grid],
     *,
+    batched_indices_dict_fn: Callable,
+    batching_kwargs: Dict[str, Any],
     device: Device,
     dx_dict: Dict[str, float],
-    randomize: bool,
 ) -> Dict[str, Grid]:
+    """
+    Batch "bulk" according to "batched_indices_dict_fn", then batch the layers
+    and boundaries consistently. The batched layers will be subgrids of
+    the batched "bulk".
+    """
+
     batched_grids: dict[str, Grid] = {}
-    batched_indices_dict = batching.get_equispaced_batched_indices_dict(
+    batched_indices_dict = batched_indices_dict_fn(
         unbatched_grids["bulk"],
-        batch_sizes,
-        randomize=randomize,
+        **batching_kwargs,
     )
 
     # Bulk
@@ -149,8 +153,8 @@ def get_batched_grids(
 
 
 def get_batched_layer_grids_as_subgrids(
-    batched_grids: dict[str, Grid], unbatched_grids: dict[str, Grid], *, device: Device
-) -> dict[str, Grid]:
+    batched_grids: Dict[str, Grid], unbatched_grids: Dict[str, Grid], *, device: Device
+) -> Dict[str, Grid]:
     """
     Return the batched grids "bulk{i}", which are subgrids of the batched "bulk",
     as subgrids of the unbatched "bulk{i}".

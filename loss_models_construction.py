@@ -23,6 +23,17 @@ def get_loss_models(
     """
     Get the weight-dependent models needed to calculate the loss
     and a dict containing the names of the quantities used as losses
+
+    Models:
+        phi_zero/one{i}_{contact}: Ansaetze modulated by the NN outputs
+        if params.hard_bc_dir != 0:
+            phi_zero/one{i}_{contact}_dx: Their derivative, only computed at the
+                input/output boundary of each layer if params.hard_bc_dir == +/-1
+        phi{i}_{contact}[_dx]: Wave function and its derivative
+        incoming/reflected/transmitted_coeff_{contact}: Prefactors to the corresponding
+            contact plane waves (if not fixed already in the constant models)
+        j{i}_{contact}: current density
+        j/SE/cc/wc_loss_{i}_{contact}: losses
     """
 
     loss_models: list[MultiModel] = []
@@ -33,6 +44,7 @@ def get_loss_models(
     for i in range(1, N + 1):
         loss_quantities[f"bulk{i}"] = []
     if params.soft_bc or params.soft_bc_output:
+        # Only the contact boundaries have losses if only soft_bc_output is True
         boundary_indices = range(0, N + 1) if params.soft_bc else (0, N)
         for i in boundary_indices:
             loss_quantities[f"boundary{i}"] = []

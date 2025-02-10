@@ -20,8 +20,8 @@ si_complex_dtype = torch.complex128
 # Models
 loaded_parameters_index = None
 loaded_parameters_NR_step = 1
-loaded_V_el_index = 427  # loaded_parameters_index  # 427
-loaded_V_el_NR_step = 1  # loaded_parameters_NR_step  # 1
+loaded_V_el_index = 427
+loaded_V_el_NR_step = loaded_parameters_NR_step  # 1
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -34,7 +34,7 @@ model_dtype = torch.float32
 
 # Training
 max_n_training_steps = None
-max_time = 15000
+max_time = None
 min_loss = 10000e-9
 report_each = 1
 Optimizer = torch.optim.LBFGS
@@ -57,7 +57,7 @@ batch_sizes: Dict[str, int] = {
 }
 n_newton_raphson_steps = 2
 newton_raphson_rate = 1
-reset_weights_per_nr_step = True
+reset_weights_per_nr_step = False
 soft_bc = False
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
@@ -74,7 +74,7 @@ use_phi_one = True
 
 # Plotting
 plot_each_voltage = 1
-plot_each_energy = 12
+plot_each_energy = 50
 extra_plots = True
 
 # Physical
@@ -83,12 +83,12 @@ VOLTAGE_STEP = 0.01 * consts.VOLT
 VOLTAGE_MAX = 0.0 * consts.VOLT
 VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
-# E_MIN = 1e-3 * consts.EV
-# E_STEP = 1e-3 * consts.EV
-# E_MAX = 0.3 * consts.EV
-E_MIN = 0.01 * consts.EV
-E_STEP = 1 * consts.EV
-E_MAX = 0.01 * consts.EV
+E_MIN = 1e-3 * consts.EV
+E_STEP = 1e-3 * consts.EV
+E_MAX = 0.6 * consts.EV
+# E_MIN = 0.01 * consts.EV
+# E_STEP = 1 * consts.EV
+# E_MAX = 0.01 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
@@ -102,11 +102,18 @@ CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
-# ansatz: determines how a/b_phase are calculated.
-#   none: Unity
-#   plane: Plane wave
-#   wkb: WKB solution
-#   half_wkb: a (input-output) is WKB, b unity
+energy_cutoff_delta = 0.05 * consts.EV
+
+"""
+ansatz: determines how a/b_phase are calculated.
+  none: Unity
+  plane: Plane wave
+  wkb: WKB solution
+  half_wkb: a (input-output) is WKB, b unity, swapped if hard_bc_dir == -1
+      This makes sure that both ansaetze approach (about) unity at the boundary where we
+      force the BC, such that the solution does not explode for highly negative
+      energies / thick barriers.
+"""
 ansatz = "half_wkb"  # "none", "plane", "wkb", "half_wkb"
 
 V_OOM = 0.3 * consts.EV

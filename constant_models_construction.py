@@ -21,6 +21,29 @@ def get_constant_models(
     dx_dict: Dict[str, float],
     V_el_function: Callable[[QuantityDict], torch.Tensor],  # Maps q to V_el
 ) -> Sequence[MultiModel]:
+    """
+    Return models that are independent of the trained parameters.
+
+    Models:
+        E_{contact}: The energy levels when propagating from `contact`.
+        V_int{i} / m_eff{i} / doping{i} / permittivity{i} / k{i}_{contact}:
+            Physical constants in the whole device
+        v{i}_{contact}: Physical constant computed only in the contacts, based on k
+        V_el{i}: Based on the provided V_el_function. At the contacts, V_el{0} = 0 and
+            V_el{N+1} = applied bias are forced (TODO: change that)
+        a/b_phase{i}_{contact}: The ansatz that will be modulated by the NN
+        E_fermi_{contact} / fermi_integral_{contact}: Global constants in "bulk"
+
+        if params.hard_bc_dir == 1:
+            incoming_coeff_{contact} = 1
+
+        if params.hard_bc_dir == -1:
+            transmitted_coeff_{contact} = 1
+            phi{i}_{contact} = 1 and
+            phi{i}_{contact}_dx = contact.direction * i * k
+            at the output contact.
+    """
+
     N = device.n_layers
     zero_model = model.ConstModel(0, model_dtype=params.si_real_dtype)
     one_model = model.ConstModel(1, model_dtype=params.si_real_dtype)
@@ -112,9 +135,8 @@ def get_constant_models(
                 / q[f"m_eff{i}"]
             )
 
-    if params.hard_bc_dir == -1:
-        # Output contact: Boundary conditions
-        for contact in device.contacts:
+        if params.hard_bc_dir == -1:
+            # Output contact: Boundary conditions
             i = contact.out_index
             const_models_dict[i][f"phi{i}_{contact}"] = one_model
             const_models_dict[i][f"phi{i}_{contact}_dx"] = model.FunctionModel(

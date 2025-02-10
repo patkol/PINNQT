@@ -94,13 +94,15 @@ def cc_loss_trafo(qs, *, i, contact):
     out_index = contact.get_out_layer_index(i)
 
     if i == contact.in_boundary_index:
+        a = qs["bulk"][f"incoming_coeff_{contact}"]
         r = qs["bulk"][f"reflected_coeff_{contact}"]
-        phi_dx_in = 1j * q[f"k{in_index}_{contact}"] * (1 - r)
+        # TODO: check the sign
+        phi_dx_in = contact.direction * 1j * q[f"k{in_index}_{contact}"] * (a - r)
     else:
         phi_dx_in = q[f"phi{in_index}_{contact}_dx"]
     if i == contact.out_boundary_index:
         t = qs["bulk"][f"transmitted_coeff_{contact}"]
-        phi_dx_out = 1j * q[f"k{out_index}_{contact}"] * t
+        phi_dx_out = contact.direction * 1j * q[f"k{out_index}_{contact}"] * t
     else:
         phi_dx_out = q[f"phi{out_index}_{contact}_dx"]
 

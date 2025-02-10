@@ -13,6 +13,12 @@ def get_eval_models(device: Device) -> Sequence[MultiModel]:
     """
     Get parameters which are used for the evaluation of the results, but not necessary
     for calculating the losses (these are in loss_models).
+
+    Models:
+        T/R_{contact}: Transmitted/reflected amplitude
+        I/n[_{contact}]: Current/density [from one contact only]
+        phi_{contact}: Wavefunction on "bulk"
+        DOS_{contact}: density of states from one contact only
     """
 
     eval_models: list[MultiModel] = []

@@ -17,6 +17,13 @@ def get_trained_models(
     *,
     dx_dict: Dict[str, float],
 ) -> Tuple[Sequence[MultiModel], Sequence[str]]:
+    """
+    Return models that represent the neural networks.
+
+    Models:
+        a/b_output{i}_{contact}: The NN output.
+    """
+
     trained_models: list[MultiModel] = []
     trained_models_labels: list[str] = []
 

@@ -446,7 +446,10 @@ def wkb_phase_trafo(
             a_phase, b_phase = RL_phase, LR_phase
 
         if params.ansatz == "half_wkb":
-            b_phase = torch.ones_like(b_phase)
+            if params.hard_bc_dir == -1:
+                a_phase = torch.ones_like(a_phase)
+            else:
+                b_phase = torch.ones_like(b_phase)
 
         for grid_name in grid_names:
             q = qs[grid_name]
@@ -700,10 +703,16 @@ def contact_coeffs_trafo(qs, *, contact):
 
     if params.hard_bc_dir == -1:
         # transmitted_coeff is fixed
+        """
+        phi = a * exp(sik(x-x0)) + r * exp(-sik(x-x0)) with s = contact.direction,
+        phi' = sik * (a * exp(sik(x-x0)) - r * exp(-sik(x-x0)))
+        => a * exp(sik(x-x0)) = (phi + phi'/sik) / 2
+        """
         k_in = q_in[f"k{contact.index}_{contact}"]
         q[f"incoming_coeff_{contact}"] = 0.5 * (
-            phi_in + phi_dx_in / (1j * contact.direction * k_in)
+            phi_in + phi_dx_in / (contact.direction * 1j * k_in)
         )
+
     else:
         # incoming_coeff is fixed
         phi_out, _ = get_phi_target(
