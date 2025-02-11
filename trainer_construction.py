@@ -10,9 +10,7 @@ from kolpinn import quantities
 from kolpinn.quantities import QuantityDict
 from kolpinn import batching
 from kolpinn import model
-from kolpinn.model import MultiModel
 from kolpinn import training
-from kolpinn.training import TrainerConfig, TrainerState
 
 import parameters as params
 from classes import Device
@@ -30,29 +28,6 @@ def get_dx_dict():
         dx_dict["_pdx"] = params.dx
 
     return dx_dict
-
-
-def get_trainer_state(
-    config: TrainerConfig,
-    const_qs: Dict[str, QuantityDict],
-    trained_models: Sequence[MultiModel],
-    dependent_models: Sequence[MultiModel],
-) -> TrainerState:
-    optimizer = training.get_optimizer(config, trained_models=trained_models)
-    scheduler = training.get_scheduler(
-        config.Scheduler,
-        optimizer,
-        **config.scheduler_kwargs,
-    )
-    state = training.TrainerState(
-        const_qs,
-        trained_models,
-        dependent_models,
-        optimizer,
-        scheduler,
-    )
-
-    return state
 
 
 def get_batched_qs_fn(
@@ -194,7 +169,7 @@ def get_trainer(
         min_loss=min_loss,
         optimizer_reset_tol=optimizer_reset_tol,
     )
-    state = get_trainer_state(
+    state = training.get_trainer_state(
         config,
         const_qs,
         trained_models,

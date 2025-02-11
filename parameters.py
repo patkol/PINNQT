@@ -18,7 +18,7 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 560
 loaded_parameters_NR_step = 1
 loaded_V_el_index = 427
 loaded_V_el_NR_step = loaded_parameters_NR_step  # 1

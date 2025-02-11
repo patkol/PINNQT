@@ -93,7 +93,7 @@ def get_updated_trainer(
         constant_models,
         quantities_requiring_grad,
     )
-    new_state = trainer_construction.get_trainer_state(
+    new_state = training.get_trainer_state(
         trainer.config,
         const_qs,
         trainer.state.trained_models,
@@ -148,17 +148,23 @@ if __name__ == "__main__":
         0 if params.loaded_V_el_index is None else params.loaded_V_el_NR_step
     )
     while True:  # Newton-Raphson loop
-        for energy_cutoff in energy_cutoffs:
-            save_subpath = f"newton_step{newton_raphson_step:04d}/up_to_{energy_cutoff / consts.EV:.2g}_eV"
+        save_subpath = f"newton_step{newton_raphson_step:04d}/"
+        save_path = saved_parameters_path + save_subpath
+        os.makedirs(save_path, exist_ok=True)
 
-            save_path = saved_parameters_path + save_subpath
-            os.makedirs(save_path, exist_ok=True)
+        for energy_cutoff in energy_cutoffs:
+            print()
+            print(f"Energy cutoff {energy_cutoff/consts.EV:.3g} eV")
+            print()
 
             # Set the trained energy range
             trainer.config.get_batched_qs_kwargs["batch_bounds"]["DeltaE"] = (
                 -float("inf"),
                 energy_cutoff,
             )
+
+            # Reset the state of the trainer
+            training.reset_trainer_state(trainer)
 
             # Train
             training.train(
@@ -168,49 +174,49 @@ if __name__ == "__main__":
                 save_subpath=save_subpath,
             )
 
-            # Print evaluation times
-            eval_times = dict(
-                sorted(
-                    trainer.state.evaluation_times.items(),
-                    key=lambda item: item[1],
-                    reverse=True,
-                )
+        # Print evaluation times
+        eval_times = dict(
+            sorted(
+                trainer.state.evaluation_times.items(),
+                key=lambda item: item[1],
+                reverse=True,
             )
-            total_eval_time = sum(eval_times.values())
-            eval_relatives = dict(
-                (key, value / total_eval_time) for key, value in eval_times.items()
-            )
-            print("Evaluation time: ", total_eval_time * 1e-9, "s")
-            for _, model_name in zip(range(25), eval_relatives):
-                print(f"{eval_relatives[model_name]:.1%} {model_name}")
+        )
+        total_eval_time = sum(eval_times.values())
+        eval_relatives = dict(
+            (key, value / total_eval_time) for key, value in eval_times.items()
+        )
+        print("Evaluation time: ", total_eval_time * 1e-9, "s")
+        for _, model_name in zip(range(25), eval_relatives):
+            print(f"{eval_relatives[model_name]:.1%} {model_name}")
 
-            # Get all quantities
-            extended_qs = training.get_extended_qs(
-                trainer.state, additional_models=eval_models
-            )
+        # Get all quantities
+        extended_qs = training.get_extended_qs(
+            trainer.state, additional_models=eval_models
+        )
 
-            # Save quantities and plots
-            saving.save_q_bulk(
-                extended_qs["bulk"],
-                path_prefix=f"data/{trainer.config.saved_parameters_index:04d}/"
-                + save_subpath,
-                included_quantities_labels=[
-                    "voltage",
-                    "DeltaE",
-                    "x",
-                    "E_L",
-                    "E_R",
-                    "V_el",
-                    "V_el_new",
-                    "n",
-                    "T_L",
-                    "T_R",
-                    "R_L",
-                    "R_R",
-                    "phi_L",
-                ],
-            )
-            plotting.save_plots(extended_qs, trainer, device, prefix=save_subpath)
+        # Save quantities and plots
+        saving.save_q_bulk(
+            extended_qs["bulk"],
+            path_prefix=f"data/{trainer.config.saved_parameters_index:04d}/"
+            + save_subpath,
+            included_quantities_labels=[
+                "voltage",
+                "DeltaE",
+                "x",
+                "E_L",
+                "E_R",
+                "V_el",
+                "V_el_new",
+                "n",
+                "T_L",
+                "T_R",
+                "R_L",
+                "R_R",
+                "phi_L",
+            ],
+        )
+        plotting.save_plots(extended_qs, trainer, device, prefix=save_subpath)
 
         # Set up the next Newton-Raphson step
         newton_raphson_step += 1
