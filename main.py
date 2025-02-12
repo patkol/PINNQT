@@ -116,12 +116,16 @@ if params.loaded_parameters_index is not None:
 
 if params.loaded_V_el_index is not None:
     # Replace V_el by the one from the loaded file
+    loaded_step, loaded_label = params.loaded_V_el_NR_step, "V_el"
+    if params.use_V_el_new:
+        loaded_step -= 1
+        loaded_label += "_new"
     loaded_q_bulk = torch.load(
-        f"data/{params.loaded_V_el_index:04d}/newton_step{params.loaded_V_el_NR_step:04d}/q_bulk.pkl"
+        f"data/{params.loaded_V_el_index:04d}/newton_step{loaded_step:04d}/q_bulk.pkl"
     )
     trainer = get_updated_trainer(
         trainer,
-        V_el=loaded_q_bulk["V_el"].to(params.device),
+        V_el=loaded_q_bulk[loaded_label].to(params.device),
         V_el_grid=loaded_q_bulk.grid,
         unbatched_grids=unbatched_grids,
         quantities_requiring_grad=quantities_requiring_grad,

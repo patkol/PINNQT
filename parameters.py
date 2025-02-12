@@ -18,10 +18,12 @@ si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 560
-loaded_parameters_NR_step = 1
-loaded_V_el_index = 427
+loaded_parameters_index = 562
+loaded_parameters_NR_step = 2
+loaded_V_el_index = 562  # 427
 loaded_V_el_NR_step = loaded_parameters_NR_step  # 1
+# use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
+use_V_el_new = True
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -55,7 +57,7 @@ batch_sizes: Dict[str, int] = {
     # "x": 1000,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 2
+n_newton_raphson_steps = 8
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
 soft_bc = False
