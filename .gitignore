@@ -2,6 +2,7 @@
 *.vim
 *.lprof
 *.code-workspace
+*.svg
 deprecated.txt
 matlab_results/
 tests/

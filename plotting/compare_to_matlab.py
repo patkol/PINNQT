@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt  # type: ignore
 
 torch.set_default_device("cpu")
 
-q_bulk = torch.load("../data/0539/newton_step0001/q_bulk.pkl")
-matlab_path = "../matlab_results/barrier/0V/newton_step0001/"
+q_bulk = torch.load("../data/0564/newton_step0003/q_bulk.pkl")
+matlab_path = "../matlab_results/barrier/0V/newton_step0003/"
 matlab_data = {}
 for name in ("E", "x", "n", "Vact_old", "Vact_new"):
     matlab_data[name] = np.loadtxt(
@@ -68,14 +68,16 @@ plt.plot(
 )
 plt.legend()
 plt.grid()
-plt.show()
+plt.savefig("phiL.svg")
+plt.clf()
 
 plt.title("n")
 plt.plot(grid["x"].cpu(), q_bulk["n"][voltage_index, 0, :].cpu(), label="PINNQT")
 plt.plot(matlab_data["x"], matlab_data["n"], label="MATLAB")
 plt.legend()
 plt.grid()
-plt.show()
+plt.savefig("n.svg")
+plt.clf()
 
 plt.title("V_el_old")
 plt.plot(grid["x"].cpu(), q_bulk["V_el"][voltage_index, 0, :].cpu(), label="PINNQT")
@@ -84,11 +86,13 @@ plt.plot(
 )
 plt.legend()
 plt.grid()
-plt.show()
+plt.savefig("V_el_old.svg")
+plt.clf()
 
 plt.title("V_el_new")
 plt.plot(grid["x"].cpu(), q_bulk["V_el_new"][voltage_index, 0, :].cpu(), label="PINNQT")
 plt.plot(matlab_data["x"], matlab_data["Vact_new"], label="MATLAB")
 plt.legend()
 plt.grid()
-plt.show()
+plt.savefig("V_el_new.svg")
+plt.clf()

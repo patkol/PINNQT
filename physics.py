@@ -141,8 +141,38 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        # TODO: respect the different permittivities while calculating the potential,
+        # TODO: respect the different permittivities while calculating the initial
+        #       potential,
         #       and set them to inf at the contacts to replace the "includes_contacts"
+        "includes_contacts": True,
+    },
+    "barrier1_extended_combined": {
+        "boundaries": [
+            0 * NM,
+            94 * NM,
+        ],
+        "potentials": [
+            0 * EV,
+            lambda q: 0.3 * EV * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
+            0 * EV,
+        ],
+        "m_effs": [
+            0.065 * M_E,
+            lambda q: 0.065 * M_E
+            + 0.035 * M_E * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
+            0.065 * M_E,
+        ],
+        "dopings": [
+            1e19 / CM**3,
+            lambda q: 1e19 / CM**3 * ((q["x"] < 30 * NM) + (q["x"] >= 64 * NM)),
+            1e19 / CM**3,
+        ],
+        "permittivities": [
+            12 * EPSILON_0,
+            lambda q: 12 * EPSILON_0
+            - 6 * EPSILON_0 * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
+            12 * EPSILON_0,
+        ],
         "includes_contacts": True,
     },
     # like matlab short_barrier, more heavily doped s.t. we can simulate shorter contacts
