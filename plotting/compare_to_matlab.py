@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Copyright (c) 2025 ETH Zurich, Patrice Kolb
+
+
 import numpy as np
 import torch
 import matplotlib.pyplot as plt  # type: ignore

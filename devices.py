@@ -1,8 +1,9 @@
-# Copyright (c) 2024 ETH Zurich, Patrice Kolb
+# Copyright (c) 2025 ETH Zurich, Patrice Kolb
 
 
 from physical_constants import NM, M_E, EPSILON_0, EV, CM
 import parameters as params
+import formulas
 
 
 # Devices
@@ -153,6 +154,52 @@ device_kwargs_dict: dict[str, dict] = {
             0.065 * M_E,
             lambda q: 0.065 * M_E
             + 0.035 * M_E * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
+            0.065 * M_E,
+        ],
+        "dopings": [
+            1e19 / CM**3,
+            lambda q: 1e19 / CM**3 * ((q["x"] < 30 * NM) + (q["x"] >= 64 * NM)),
+            1e19 / CM**3,
+        ],
+        "permittivities": [
+            12 * EPSILON_0,
+            lambda q: 12 * EPSILON_0
+            - 6 * EPSILON_0 * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
+            12 * EPSILON_0,
+        ],
+        "includes_contacts": True,
+    },
+    "barrier1_extended_combined_smoothed": {
+        "boundaries": [
+            0 * NM,
+            94 * NM,
+        ],
+        "potentials": [
+            0 * EV,
+            lambda q: 0.3 * EV * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
+            0 * EV,
+        ],
+        "m_effs": [
+            0.065 * M_E,
+            lambda q: 0.065 * M_E
+            + 0.035
+            * M_E
+            * (
+                formulas.smooth_transition(
+                    q["x"],
+                    x0=45 * NM - params.m_eff_smoothing_distance / 2,
+                    x1=45 * NM + params.m_eff_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+                - formulas.smooth_transition(
+                    q["x"],
+                    x0=49 * NM - params.m_eff_smoothing_distance / 2,
+                    x1=49 * NM + params.m_eff_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+            ),
             0.065 * M_E,
         ],
         "dopings": [

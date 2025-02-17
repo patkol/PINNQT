@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, Patrice Kolb
+
+
 import numpy as np
 
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2024 ETH Zurich, Patrice Kolb
+# Copyright (c) 2025 ETH Zurich, Patrice Kolb
 
 
 from typing import Dict, Any
@@ -11,7 +11,7 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "barrier1_extended"
+simulated_device_name = "barrier1_extended_combined_smoothed"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
@@ -36,7 +36,7 @@ model_dtype = torch.float32
 
 # Training
 max_n_training_steps = None
-max_time = None
+max_time = 100
 min_loss = 10000e-9
 report_each = 1
 Optimizer = torch.optim.LBFGS
@@ -57,7 +57,7 @@ batch_sizes: Dict[str, int] = {
     "x": 200,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 8
+n_newton_raphson_steps = 1
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
 soft_bc = False
@@ -94,7 +94,7 @@ E_MAX = 0.05 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
-X_STEP = 0.2 * consts.NM
+X_STEP = 0.05 * consts.NM
 
 TEMPERATURE = 300 * consts.KELVIN
 
@@ -105,6 +105,7 @@ CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
 energy_cutoff_delta = 0.05 * consts.EV
+m_eff_smoothing_distance = 4 * consts.NM
 
 """
 ansatz: determines how a/b_phase are calculated.
