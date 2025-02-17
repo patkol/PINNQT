@@ -7,9 +7,9 @@ from typing import Dict, Tuple, Callable
 from kolpinn import model
 from kolpinn.model import MultiModel
 
+from classes import Device
 import physical_constants as consts
 import parameters as params
-from classes import Device
 
 
 def get_trained_models(

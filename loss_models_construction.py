@@ -8,9 +8,10 @@ import torch
 from kolpinn import model
 from kolpinn.model import MultiModel
 
+from classes import Device
 import physical_constants as consts
 import parameters as params
-from classes import Device
+import formulas
 import loss
 import transformations as trafos
 
@@ -86,7 +87,7 @@ def get_loss_models(
             if params.hard_bc_dir != 0:
                 bc_boundary = boundary_in if params.hard_bc_dir == 1 else boundary_out
                 loss_models.append(
-                    trafos.get_dx_model(
+                    formulas.get_dx_model(
                         "multigrid" if params.fd_first_derivatives else "exact",
                         f"phi_zero{i}_{contact}",
                         bc_boundary,
@@ -94,7 +95,7 @@ def get_loss_models(
                 )
                 if params.use_phi_one:
                     loss_models.append(
-                        trafos.get_dx_model(
+                        formulas.get_dx_model(
                             "multigrid" if params.fd_first_derivatives else "exact",
                             f"phi_one{i}_{contact}",
                             bc_boundary,
@@ -116,7 +117,7 @@ def get_loss_models(
             )
             # phi_dx in bulk for current density
             loss_models.append(
-                trafos.get_dx_model(
+                formulas.get_dx_model(
                     "singlegrid" if params.fd_first_derivatives else "exact",
                     f"phi{i}_{contact}",
                     bulk,
@@ -126,7 +127,7 @@ def get_loss_models(
             # OPTIM: only calculate the needed BC based on which BC are applied
             for boundary in (boundary_in, boundary_out):
                 loss_models.append(
-                    trafos.get_dx_model(
+                    formulas.get_dx_model(
                         "multigrid" if params.fd_first_derivatives else "exact",
                         f"phi{i}_{contact}",
                         boundary,

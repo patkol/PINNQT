@@ -1,15 +1,8 @@
 # Copyright (c) 2024 ETH Zurich, Patrice Kolb
 
 
-import torch
-
+from physical_constants import NM, M_E, EPSILON_0, EV, CM
 import parameters as params
-from physical_constants import NM, M_E, EPSILON_0, EV, CM, H_BAR, K_B
-
-
-# Constants
-
-BETA = 1 / (K_B * params.TEMPERATURE)
 
 
 # Devices
@@ -403,12 +396,3 @@ device_kwargs_dict: dict[str, dict] = {
         "includes_contacts": True,
     },
 }
-
-device_kwargs = device_kwargs_dict[params.simulated_device_name]
-
-
-def k_function(m, E):
-    k_squared = 2 * m * E / H_BAR**2
-    k_squared = k_squared.to(params.si_complex_dtype)
-
-    return torch.sqrt(k_squared)

@@ -12,10 +12,10 @@ from kolpinn import batching
 from kolpinn import model
 from kolpinn import training
 
-import parameters as params
 from classes import Device
+import parameters as params
+import formulas
 import grid_construction
-import transformations as trafos
 from constant_models_construction import get_constant_models
 from trained_models_construction import get_trained_models
 from loss_models_construction import get_loss_models
@@ -127,7 +127,7 @@ def get_trainer(
     constant_models = get_constant_models(
         device,
         dx_dict=dx_dict,
-        V_el_function=lambda q: trafos.get_V_voltage(
+        V_el_function=lambda q: formulas.get_V_voltage(
             q, device.device_start, device.device_end
         ),
     )

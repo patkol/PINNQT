@@ -9,9 +9,10 @@ from kolpinn.quantities import QuantityDict
 from kolpinn import model
 from kolpinn.model import Model, MultiModel
 
+from classes import Device
 import physical_constants as consts
 import parameters as params
-from classes import Device
+import formulas
 import transformations as trafos
 
 
@@ -90,7 +91,7 @@ def get_constant_models(
             x_out = device.boundaries[contact.get_out_boundary_index(i)]
 
             models_dict[f"k{i}_{contact}"] = model.FunctionModel(
-                lambda q, i=i, contact=contact: trafos.k_function(q, i, contact),
+                lambda q, i=i, contact=contact: formulas.get_k(q, i, contact),
             )
 
             if params.ansatz == "none":

@@ -14,9 +14,9 @@ from kolpinn.training import Trainer
 from kolpinn import visualization
 from kolpinn.visualization import add_lineplot, save_lineplot, save_heatmap
 
+from classes import Device
 import physical_constants as consts
 import parameters as params
-from classes import Device
 
 
 def save_plots(

@@ -124,6 +124,8 @@ K_OOM = np.sqrt(2 * M_EFF_OOM * V_OOM / consts.H_BAR**2)
 CURRENT_CONTINUITY_OOM = K_OOM / M_EFF_OOM
 PROBABILITY_CURRENT_OOM = consts.H_BAR * K_OOM / M_EFF_OOM
 
+BETA = 1 / (consts.K_B * TEMPERATURE)
+
 
 assert hard_bc_dir in (1, -1, 0)
 assert ansatz in ("none", "plane", "wkb", "half_wkb")

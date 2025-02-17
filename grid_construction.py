@@ -7,8 +7,8 @@ import torch
 from kolpinn import grids
 from kolpinn.grids import Grid, Subgrid
 
-import parameters as params
 from classes import Device
+import parameters as params
 
 
 def get_voltages(*, V_min: float, V_max: float, V_step: float) -> torch.Tensor:

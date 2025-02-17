@@ -9,7 +9,6 @@ from kolpinn.quantities import get_fd_second_derivative, mean_dimension, restric
 
 import physical_constants as consts
 import parameters as params
-import physics
 
 
 def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
@@ -47,7 +46,7 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     residual /= params.V_OOM
     # Fermi-Dirac weighting
     residual *= 1 / (
-        1 + torch.exp(physics.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
+        1 + torch.exp(params.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
     )
     q[f"SE_loss{i}_{contact}"] = params.loss_function(residual)
 
@@ -66,7 +65,7 @@ def j_loss_trafo(qs, *, i, N, contact):
     # residual = torch.log(complex_abs2(prob_current / exact_prob_current))
     # Fermi-Dirac weighting
     residual *= 1 / (
-        1 + torch.exp(physics.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
+        1 + torch.exp(params.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
     )
     q[f"j_loss{i}_{contact}"] = params.loss_function(residual)
 

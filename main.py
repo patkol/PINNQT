@@ -21,10 +21,10 @@ from kolpinn import storage
 from kolpinn import training
 from kolpinn.training import Trainer
 
+from classes import Device
 import physical_constants as consts
 import parameters as params
-import physics
-from classes import Device
+import devices
 from constant_models_construction import get_constant_models
 from eval_models_construction import get_eval_models
 import trainer_construction
@@ -40,7 +40,9 @@ torch.set_default_device(params.device)
 torch.set_default_dtype(params.si_real_dtype)
 # torch.autograd.set_detect_anomaly(True)  # For debugging, very expensive
 
-device = Device(**physics.device_kwargs)
+
+device_kwargs = devices.device_kwargs_dict[params.simulated_device_name]
+device = Device(**device_kwargs)
 eval_models = get_eval_models(device)
 saved_parameters_index = storage.get_next_parameters_index()
 print("saved_parameters_index =", saved_parameters_index)
