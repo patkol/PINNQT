@@ -11,14 +11,14 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "barrier1_extended_combined"
+simulated_device_name = "barrier1_extended"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 573
+loaded_parameters_index = None
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None  # loaded_parameters_index  # 427
 loaded_V_el_NR_step = loaded_parameters_NR_step  # 1
@@ -35,7 +35,7 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = None
 min_loss = 10000e-9
 report_each = 1
@@ -116,7 +116,7 @@ ansatz: determines how a/b_phase are calculated.
       force the BC, such that the solution does not explode for highly negative
       energies / thick barriers.
 """
-ansatz = "half_wkb"  # "none", "plane", "wkb", "half_wkb"
+ansatz = "wkb"  # "none", "plane", "wkb", "half_wkb"
 
 V_OOM = 0.3 * consts.EV
 M_EFF_OOM = 0.1 * consts.M_E

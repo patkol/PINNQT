@@ -423,27 +423,24 @@ def wkb_phase_trafo(
             "x", x_L, sorted_integrand, sorted_supergrid
         )
         sorted_k_integral = smoothen(sorted_k_integral, sorted_supergrid, "x")
-
-        # Propagation left -> right
-        sorted_LR_phase = torch.exp(1j * sorted_k_integral)
-        LR_phase = quantities.combine_quantity(
-            [sorted_LR_phase], [sorted_supergrid], supergrid
+        k_integral_LR = quantities.combine_quantity(
+            [sorted_k_integral], [sorted_supergrid], supergrid
         )
-
-        # Propagation right -> left
         right_k_integral = quantities.restrict(
-            sorted_k_integral, supergrid.subgrids[f"boundary{right_boundary_index}"]
+            k_integral_LR, supergrid.subgrids[f"boundary{right_boundary_index}"]
         )
-        sorted_RL_phase = torch.exp(-1j * (sorted_k_integral - right_k_integral))
-        RL_phase = quantities.combine_quantity(
-            [sorted_RL_phase], [sorted_supergrid], supergrid
-        )
+        # k_integral_RL: integrating from x_R (k_integral integrates from x_L)
+        k_integral_RL = k_integral_LR - right_k_integral
 
-        # Make a the in and b the out direction
         if contact.direction == 1:
-            a_phase, b_phase = LR_phase, RL_phase
+            a_phase = torch.exp(1j * k_integral_LR)
+            # Conjugate k for the calculation of b_phase to ensure
+            # that it decays towards the output
+            b_phase = torch.exp(-1j * torch.conj(k_integral_LR))
+
         else:
-            a_phase, b_phase = RL_phase, LR_phase
+            a_phase = torch.exp(1j * torch.conj(k_integral_RL))
+            b_phase = torch.exp(-1j * k_integral_RL)
 
         if params.ansatz == "half_wkb":
             if params.hard_bc_dir == -1:
