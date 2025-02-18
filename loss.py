@@ -6,7 +6,7 @@
 import torch
 
 from kolpinn.mathematics import complex_abs2, grad
-from kolpinn.quantities import get_fd_second_derivative, mean_dimension, restrict
+from kolpinn import quantities
 
 import physical_constants as consts
 import parameters as params
@@ -22,20 +22,30 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     q_full = qs_full[f"bulk{i}"]
 
     if params.fd_second_derivatives:
-        phi_dx_dx = get_fd_second_derivative("x", q[f"phi{i}_{contact}"], q.grid)
-        hbar_phi_dx_over_m_dx = phi_dx_dx * (consts.H_BAR / q[f"m_eff{i}"])
+        if quantities.is_singleton_dimension("x", q[f"m_eff{i}"], q.grid):
+            phi_dx_dx = quantities.get_fd_second_derivative(
+                "x",
+                q[f"phi{i}_{contact}"],
+                q.grid,
+            )
+            phi_dx_over_m_dx = phi_dx_dx / q[f"m_eff{i}"]
+        else:
+            phi_dx_over_m_dx = quantities.get_fd_second_derivative(
+                "x",
+                q[f"phi{i}_{contact}"],
+                q.grid,
+                factor=1 / q[f"m_eff{i}"],
+            )
     else:
-        # Multiplying hbar here for numerical stability
-        hbar_phi_dx_over_m = q[f"phi{i}_{contact}_dx"] * (consts.H_BAR / q[f"m_eff{i}"])
-        hbar_phi_dx_over_m_dx_full = grad(
-            hbar_phi_dx_over_m,
+        phi_dx_over_m_dx_full = grad(
+            q[f"phi{i}_{contact}_dx"] / q[f"m_eff{i}"],
             q_full["x"],
             retain_graph=True,
             create_graph=with_grad,
         )
-        hbar_phi_dx_over_m_dx = restrict(hbar_phi_dx_over_m_dx_full, q.grid)
+        phi_dx_over_m_dx = quantities.restrict(phi_dx_over_m_dx_full, q.grid)
     residual = (
-        -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx
+        -0.5 * consts.H_BAR**2 * phi_dx_over_m_dx
         + (q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"]) * q[f"phi{i}_{contact}"]
     )
     # residual = -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx / q[f"phi{i}_{contact}"] + (
@@ -58,9 +68,9 @@ def j_loss_trafo(qs, *, i, N, contact):
     q = qs[f"bulk{i}"]
 
     prob_current = q[f"j{i}_{contact}"]
-    residual = prob_current - mean_dimension("x", prob_current, q.grid)
+    residual = prob_current - quantities.mean_dimension("x", prob_current, q.grid)
     residual /= complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
-    # residual /= mean_dimension("x", complex_abs2(q[f"phi{i}_{contact}"]), q.grid)
+    # residual /= quantities.mean_dimension("x", complex_abs2(q[f"phi{i}_{contact}"]), q.grid)
     residual /= params.PROBABILITY_CURRENT_OOM
     # exact_prob_current = qs["bulk"][f"j_exact_{contact}"]
     # residual = torch.log(complex_abs2(prob_current / exact_prob_current))
@@ -96,7 +106,6 @@ def cc_loss_trafo(qs, *, i, contact):
     if i == contact.in_boundary_index:
         a = qs["bulk"][f"incoming_coeff_{contact}"]
         r = qs["bulk"][f"reflected_coeff_{contact}"]
-        # TODO: check the sign
         phi_dx_in = contact.direction * 1j * q[f"k{in_index}_{contact}"] * (a - r)
     else:
         phi_dx_in = q[f"phi{in_index}_{contact}_dx"]

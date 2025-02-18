@@ -169,14 +169,31 @@ device_kwargs_dict: dict[str, dict] = {
         ],
         "includes_contacts": True,
     },
-    "barrier1_extended_combined_smoothed": {
+    "barrier1_combined_smoothed": {
         "boundaries": [
             0 * NM,
-            94 * NM,
+            34 * NM,
         ],
         "potentials": [
             0 * EV,
-            lambda q: 0.3 * EV * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
+            lambda q: 0.3
+            * EV
+            * (
+                formulas.smooth_transition(
+                    q["x"],
+                    x0=15 * NM - params.device_smoothing_distance / 2,
+                    x1=15 * NM + params.device_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+                - formulas.smooth_transition(
+                    q["x"],
+                    x0=19 * NM - params.device_smoothing_distance / 2,
+                    x1=19 * NM + params.device_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+            ),
             0 * EV,
         ],
         "m_effs": [
@@ -187,15 +204,78 @@ device_kwargs_dict: dict[str, dict] = {
             * (
                 formulas.smooth_transition(
                     q["x"],
-                    x0=45 * NM - params.m_eff_smoothing_distance / 2,
-                    x1=45 * NM + params.m_eff_smoothing_distance / 2,
+                    x0=15 * NM - params.device_smoothing_distance / 2,
+                    x1=15 * NM + params.device_smoothing_distance / 2,
                     y0=0,
                     y1=1,
                 )
                 - formulas.smooth_transition(
                     q["x"],
-                    x0=49 * NM - params.m_eff_smoothing_distance / 2,
-                    x1=49 * NM + params.m_eff_smoothing_distance / 2,
+                    x0=19 * NM - params.device_smoothing_distance / 2,
+                    x1=19 * NM + params.device_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+            ),
+            0.065 * M_E,
+        ],
+        "dopings": [
+            1e19 / CM**3,
+            0,
+            1e19 / CM**3,
+        ],
+        "permittivities": [
+            12 * EPSILON_0,
+            lambda q: 12 * EPSILON_0
+            - 6 * EPSILON_0 * (q["x"] >= 15 * NM) * (q["x"] < 19 * NM),
+            12 * EPSILON_0,
+        ],
+        "includes_contacts": False,
+    },
+    "barrier1_extended_combined_smoothed": {
+        "boundaries": [
+            0 * NM,
+            94 * NM,
+        ],
+        "potentials": [
+            0 * EV,
+            lambda q: 0.3
+            * EV
+            * (
+                formulas.smooth_transition(
+                    q["x"],
+                    x0=45 * NM - params.device_smoothing_distance / 2,
+                    x1=45 * NM + params.device_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+                - formulas.smooth_transition(
+                    q["x"],
+                    x0=49 * NM - params.device_smoothing_distance / 2,
+                    x1=49 * NM + params.device_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+            ),
+            0 * EV,
+        ],
+        "m_effs": [
+            0.065 * M_E,
+            lambda q: 0.065 * M_E
+            + 0.035
+            * M_E
+            * (
+                formulas.smooth_transition(
+                    q["x"],
+                    x0=45 * NM - params.device_smoothing_distance / 2,
+                    x1=45 * NM + params.device_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+                - formulas.smooth_transition(
+                    q["x"],
+                    x0=49 * NM - params.device_smoothing_distance / 2,
+                    x1=49 * NM + params.device_smoothing_distance / 2,
                     y0=0,
                     y1=1,
                 )
@@ -299,6 +379,51 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             6 * EPSILON_0,
             12 * EPSILON_0,
+            12 * EPSILON_0,
+        ],
+        "includes_contacts": False,
+    },
+    "barrier3_combined_smoothed": {
+        "boundaries": [
+            0 * NM,
+            34 * NM,
+        ],
+        "potentials": [
+            0 * EV,
+            lambda q: 0.3
+            * EV
+            * (
+                formulas.smooth_transition(
+                    q["x"],
+                    x0=15 * NM - params.device_smoothing_distance / 2,
+                    x1=15 * NM + params.device_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+                - formulas.smooth_transition(
+                    q["x"],
+                    x0=19 * NM - params.device_smoothing_distance / 2,
+                    x1=19 * NM + params.device_smoothing_distance / 2,
+                    y0=0,
+                    y1=1,
+                )
+            ),
+            0 * EV,
+        ],
+        "m_effs": [
+            0.065 * M_E,
+            0.065 * M_E,
+            0.065 * M_E,
+        ],
+        "dopings": [
+            1e19 / CM**3,
+            0,
+            1e19 / CM**3,
+        ],
+        "permittivities": [
+            12 * EPSILON_0,
+            lambda q: 12 * EPSILON_0
+            - 6 * EPSILON_0 * (q["x"] >= 15 * NM) * (q["x"] < 19 * NM),
             12 * EPSILON_0,
         ],
         "includes_contacts": False,

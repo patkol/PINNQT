@@ -212,8 +212,8 @@ def wkb_phase_trafo(
             b_phase = torch.exp(-1j * torch.conj(k_integral_LR))
 
         else:
-            a_phase = torch.exp(1j * torch.conj(k_integral_RL))
-            b_phase = torch.exp(-1j * k_integral_RL)
+            a_phase = torch.exp(-1j * k_integral_RL)
+            b_phase = torch.exp(1j * torch.conj(k_integral_RL))
 
         if params.ansatz == "half_wkb":
             if params.hard_bc_dir == -1:
@@ -363,10 +363,10 @@ def hard_bc_in_phi_trafo(
 ):
     """
     d * (phi0 [+ phi1]) at the input boundary.
-    Condition: phi' = gamma * (2 - phi) at the input contact.
-    with gamma := m_eff_device / m_eff_contact * i * k_contact.
+    Condition: phi' = gamma * (2a - phi) at the input contact.
+    with gamma := contact.direction * m_eff_device / m_eff_contact * i * k_contact.
     Solved by d * phi_old
-    with d = 2 / (phi_old_contact' / gamma + phi_old_contact)
+    with d = 2a / (phi_old_contact' / gamma + phi_old_contact)
     """
 
     assert direction == 1  # Don't need this special trafo for output -> input
@@ -378,12 +378,14 @@ def hard_bc_in_phi_trafo(
     phi_boundary = formulas.get_simple_phi(q_boundary, i=i, contact=contact)
     phi_dx_boundary = formulas.get_simple_phi_dx(q_boundary, i=i, contact=contact)
     gamma = (
-        q_boundary[f"m_eff{i}"]
+        contact.direction
+        * q_boundary[f"m_eff{i}"]
         / q_boundary[f"m_eff{contact.index}"]
         * 1j
         * q_boundary[f"k{contact.index}_{contact}"]
     )
-    d = 2 / (phi_dx_boundary / gamma + phi_boundary)
+    a = qs["bulk"][f"incoming_coeff_{contact}"]
+    d = 2 * a / (phi_dx_boundary / gamma + phi_boundary)
 
     for grid_name in grid_names:
         q = qs[grid_name]
