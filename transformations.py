@@ -402,9 +402,10 @@ def hard_bc_out_phi_trafo(
     Force the output BC at the output boundary without affecting the WF
     at the input boundary.
     BC on the output boundary: There can only be an
-    outgoing wave there. The criterion for that is i*k*phi = phi_dx.
+    outgoing wave there. The criterion for that is contact.direction*i*k*phi = phi_dx.
     Assuming that there the eff mass & potential plateau towards the
-    contacts - then the solution should approach e^{ikx}.
+    contacts - then the solution should approach t * e^{contact.direction*ikx}.
+    As t we use the value of the current phi at the output.
     """
 
     assert direction == 1  # Don't need this special trafo for output -> input
@@ -414,15 +415,27 @@ def hard_bc_out_phi_trafo(
     q_out_boundary = qs[f"boundary{contact.get_out_boundary_index(i)}"]
     x_in, x_out = q_in_boundary["x"].item(), q_out_boundary["x"].item()
 
+    max_transition_distance = abs(x_out - x_in)
+    assert (
+        params.hard_bc_output_transition_distance <= max_transition_distance
+    ), f'The "hard_bc_output_transition_distance" is too wide, must be less than {max_transition_distance / consts.NM} nm for the current device'
+
     for grid_name in grid_names:
         q = qs[grid_name]
         delta_x = q["x"] - q_out_boundary["x"]
-        plane_wave_phase = torch.exp(1j * q_out_boundary[f"k{i}_{contact}"] * delta_x)
+        plane_wave_phase = torch.exp(
+            contact.direction * 1j * q_out_boundary[f"k{i}_{contact}"] * delta_x
+        )
         # TODO: Force the correct transmitted amplitude based on the reflected one
         phi_out = q_out_boundary[f"phi{i}_{contact}"] * plane_wave_phase
 
         # Transition to phi_out
-        transition_function = formulas.smooth_transition(q["x"], x_in, x_out, 1, 0)
+        transition_start = (
+            x_out - contact.direction * params.hard_bc_output_transition_distance
+        )
+        transition_function = formulas.smooth_transition(
+            q["x"], transition_start, x_out, 1, 0
+        )
         q.overwrite(
             f"phi{i}_{contact}",
             transition_function * q[f"phi{i}_{contact}"]

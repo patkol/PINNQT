@@ -11,7 +11,7 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "free1"
+simulated_device_name = "barrier1"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
@@ -60,7 +60,7 @@ batch_sizes: Dict[str, int] = {
 n_newton_raphson_steps = 1
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
-soft_bc = False
+soft_bc = True
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
 soft_bc_output = True
@@ -72,6 +72,7 @@ hard_bc_dir = 1
 # hard_bc_output: Whether to enforce hard BC on the output contact,
 # only has an effect if hard_bc_dir == 1
 hard_bc_output = False
+hard_bc_output_transition_distance = 10 * consts.NM
 use_phi_one = True
 
 # Plotting
