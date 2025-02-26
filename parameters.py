@@ -11,7 +11,7 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "barrier1"
+simulated_device_name = "barrier1_extended_3layers"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
@@ -19,11 +19,11 @@ si_complex_dtype = torch.complex128
 
 # Models
 loaded_parameters_index = None
-loaded_parameters_NR_step = 0
-loaded_V_el_index = None  # loaded_parameters_index  # 427
-loaded_V_el_NR_step = loaded_parameters_NR_step  # 1
+loaded_parameters_NR_step = 1
+loaded_V_el_index = None  # loaded_parameters_index
+loaded_V_el_NR_step = 1  # loaded_parameters_NR_step
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
-use_V_el_new = False
+use_V_el_new = True
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
@@ -57,10 +57,10 @@ batch_sizes: Dict[str, int] = {
     # "x": 200,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 1
+n_newton_raphson_steps = 8
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
-soft_bc = True
+soft_bc = False
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
 soft_bc_output = True
@@ -74,6 +74,9 @@ hard_bc_dir = 1
 hard_bc_output = False
 hard_bc_output_transition_distance = 10 * consts.NM
 use_phi_one = True
+U_input_scale = 0.1 * consts.VOLT
+E_input_scale = 0.1 * consts.EV
+x_input_scale = 10 * consts.NM
 
 # Plotting
 plot_each_voltage = 1
@@ -88,10 +91,10 @@ VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
 E_MIN = 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
-E_MAX = 0.05 * consts.EV
+E_MAX = 0.6 * consts.EV
 # E_MIN = 0.05 * consts.EV
-# E_STEP = 0.01 * consts.EV
-# E_MAX = 0.4 * consts.EV
+# E_STEP = 0.05 * consts.EV
+# E_MAX = 0.05 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
@@ -105,7 +108,7 @@ CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
-energy_cutoff_delta = E_MAX  # 0.05 * consts.EV
+energy_cutoff_delta = 0.05 * consts.EV
 device_smoothing_distance = 4 * consts.NM
 
 """

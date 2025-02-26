@@ -523,6 +523,30 @@ def save_plots(
                         x_unit_name="nm",
                         path_prefix=extra_prefix,
                     )
+                    save_heatmap(
+                        torch.real(q_layer[f"{c}_output{i}_{contact}"]),
+                        q_layer.grid,
+                        f"Re[{c}_output{i}_{contact}]",
+                        "x",
+                        "DeltaE",
+                        x_unit=consts.NM,
+                        x_unit_name="nm",
+                        y_unit=consts.EV,
+                        y_unit_name="eV",
+                        path_prefix=extra_prefix,
+                    )
+                    save_heatmap(
+                        torch.imag(q_layer[f"{c}_output{i}_{contact}"]),
+                        q_layer.grid,
+                        f"Im[{c}_output{i}_{contact}]",
+                        "x",
+                        "DeltaE",
+                        x_unit=consts.NM,
+                        x_unit_name="nm",
+                        y_unit=consts.EV,
+                        y_unit_name="eV",
+                        path_prefix=extra_prefix,
+                    )
 
                 save_lineplot(
                     torch.real(q_layer_reduced[f"phi_zero{i}_{contact}"]),

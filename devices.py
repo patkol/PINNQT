@@ -140,6 +140,43 @@ device_kwargs_dict: dict[str, dict] = {
         #       and set them to inf at the contacts to replace the "includes_contacts"
         "includes_contacts": True,
     },
+    "barrier1_extended_3layers": {
+        "boundaries": [
+            0 * NM,
+            45 * NM,
+            49 * NM,
+            94 * NM,
+        ],
+        "potentials": [
+            0 * EV,
+            0 * EV,
+            0.3 * EV,
+            0 * EV,
+            0 * EV,
+        ],
+        "m_effs": [
+            0.065 * M_E,
+            0.065 * M_E,
+            0.1 * M_E,
+            0.065 * M_E,
+            0.065 * M_E,
+        ],
+        "dopings": [
+            1e19 / CM**3,
+            lambda q: 1e19 / CM**3 * (q["x"] < 30 * NM),
+            0,
+            lambda q: 1e19 / CM**3 * (q["x"] >= 64 * NM),
+            1e19 / CM**3,
+        ],
+        "permittivities": [
+            12 * EPSILON_0,
+            12 * EPSILON_0,
+            6 * EPSILON_0,
+            12 * EPSILON_0,
+            12 * EPSILON_0,
+        ],
+        "includes_contacts": True,
+    },
     "barrier1_extended_combined": {
         "boundaries": [
             0 * NM,

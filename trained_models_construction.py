@@ -8,7 +8,6 @@ from kolpinn import model
 from kolpinn.model import MultiModel
 
 from classes import Device
-import physical_constants as consts
 import parameters as params
 
 
@@ -49,9 +48,12 @@ def get_trained_models(
         inputs_labels.append("x")
 
         model_transformations: Dict[str, Callable] = {
-            "x": lambda x, q, x_left=x_left, x_right=x_right: (x - x_left)
-            / (x_right - x_left),
-            "DeltaE": lambda E, q: E / consts.EV,
+            "x": lambda x, q, x_left=x_left, x_right=x_right: (
+                x - (x_left + x_right) / 2
+            )
+            / params.x_input_scale,
+            "DeltaE": lambda E, q: E / params.E_input_scale,
+            "voltage": lambda U, q: U / params.U_input_scale,
         }
 
         for contact in device.contacts:
