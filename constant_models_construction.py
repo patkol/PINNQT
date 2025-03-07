@@ -96,32 +96,10 @@ def get_constant_models(
 
             if params.ansatz == "none":
                 models_dict[f"a_phase{i}_{contact}"] = one_model
-            elif params.ansatz == "plane":
-                # The shifts by x_out are important for
-                # energies smaller than V, it keeps them from exploding for layers
-                # far away from the contacts. It can still get large/tiny for
-                # thick layers.
-                models_dict[f"a_phase{i}_{contact}"] = model.FunctionModel(
-                    lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
-                        contact.direction
-                        * 1j
-                        * q[f"smooth_k{i}_{contact}"]
-                        * (q["x"] - x_out)  # TODO: x_in?
-                    ),
-                )
             if not params.use_phi_one:
                 continue
             if params.ansatz == "none":
                 models_dict[f"b_phase{i}_{contact}"] = one_model
-            elif params.ansatz == "plane":
-                models_dict[f"b_phase{i}_{contact}"] = model.FunctionModel(
-                    lambda q, i=i, x_out=x_out, contact=contact: torch.exp(
-                        -contact.direction
-                        * 1j
-                        * q[f"smooth_k{i}_{contact}"]
-                        * (q["x"] - x_out)
-                    ),
-                )
 
     # Both contacts
     const_models_dict[0]["V_el0"] = zero_model
