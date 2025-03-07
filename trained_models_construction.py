@@ -3,7 +3,11 @@
 
 from collections.abc import Sequence
 from typing import Dict, Tuple, Callable
+import torch
 
+from kolpinn import grids
+from kolpinn import quantities
+from kolpinn.quantities import QuantityDict
 from kolpinn import model
 from kolpinn.model import MultiModel
 
@@ -52,46 +56,100 @@ def get_trained_models(
                 x - (x_left + x_right) / 2
             )
             / params.x_input_scale,
-            "DeltaE": lambda E, q: E / params.E_input_scale,
+            "DeltaE": lambda E, q: E / params.E_input_scale
+            + (
+                0
+                if params.E_input_scale_sqrt is None
+                else torch.sqrt(E / params.E_input_scale_sqrt)
+            ),
             "voltage": lambda U, q: U / params.U_input_scale,
         }
 
         for contact in device.contacts:
-            cs = ("a", "b") if params.use_phi_one else ("a",)
-            for c in cs:
-                nn_model = model.SimpleNNModel(
-                    inputs_labels,
-                    params.activation_function,
-                    n_neurons_per_hidden_layer=params.n_neurons_per_hidden_layer,
-                    n_hidden_layers=params.n_hidden_layers,
-                    model_dtype=params.model_dtype,
-                    output_dtype=params.si_complex_dtype,
-                    device=params.device,
-                )
+            # The part below is partly a code duplication with `SimpleNNModel`,
+            # `TransformedModel`, and
+            # `get_combined_multi_model` from kolpinn.model.
+            # It is reimplemented here to allow for two outputs (a and b)
+            nn = model.SimpleNetwork(
+                params.activation_function,
+                n_inputs=len(inputs_labels),
+                n_outputs=4,
+                n_neurons_per_hidden_layer=params.n_neurons_per_hidden_layer,
+                n_hidden_layers=params.n_hidden_layers,
+                dtype=params.model_dtype,
+            )
 
-                output_transformation = None
-                # DEBUG: Free space solution w/ correct tensor shape
-                # if (contact.name == "L" and c == "a") or (
-                #     contact.name == "R" and c == "b"
-                # ):
-                #     output_transformation = lambda quantity, q: quantity * 0 + 1
-                # else:
-                #     output_transformation = lambda quantity, q: quantity * 0
-
-                c_model = model.TransformedModel(
-                    nn_model,
-                    input_transformations=model_transformations,
-                    output_transformation=output_transformation,
+            def qs_trafo(
+                qs: Dict[str, QuantityDict],
+                *,
+                grid_names=layer_grids,
+                combined_dimension_name="x",
+                required_quantities_labels=["voltage", "DeltaE", "x"],
+                n_inputs=len(inputs_labels),
+                nn=nn,
+                model_transformations=model_transformations,
+                i=i,
+                contact=contact,
+            ):
+                child_grids = dict(
+                    (grid_name, qs[grid_name].grid) for grid_name in grid_names
                 )
-                trained_models.append(
-                    model.get_combined_multi_model(
-                        c_model,
-                        f"{c}_output{i}_{contact}",
-                        layer_grids,
-                        combined_dimension_name="x",
-                        required_quantities_labels=["voltage", "DeltaE", "x"],
+                supergrid = grids.Supergrid(
+                    child_grids,
+                    combined_dimension_name,
+                    copy_all=False,
+                )
+                q = QuantityDict(supergrid)
+                for label in required_quantities_labels:
+                    q[label] = quantities.combine_quantity(
+                        [qs[child_name][label] for child_name in grid_names],
+                        list(supergrid.subgrids.values()),
+                        supergrid,
                     )
+
+                # Evaluate the NN
+
+                # inputs_tensor[gridpoint, input quantity]
+                inputs_tensor = torch.zeros(
+                    (q.grid.n_points, n_inputs),
+                    dtype=params.model_dtype,
                 )
-                trained_models_labels.append(f"{c}_output{i}_{contact}")
+                for input_index, label in enumerate(inputs_labels):
+                    transformed_input = model_transformations[label](q[label], q)
+                    inputs_tensor[:, input_index] = quantities.expand_all_dims(
+                        transformed_input,
+                        q.grid,
+                    ).flatten()
+                output = nn(inputs_tensor)
+                a_output = torch.view_as_complex(output[..., :2])
+                b_output = torch.view_as_complex(output[..., 2:])
+                a_output = a_output.reshape(q.grid.shape)
+                b_output = b_output.reshape(q.grid.shape)
+                a_output = a_output.to(params.si_complex_dtype)
+                b_output = b_output.to(params.si_complex_dtype)
+                # DEBUG: Output 1
+                # a_output = 0 * a_output + 1
+                # b_output = 0 * b_output + 1
+
+                for grid_name in grid_names:
+                    qs[grid_name][f"a_output{i}_{contact}"] = quantities.restrict(
+                        a_output,
+                        supergrid.subgrids[grid_name],
+                    )
+                    qs[grid_name][f"b_output{i}_{contact}"] = quantities.restrict(
+                        b_output,
+                        supergrid.subgrids[grid_name],
+                    )
+
+                return qs
+
+            nn_model = MultiModel(
+                qs_trafo,
+                f"NN{i}_{contact}",
+                parameters_in=list(nn.parameters()),
+                networks_in=[nn],
+            )
+            trained_models.append(nn_model)
+            trained_models_labels.append(f"NN{i}_{contact}")
 
     return trained_models, trained_models_labels

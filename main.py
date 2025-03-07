@@ -202,6 +202,7 @@ if __name__ == "__main__":
         )
 
         # Save quantities and plots
+        print("Saving quantities...")
         saving.save_q_bulk(
             extended_qs["bulk"],
             path_prefix=f"data/{trainer.config.saved_parameters_index:04d}/"
@@ -222,7 +223,10 @@ if __name__ == "__main__":
                 "phi_L",
             ],
         )
+        print("Done saving quantities")
+        print("Saving plots...")
         plotting.save_plots(extended_qs, trainer, device, prefix=save_subpath)
+        print("Done saving plots")
 
         # Set up the next Newton-Raphson step
         newton_raphson_step += 1
