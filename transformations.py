@@ -216,10 +216,11 @@ def wkb_phase_trafo(
             b_phase = torch.exp(1j * torch.conj(k_integral_RL))
 
         if params.ansatz == "half_wkb":
-            if params.hard_bc_dir == -1:
-                a_phase = torch.ones_like(a_phase)
-            else:
-                b_phase = torch.ones_like(b_phase)
+            b_phase = torch.ones_like(b_phase)
+
+        if params.ignore_wkb_phase:
+            a_phase = torch.abs(a_phase)
+            b_phase = torch.abs(b_phase)
 
         for grid_name in grid_names:
             q = qs[grid_name]

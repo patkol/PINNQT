@@ -20,7 +20,7 @@ si_complex_dtype = torch.complex128
 # Models
 loaded_parameters_index = None
 loaded_parameters_NR_step = 2
-loaded_V_el_index = 674
+loaded_V_el_index = None  # 674
 loaded_V_el_NR_step = loaded_parameters_NR_step
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
 use_V_el_new = True
@@ -121,7 +121,8 @@ ansatz: determines how a/b_phase are calculated.
       force the BC, such that the solution does not explode for highly negative
       energies / thick barriers.
 """
-ansatz = "wkb"
+ansatz = "none"
+ignore_wkb_phase = True  # Whether to use the absolute value as the wkb ansatz
 
 V_OOM = 0.3 * consts.EV
 M_EFF_OOM = 0.1 * consts.M_E
