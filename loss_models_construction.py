@@ -109,12 +109,18 @@ def get_loss_models(
                     trafos.phi_trafo,
                     f"phi{i}_{contact}",
                     kwargs={
+                        "learn_phi_prime": params.learn_phi_prime,
                         "i": i,
                         "contact": contact,
                         "grid_names": boundaries_in + bulks + boundaries_out,
                     },
                 )
             )
+
+            if params.learn_phi_prime:
+                # The derivative has been computed in phi_trafo already
+                continue
+
             # phi_dx in bulk for current density
             loss_models.append(
                 formulas.get_dx_model(

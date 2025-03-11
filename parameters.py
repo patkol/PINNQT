@@ -11,7 +11,7 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "barrier1_extended_3layers"
+simulated_device_name = "barrier1_extended_combined"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
@@ -60,7 +60,7 @@ batch_sizes: Dict[str, int] = {
 n_newton_raphson_steps = 3
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
-soft_bc = False
+soft_bc = True
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
 soft_bc_output = True
@@ -68,12 +68,13 @@ soft_bc_output = True
 # 1: Force BC from input to output contact
 # -1: vice versa
 # 0: no hard BC
-hard_bc_dir = -1
+hard_bc_dir = 1
 # hard_bc_output: Whether to enforce hard BC on the output contact,
 # only has an effect if hard_bc_dir == 1
 hard_bc_output = False
 hard_bc_output_transition_distance = 10 * consts.NM
-use_phi_one = True
+use_phi_one = False
+learn_phi_prime = True
 U_input_scale = 0.1 * consts.VOLT
 E_input_scale = 0.1 * consts.EV
 E_input_scale_sqrt = 2e-2 * consts.EV
