@@ -472,36 +472,36 @@ def save_plots(
 
                 cs = ("a", "b") if params.use_phi_one else ("a",)
                 for c in cs:
-                    save_lineplot(
-                        torch.real(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
-                        q_layer_reduced.grid,
-                        f"Re[{c}_phase{i}_{contact}]",
-                        "x",
-                        "DeltaE",
-                        x_unit=consts.NM,
-                        x_unit_name="nm",
-                        path_prefix=extra_prefix,
-                    )
-                    save_lineplot(
-                        torch.imag(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
-                        q_layer_reduced.grid,
-                        f"Im[{c}_phase{i}_{contact}]",
-                        "x",
-                        "DeltaE",
-                        x_unit=consts.NM,
-                        x_unit_name="nm",
-                        path_prefix=extra_prefix,
-                    )
-                    save_lineplot(
-                        complex_abs2(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
-                        q_layer_reduced.grid,
-                        f"|{c}_phase{i}_{contact}|^2",
-                        "x",
-                        "DeltaE",
-                        x_unit=consts.NM,
-                        x_unit_name="nm",
-                        path_prefix=extra_prefix,
-                    )
+                    # save_lineplot(
+                    #     torch.real(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
+                    #     q_layer_reduced.grid,
+                    #     f"Re[{c}_phase{i}_{contact}]",
+                    #     "x",
+                    #     "DeltaE",
+                    #     x_unit=consts.NM,
+                    #     x_unit_name="nm",
+                    #     path_prefix=extra_prefix,
+                    # )
+                    # save_lineplot(
+                    #     torch.imag(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
+                    #     q_layer_reduced.grid,
+                    #     f"Im[{c}_phase{i}_{contact}]",
+                    #     "x",
+                    #     "DeltaE",
+                    #     x_unit=consts.NM,
+                    #     x_unit_name="nm",
+                    #     path_prefix=extra_prefix,
+                    # )
+                    # save_lineplot(
+                    #     complex_abs2(q_layer_reduced[f"{c}_phase{i}_{contact}"]),
+                    #     q_layer_reduced.grid,
+                    #     f"|{c}_phase{i}_{contact}|^2",
+                    #     "x",
+                    #     "DeltaE",
+                    #     x_unit=consts.NM,
+                    #     x_unit_name="nm",
+                    #     path_prefix=extra_prefix,
+                    # )
 
                     save_lineplot(
                         torch.real(q_layer_reduced[f"{c}_output{i}_{contact}"]),

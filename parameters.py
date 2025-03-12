@@ -11,7 +11,7 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "barrier1_extended_combined"
+simulated_device_name = "barrier1_extended_3layers"
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
@@ -19,7 +19,7 @@ si_complex_dtype = torch.complex128
 
 # Models
 loaded_parameters_index = None
-loaded_parameters_NR_step = 2
+loaded_parameters_NR_step = 0
 loaded_V_el_index = None  # 674
 loaded_V_el_NR_step = loaded_parameters_NR_step
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
@@ -35,7 +35,7 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 0
 max_time = None
 min_loss = 10000e-9
 report_each = 1
@@ -57,10 +57,10 @@ batch_sizes: Dict[str, int] = {
     # "x": 200,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 3
+n_newton_raphson_steps = 1
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
-soft_bc = True
+soft_bc = False
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
 soft_bc_output = True
@@ -68,7 +68,7 @@ soft_bc_output = True
 # 1: Force BC from input to output contact
 # -1: vice versa
 # 0: no hard BC
-hard_bc_dir = 1
+hard_bc_dir = -1
 # hard_bc_output: Whether to enforce hard BC on the output contact,
 # only has an effect if hard_bc_dir == 1
 hard_bc_output = False
@@ -93,7 +93,7 @@ VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
 E_MIN = 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
-E_MAX = 0.6 * consts.EV
+E_MAX = 0.05 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV

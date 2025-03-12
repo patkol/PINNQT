@@ -451,7 +451,8 @@ def phi_trafo_learn_phi_prime(
 ):
     """Interpret phi_zero/one as 1/m phi'"""
 
-    assert direction in (1, -1)  # Need some values to start the integration
+    # Need some values to start the integration, naturally leading to hard bc
+    assert direction in (1, -1)
 
     for grid_name in grid_names:
         q = qs[grid_name]
@@ -459,6 +460,46 @@ def phi_trafo_learn_phi_prime(
         if params.use_phi_one:
             phi_dx_over_m += q[f"phi_one{i}_{contact}"]
         q[f"phi{i}_{contact}_dx"] = q[f"m_eff{i}"] * phi_dx_over_m
+
+    boundary_index = (
+        contact.get_in_boundary_index(i)
+        if direction == 1
+        else contact.get_out_boundary_index(i)
+    )
+    q_boundary = qs[f"boundary{boundary_index}"]
+    x_boundary = q_boundary.grid["x"].item()
+
+    if direction == 1 and i == contact.in_layer_index:
+        gamma = (
+            contact.direction
+            * q_boundary[f"m_eff{i}"]
+            / q_boundary[f"m_eff{contact.index}"]
+            * 1j
+            * q_boundary[f"k{contact.index}_{contact}"]
+        )
+        a = qs["bulk"][f"incoming_coeff_{contact}"]
+        phi_dx_boundary = q_boundary[f"phi{i}_{contact}_dx"]
+        phi_boundary = 2 * a - phi_dx_boundary / gamma
+
+    else:
+        prev_layer_index = (
+            contact.get_in_layer_index(boundary_index)
+            if direction == 1
+            else contact.get_out_layer_index(boundary_index)
+        )
+        # Find the phi to start the integration from
+        phi_boundary = q_boundary[f"phi{prev_layer_index}_{contact}"]
+        # Find a correction factor d to phi_dx s.t. cc is satisfied
+        phi_dx_boundary_current = q_boundary[f"phi{i}_{contact}_dx"]
+        phi_dx_boundary_target = (
+            q_boundary[f"phi{prev_layer_index}_{contact}_dx"]
+            * q_boundary[f"m_eff{i}"]
+            / q_boundary[f"m_eff{prev_layer_index}"]
+        )
+        d = phi_dx_boundary_target / phi_dx_boundary_current
+        for grid_name in grid_names:
+            q = qs[grid_name]
+            q.overwrite(f"phi{i}_{contact}_dx", d * q[f"phi{i}_{contact}_dx"])
 
     # Integrate phi'
     # Code duplication w/ WKB ansatz
@@ -472,35 +513,6 @@ def phi_trafo_learn_phi_prime(
         phi_dxs, list(supergrid.subgrids.values()), supergrid
     )
     sorted_integrand = quantities.restrict(integrand, sorted_supergrid)
-    boundary_index = (
-        contact.get_in_boundary_index(i)
-        if direction == 1
-        else contact.get_out_boundary_index(i)
-    )
-    prev_layer_index = (
-        contact.get_in_layer_index(boundary_index)
-        if direction == 1
-        else contact.get_out_layer_index(boundary_index)
-    )
-    q_boundary = qs[f"boundary{boundary_index}"]
-    x_boundary = q_boundary.grid["x"].item()
-
-    # Find phi at the boundary to start the integration from
-    if direction == 1 and i == contact.in_layer_index:
-        """Condition: phi = 2a - phi_dx / gamma"""
-        gamma = (
-            contact.direction
-            * q_boundary[f"m_eff{i}"]
-            / q_boundary[f"m_eff{contact.index}"]
-            * 1j
-            * q_boundary[f"k{contact.index}_{contact}"]
-        )
-        a = qs["bulk"][f"incoming_coeff_{contact}"]
-        phi_dx_boundary = qs[f"boundary{boundary_index}"][f"phi{i}_{contact}_dx"]
-        phi_boundary = 2 * a - phi_dx_boundary / gamma
-    else:
-        phi_boundary = q_boundary[f"phi{prev_layer_index}_{contact}"]
-
     sorted_integral = quantities.get_cumulative_integral(
         "x", x_boundary, sorted_integrand, sorted_supergrid
     )
