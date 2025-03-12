@@ -507,7 +507,7 @@ def phi_trafo_learn_phi_prime(
     integral = quantities.combine_quantity(
         [sorted_integral], [sorted_supergrid], supergrid
     )
-    sorted_integral += phi_boundary
+    integral += phi_boundary
 
     for grid_name in grid_names:
         q = qs[grid_name]
