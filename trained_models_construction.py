@@ -73,7 +73,7 @@ def get_trained_models(
             nn = model.SimpleNetwork(
                 params.activation_function,
                 n_inputs=len(inputs_labels),
-                n_outputs=4,
+                n_outputs=4 if params.use_phi_one else 2,
                 n_neurons_per_hidden_layer=params.n_neurons_per_hidden_layer,
                 n_hidden_layers=params.n_hidden_layers,
                 dtype=params.model_dtype,
@@ -122,11 +122,12 @@ def get_trained_models(
                     ).flatten()
                 output = nn(inputs_tensor)
                 a_output = torch.view_as_complex(output[..., :2])
-                b_output = torch.view_as_complex(output[..., 2:])
                 a_output = a_output.reshape(q.grid.shape)
-                b_output = b_output.reshape(q.grid.shape)
                 a_output = a_output.to(params.si_complex_dtype)
-                b_output = b_output.to(params.si_complex_dtype)
+                if params.use_phi_one:
+                    b_output = torch.view_as_complex(output[..., 2:])
+                    b_output = b_output.reshape(q.grid.shape)
+                    b_output = b_output.to(params.si_complex_dtype)
                 # DEBUG: Output 1
                 # a_output = 0 * a_output + 1
                 # b_output = 0 * b_output + 1
@@ -136,6 +137,8 @@ def get_trained_models(
                         a_output,
                         supergrid.subgrids[grid_name],
                     )
+                    if not params.use_phi_one:
+                        continue
                     qs[grid_name][f"b_output{i}_{contact}"] = quantities.restrict(
                         b_output,
                         supergrid.subgrids[grid_name],

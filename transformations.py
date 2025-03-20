@@ -262,19 +262,25 @@ def phi_zero_one_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str
     Add phi_zero and phi_one.
     """
 
+    # x_in = qs[f"boundary{contact.in_boundary_index}"]["x"]
+    x_in = qs[f"boundary{contact.get_in_boundary_index(i)}"]["x"]
+
     for grid_name in grid_names:
         q = qs[grid_name]
-
-        q[f"phi_zero{i}_{contact}"] = (
-            q[f"a_output{i}_{contact}"] * q[f"a_phase{i}_{contact}"]
+        a_output = q[f"a_output{i}_{contact}"]
+        a_output = formulas.a_output_transformation(
+            a_output, q=q, x_in=x_in, i=i, contact=contact
         )
+        q[f"phi_zero{i}_{contact}"] = a_output * q[f"a_phase{i}_{contact}"]
 
         if not params.use_phi_one:
             continue
 
-        q[f"phi_one{i}_{contact}"] = (
-            q[f"b_output{i}_{contact}"] * q[f"b_phase{i}_{contact}"]
+        b_output = q[f"b_output{i}_{contact}"]
+        b_output = formulas.b_output_transformation(
+            b_output, q=q, x_in=x_in, i=i, contact=contact
         )
+        q[f"phi_one{i}_{contact}"] = b_output * q[f"b_phase{i}_{contact}"]
 
     return qs
 
@@ -530,9 +536,94 @@ def phi_trafo_learn_phi_prime(
     return qs
 
 
+def phi_trafo_learn_phi_prime_polar(
+    qs, i: int, contact: Contact, grid_names: Sequence[str], direction: int
+):
+    """
+    Interpret abs/angle[phi_zero] as abs(phi)' / angle(phi)'
+    No hard BC at the input/output boundaries for direction == 1!
+    Also there's no hard cc BC.
+    phi_dx is not determined in here.
+    """
+
+    # Need some values to start the integration, naturally leading to hard bc
+    assert direction == -1  # in (1, -1)
+
+    # Find the phi to start the integration from
+    boundary_index = (
+        contact.get_in_boundary_index(i)
+        if direction == 1
+        else contact.get_out_boundary_index(i)
+    )
+    q_boundary = qs[f"boundary{boundary_index}"]
+    x_boundary = q_boundary.grid["x"].item()
+    prev_layer_index = (
+        contact.get_in_layer_index(boundary_index)
+        if direction == 1
+        else contact.get_out_layer_index(boundary_index)
+    )
+    phi_boundary = q_boundary[f"phi{prev_layer_index}_{contact}"]
+
+    # Integrate phi'
+    # Code duplication w/ WKB ansatz
+    child_grids: dict[str, Grid] = dict(
+        (grid_name, qs[grid_name].grid) for grid_name in grid_names
+    )
+    supergrid = Supergrid(child_grids, "x", copy_all=False)
+    sorted_supergrid = grids.get_sorted_grid_along(["x"], supergrid, copy_all=False)
+
+    input_labels = ["zero"]
+    if params.use_phi_one:
+        input_labels.append("one")
+    integral = 0
+    for input_label in input_labels:
+        phi_abs_dxs = [
+            torch.abs(qs[grid_name][f"phi_{input_label}{i}_{contact}"])
+            for grid_name in grid_names
+        ]
+        phi_angle_dxs = [
+            torch.angle(qs[grid_name][f"phi_{input_label}{i}_{contact}"])
+            for grid_name in grid_names
+        ]
+        abs_integrand = quantities.combine_quantity(
+            phi_abs_dxs, list(supergrid.subgrids.values()), supergrid
+        )
+        angle_integrand = quantities.combine_quantity(
+            phi_angle_dxs, list(supergrid.subgrids.values()), supergrid
+        )
+        sorted_abs_integrand = quantities.restrict(abs_integrand, sorted_supergrid)
+        sorted_angle_integrand = quantities.restrict(angle_integrand, sorted_supergrid)
+        sorted_abs_integral = quantities.get_cumulative_integral(
+            "x", x_boundary, sorted_abs_integrand, sorted_supergrid
+        )
+        sorted_angle_integral = quantities.get_cumulative_integral(
+            "x", x_boundary, sorted_angle_integrand, sorted_supergrid
+        )
+        sorted_integral = sorted_abs_integral * torch.exp(1j * sorted_angle_integral)
+        integral += quantities.combine_quantity(
+            [sorted_integral], [sorted_supergrid], supergrid
+        )
+
+    integral += phi_boundary
+
+    assert isinstance(integral, torch.Tensor)
+    for grid_name in grid_names:
+        q = qs[grid_name]
+        q[f"phi{i}_{contact}"] = quantities.restrict(
+            integral, supergrid.subgrids[grid_name]
+        )
+
+    return qs
+
+
 def phi_trafo(qs, *, learn_phi_prime, **kwargs):
     if learn_phi_prime:
         return phi_trafo_learn_phi_prime(qs, **kwargs, direction=params.hard_bc_dir)
+
+    if params.learn_phi_prime_polar:
+        return phi_trafo_learn_phi_prime_polar(
+            qs, **kwargs, direction=params.hard_bc_dir
+        )
 
     if params.hard_bc_dir == 0:
         return simple_phi_trafo(qs, **kwargs)

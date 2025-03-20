@@ -245,3 +245,48 @@ def get_simple_phi_dx(q: QuantityDict, *, i: int, contact: Contact):
         phi_dx += q[f"phi_one{i}_{contact}_dx"]
 
     return phi_dx
+
+
+def a_output_transformation(
+    a_output,
+    *,
+    q: QuantityDict,
+    x_in,
+    i: int,
+    contact: Contact,
+):
+    if params.output_trafo == "none":
+        return a_output
+
+    if params.output_trafo == "polar":
+        return torch.real(a_output) * torch.exp(1j * torch.imag(a_output))
+
+    if params.output_trafo == "polar_times_x":
+        return torch.real(a_output) * torch.exp(
+            1j * torch.imag(a_output) * (q["x"] - x_in)
+        )
+
+    if params.output_trafo == "scaled_exp":
+        a_output_real = torch.real(a_output)
+        # k = params.K_OOM
+        # k = 2 * np.pi / (10 * consts.NM)
+        k = torch.sqrt(2 * q[f"m_eff{i}"] * q["DeltaE"]) / consts.H_BAR
+        a_output_imag = torch.imag(a_output) * k * (q["x"] - x_in)
+        a_output = a_output_real + 1j * a_output_imag
+        return torch.exp(a_output)
+
+    if params.output_trafo == "double_exp":
+        k = torch.sqrt(2 * q[f"m_eff{i}"] * q["DeltaE"]) / consts.H_BAR
+        return a_output * torch.exp(1j * a_output * k * (q["x"] - x_in))
+
+    if params.output_trafo == "Veff":
+        a_output_real = torch.real(a_output)
+        Veff = torch.imag(a_output) * 0.1 * consts.EV
+        k = torch.sqrt(2 * q[f"m_eff{i}"] * (q["DeltaE"] - Veff)) / consts.H_BAR
+        return torch.exp(1j * k * (q["x"] - x_in))
+
+    raise Exception(f"output_trafo {params.output_trafo} is unknown")
+
+
+def b_output_transformation(b_output, **kwargs):
+    return a_output_transformation(b_output, **kwargs)

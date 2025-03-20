@@ -29,13 +29,13 @@ use_V_el_new = True
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 8
-n_neurons_per_hidden_layer = 80
+n_hidden_layers = 4
+n_neurons_per_hidden_layer = 40
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = None
 min_loss = 10000e-9
 report_each = 1
@@ -57,13 +57,13 @@ batch_sizes: Dict[str, int] = {
     # "x": 200,
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 1
+n_newton_raphson_steps = 8
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
 soft_bc = False
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
-soft_bc_output = True
+soft_bc_output = False
 # hard_bc_direction:
 # 1: Force BC from input to output contact
 # -1: vice versa
@@ -73,11 +73,12 @@ hard_bc_dir = -1
 # only has an effect if hard_bc_dir == 1
 hard_bc_output = False
 hard_bc_output_transition_distance = 10 * consts.NM
-use_phi_one = False
-learn_phi_prime = True
+use_phi_one = True
+learn_phi_prime = False
+learn_phi_prime_polar = False
 U_input_scale = 0.1 * consts.VOLT
 E_input_scale = 0.1 * consts.EV
-E_input_scale_sqrt = 2e-2 * consts.EV
+E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
 
 # Plotting
@@ -93,7 +94,7 @@ VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
 E_MIN = 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
-E_MAX = 0.05 * consts.EV
+E_MAX = 0.6 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
@@ -123,7 +124,14 @@ ansatz: determines how a/b_phase are calculated.
       energies / thick barriers.
 """
 ansatz = "none"
-ignore_wkb_phase = True  # Whether to use the absolute value as the wkb ansatz
+ignore_wkb_phase = False  # Whether to use the absolute value as the wkb ansatz
+"""
+output_trafo: Transformation of the NN output a/b_output
+    none: None
+    scaled_exp: exp w/ imaginary part multiplied by K_OOM * x
+    Veff: interpret output as an effective potential
+"""
+output_trafo = "none"
 
 V_OOM = 0.3 * consts.EV
 M_EFF_OOM = 0.1 * consts.M_E
@@ -135,4 +143,5 @@ BETA = 1 / (consts.K_B * TEMPERATURE)
 
 
 assert hard_bc_dir in (1, -1, 0)
+assert not (learn_phi_prime and learn_phi_prime_polar)
 assert ansatz in ("none", "plane", "wkb", "half_wkb")
