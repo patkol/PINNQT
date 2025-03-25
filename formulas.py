@@ -51,6 +51,28 @@ def smooth_transition(x: torch.Tensor, x0: float, x1: float, y0: float, y1: floa
     return (y1 - y0) * g + y0
 
 
+def smooth_rectangle(
+    x: torch.Tensor,
+    *,
+    x_L: float,
+    x_R: float,
+    dx_smoothing: float,
+    y0: float,
+    y1: float,
+):
+    """
+    The function with y0 outside and y1 inside of [x_L, x_R], smoothened
+    """
+    left_transition = smooth_transition(
+        x, x0=x_L - dx_smoothing / 2, x1=x_L + dx_smoothing / 2, y0=y0, y1=y1
+    )
+    right_transition = smooth_transition(
+        x, x0=x_R - dx_smoothing / 2, x1=x_R + dx_smoothing / 2, y0=0, y1=y0 - y1
+    )
+
+    return left_transition + right_transition
+
+
 def smoothen(quantity: torch.Tensor, grid: Grid, dim_label: str):
     """
     Smoothen `quantity` on `grid` along `dim_label`.

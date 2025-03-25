@@ -129,6 +129,11 @@ def get_trainer(
         dx_dict=dx_dict,
         V_el_function=lambda q: formulas.get_V_voltage(
             q, device.device_start, device.device_end
+        )
+        + (
+            0
+            if params.V_el_guess is None
+            else formulas.smooth_rectangle(q["x"], **params.V_el_guess)
         ),
     )
     trained_models, trained_models_labels = get_trained_models(
