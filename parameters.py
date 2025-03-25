@@ -19,13 +19,17 @@ V_el_guess = {
     "y0": 0,
     "y1": 0.2 * consts.EV,
 }
+V_ext_range = (
+    V_el_guess["x_L"] - V_el_guess["dx_smoothing"] / 2,
+    V_el_guess["x_R"] + V_el_guess["dx_smoothing"] / 2,
+)
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
 
 # Models
-loaded_parameters_index = 829
+loaded_parameters_index = None
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None  # 674
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -36,13 +40,13 @@ use_V_el_new = True
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 7
-n_neurons_per_hidden_layer = 70
+n_hidden_layers = 8
+n_neurons_per_hidden_layer = 80
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = None
 min_loss = 10000e-9
 report_each = 1
@@ -80,7 +84,7 @@ hard_bc_dir = -1
 # only has an effect if hard_bc_dir == 1
 hard_bc_output = False
 hard_bc_output_transition_distance = 10 * consts.NM
-use_phi_one = True
+use_phi_one = False
 learn_phi_prime = False
 learn_phi_prime_polar = False
 U_input_scale = 0.1 * consts.VOLT

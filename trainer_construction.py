@@ -127,8 +127,9 @@ def get_trainer(
     constant_models = get_constant_models(
         device,
         dx_dict=dx_dict,
-        V_el_function=lambda q: formulas.get_V_voltage(
-            q, device.device_start, device.device_end
+        V_el_function=lambda q: formulas.get_smooth_V_voltage(
+            q,
+            *params.V_ext_range,
         )
         + (
             0

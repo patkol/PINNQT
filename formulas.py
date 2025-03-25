@@ -128,13 +128,24 @@ def get_k(q: QuantityDict, i: int, contact: Contact) -> torch.Tensor:
     return torch.sqrt(k_squared)
 
 
-def get_V_voltage(q: QuantityDict, device_start, device_end):
-    distance_factor = (q["x"] - device_start) / (device_end - device_start)
+def get_V_voltage(q: QuantityDict, x_L, x_R):
+    """
+    This does not take the permittivities into account, it's just meant as a first guess
+    """
+    distance_factor = (q["x"] - x_L) / (x_R - x_L)
     # Cap the factor beyond the device limits, these regions correspond to
     # the contacts
     distance_factor[distance_factor < 0] = 0
     distance_factor[distance_factor > 1] = 1
     V_voltage = -q["voltage"] * consts.EV * distance_factor
+
+    return V_voltage
+
+
+def get_smooth_V_voltage(q: QuantityDict, x_L, x_R):
+    V_L = 0
+    V_R = -q["voltage"] * consts.EV
+    V_voltage = smooth_transition(q["x"], x0=x_L, x1=x_R, y0=V_L, y1=V_R)
 
     return V_voltage
 

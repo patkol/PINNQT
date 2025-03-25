@@ -9,8 +9,6 @@ import formulas
 # Devices
 # _no_tails: minimal
 # _extended: there is a contact layer on each side with no potential drop
-# If 'includes_contacts' is True the potential drop does
-# not affect the outermost layers
 
 device_kwargs_dict: dict[str, dict] = {
     "free1": {
@@ -19,7 +17,6 @@ device_kwargs_dict: dict[str, dict] = {
         "m_effs": [M_E, M_E, M_E],
         "dopings": [0, 0, 0],
         "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0],
-        "includes_contacts": False,
     },
     "free2": {
         "boundaries": [0, 5 * NM, 10 * NM],
@@ -27,7 +24,6 @@ device_kwargs_dict: dict[str, dict] = {
         "m_effs": [M_E, M_E, M_E, M_E],
         "dopings": [0, 0, 0, 0],
         "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0, EPSILON_0],
-        "includes_contacts": False,
     },
     "free3": {
         "boundaries": [0, 100 * NM],
@@ -35,7 +31,6 @@ device_kwargs_dict: dict[str, dict] = {
         "m_effs": [M_E, M_E, M_E],
         "dopings": [0, 0, 0],
         "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0],
-        "includes_contacts": False,
     },
     "free4": {
         "boundaries": [0, 15 * NM],
@@ -43,7 +38,6 @@ device_kwargs_dict: dict[str, dict] = {
         "m_effs": [M_E, M_E, M_E],
         "dopings": [0, 0, 0],
         "permittivities": [EPSILON_0, EPSILON_0, EPSILON_0],
-        "includes_contacts": False,
     },
     "barrier1": {
         "boundaries": [
@@ -80,7 +74,6 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        "includes_contacts": False,
     },
     "barrier1_no_tails": {
         "boundaries": [0, 4 * NM],
@@ -88,7 +81,6 @@ device_kwargs_dict: dict[str, dict] = {
         "m_effs": [0.065 * M_E, 0.1 * M_E, 0.065 * M_E],
         "dopings": [0, 0, 0],
         "permittivities": [12 * EPSILON_0, 11 * EPSILON_0, 12 * EPSILON_0],
-        "includes_contacts": False,
     },
     "barrier1_extended": {
         "boundaries": [
@@ -135,10 +127,6 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        # TODO: respect the different permittivities while calculating the initial
-        #       potential,
-        #       and set them to inf at the contacts to replace the "includes_contacts"
-        "includes_contacts": True,
     },
     "barrier1_extended_3layers": {
         "boundaries": [
@@ -175,7 +163,6 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        "includes_contacts": True,
     },
     "barrier1_extended_combined": {
         "boundaries": [
@@ -204,7 +191,6 @@ device_kwargs_dict: dict[str, dict] = {
             - 6 * EPSILON_0 * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
             12 * EPSILON_0,
         ],
-        "includes_contacts": True,
     },
     "barrier1_combined_smoothed": {
         "boundaries": [
@@ -267,7 +253,6 @@ device_kwargs_dict: dict[str, dict] = {
             - 6 * EPSILON_0 * (q["x"] >= 15 * NM) * (q["x"] < 19 * NM),
             12 * EPSILON_0,
         ],
-        "includes_contacts": False,
     },
     "barrier1_extended_combined_smoothed": {
         "boundaries": [
@@ -330,7 +315,6 @@ device_kwargs_dict: dict[str, dict] = {
             - 6 * EPSILON_0 * (q["x"] >= 45 * NM) * (q["x"] < 49 * NM),
             12 * EPSILON_0,
         ],
-        "includes_contacts": True,
     },
     # like matlab short_barrier, more heavily doped s.t. we can simulate shorter contacts
     "barrier2": {
@@ -378,9 +362,6 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        # TODO: respect the different permittivities while calculating the potential,
-        #       and set them to inf at the contacts to replace the "includes_contacts"
-        "includes_contacts": True,
     },
     # barrier1 with constant eff. mass
     "barrier3": {
@@ -418,7 +399,6 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        "includes_contacts": False,
     },
     "barrier3_combined_smoothed": {
         "boundaries": [
@@ -463,7 +443,6 @@ device_kwargs_dict: dict[str, dict] = {
             - 6 * EPSILON_0 * (q["x"] >= 15 * NM) * (q["x"] < 19 * NM),
             12 * EPSILON_0,
         ],
-        "includes_contacts": False,
     },
     # Large barrier
     "barrier4": {
@@ -501,7 +480,6 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        "includes_contacts": False,
     },
     "rtd1": {
         "boundaries": [0 * NM, 10 * NM, 12.6 * NM, 16.6 * NM, 19.2 * NM, 29.2 * NM],
@@ -525,7 +503,6 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        "includes_contacts": False,
     },
     "rtd1_no_tails": {
         "boundaries": [0 * NM, 2.6 * NM, 6.6 * NM, 9.2 * NM],
@@ -545,7 +522,6 @@ device_kwargs_dict: dict[str, dict] = {
             11 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        "includes_contacts": False,
     },
     "rtd1_extended": {
         "boundaries": [
@@ -602,7 +578,6 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        "includes_contacts": True,
     },
     "rtd1_extended_5layers": {
         "boundaries": [
@@ -649,6 +624,5 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
             12 * EPSILON_0,
         ],
-        "includes_contacts": True,
     },
 }

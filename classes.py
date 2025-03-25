@@ -50,17 +50,11 @@ class Device:
     m_effs: Sequence[float]
     dopings: Sequence[float]
     permittivities: Sequence[float]
-    includes_contacts: bool
 
-    device_start: float = dataclasses.field(init=False)
-    device_end: float = dataclasses.field(init=False)
     n_layers: int = dataclasses.field(init=False)
     contacts: Sequence[Contact] = dataclasses.field(init=False)
 
     def __post_init__(self):
-        self.device_start = self.boundaries[1 if self.includes_contacts else 0]
-        self.device_end = self.boundaries[-2 if self.includes_contacts else -1]
-
         self.n_layers = len(self.boundaries) - 1
 
         N = self.n_layers
