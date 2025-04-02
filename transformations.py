@@ -295,7 +295,7 @@ def simple_phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str])
     return qs
 
 
-def hard_bc_phi_trafo_conj(
+def hard_bc_phi_trafo_without_phi_one(
     qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
 ):
     """d0 phi0 + d1 conj(phi0)"""
@@ -315,17 +315,38 @@ def hard_bc_phi_trafo_conj(
         q_boundary, i=i, contact=contact, direction=direction
     )
 
-    # phi = u * phi_zero + v * conj(phi_zero), find u & v s.t. this matches the target
-    determinant = 2j * torch.imag(phi_zero * torch.conj(phi_zero_dx))
-    u = (
-        phi_target * torch.conj(phi_zero_dx) - torch.conj(phi_zero) * phi_dx_target
-    ) / determinant
-    v = -(phi_target * phi_zero_dx - phi_zero * phi_dx_target) / determinant
+    # phi = F[phi_zero](u, v), find u & v s.t. this matches the target
+    if params.hard_bc_without_phi_one == "linear":
+        # Variant u * phi_zero + v:
+        u = phi_dx_target / phi_zero_dx
+        v = phi_target - u * phi_zero
+        for grid_name in grid_names:
+            q = qs[grid_name]
+            q[f"phi{i}_{contact}"] = u * q[f"phi_zero{i}_{contact}"] + v
 
-    for grid_name in grid_names:
-        q = qs[grid_name]
-        phi_zero_full = q[f"phi_zero{i}_{contact}"]
-        q[f"phi{i}_{contact}"] = u * phi_zero_full + v * torch.conj(phi_zero_full)
+    elif params.hard_bc_without_phi_one == "multiply_linear":
+        # Variant (u + v * (x-xb)) * phi_zero:
+        u = phi_target / phi_zero
+        v = (phi_dx_target - u * phi_zero_dx) / phi_zero
+        for grid_name in grid_names:
+            q = qs[grid_name]
+            factor = u + v * (q["x"] - q_boundary["x"])
+            q[f"phi{i}_{contact}"] = factor * q[f"phi_zero{i}_{contact}"]
+
+    elif params.hard_bc_without_phi_one == "conjugate":
+        # Variant u * phi_zero + v * conj(phi_zero)
+        determinant = 2j * torch.imag(phi_zero * torch.conj(phi_zero_dx))
+        u = (
+            phi_target * torch.conj(phi_zero_dx) - torch.conj(phi_zero) * phi_dx_target
+        ) / determinant
+        v = -(phi_target * phi_zero_dx - phi_zero * phi_dx_target) / determinant
+        for grid_name in grid_names:
+            q = qs[grid_name]
+            phi_zero_full = q[f"phi_zero{i}_{contact}"]
+            q[f"phi{i}_{contact}"] = u * phi_zero_full + v * torch.conj(phi_zero_full)
+
+    else:
+        raise Exception(f"Unknown hard BC: {params.hard_bc_without_phi_one}")
 
     return qs
 
@@ -637,7 +658,9 @@ def phi_trafo(qs, *, learn_phi_prime, **kwargs):
         if params.use_phi_one:
             hard_bc_phi_trafo_with_phi_one(qs, **kwargs, direction=params.hard_bc_dir)
         else:
-            hard_bc_phi_trafo_conj(qs, **kwargs, direction=params.hard_bc_dir)
+            hard_bc_phi_trafo_without_phi_one(
+                qs, **kwargs, direction=params.hard_bc_dir
+            )
 
     # Output layer
     if (

@@ -57,7 +57,7 @@ def matlab_phi_trafo(
 
 
 # Load MATLAB data
-matlab_path = "matlab_results/barrier/0V_0p01eV/newton_step0001/"
+matlab_path = "matlab_results/rtd/newton_step0001/"
 matlab_data = {}
 for name in ("E", "x", "Vact_old"):
     matlab_data[name] = np.loadtxt(

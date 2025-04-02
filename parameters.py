@@ -40,8 +40,8 @@ use_V_el_new = True
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 8
-n_neurons_per_hidden_layer = 80
+n_hidden_layers = 10
+n_neurons_per_hidden_layer = 100
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
@@ -84,7 +84,9 @@ hard_bc_dir = -1
 # only has an effect if hard_bc_dir == 1
 hard_bc_output = False
 hard_bc_output_transition_distance = 10 * consts.NM
-use_phi_one = False
+use_phi_one = True
+# hard_bc_without_phi_one: linear / multiply_linear / conjugate
+hard_bc_without_phi_one = "conjugate"
 learn_phi_prime = False
 learn_phi_prime_polar = False
 U_input_scale = 0.1 * consts.VOLT
@@ -100,7 +102,7 @@ extra_plots = True
 # Physical
 VOLTAGE_MIN = 0.2 * consts.VOLT
 VOLTAGE_STEP = 0.05 * consts.VOLT
-VOLTAGE_MAX = 0.35 * consts.VOLT
+VOLTAGE_MAX = 0.2 * consts.VOLT
 # VOLTAGE_MIN = 0 * consts.VOLT
 # VOLTAGE_STEP = 1 * consts.VOLT
 # VOLTAGE_MAX = 0 * consts.VOLT
@@ -125,7 +127,7 @@ CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
-energy_cutoff_delta = 0.05 * consts.EV
+energy_cutoff_delta = 0.2 * consts.EV
 device_smoothing_distance = 4 * consts.NM
 
 """
