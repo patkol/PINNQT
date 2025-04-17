@@ -38,9 +38,9 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 867
 loaded_parameters_NR_step = 0
-loaded_V_el_index = None  # 674
+loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
 use_V_el_new = True
@@ -83,7 +83,7 @@ reset_weights_per_nr_step = False
 soft_bc = False
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
-soft_bc_output = True
+soft_bc_output = False
 # hard_bc_direction:
 # 1: Force BC from input to output contact
 # -1: vice versa
@@ -119,7 +119,7 @@ VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
 E_MIN = 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
-E_MAX = 0.2 * consts.EV
+E_MAX = 1.5 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
@@ -131,7 +131,7 @@ TEMPERATURE = 300 * consts.KELVIN
 
 # CONSTANT_FERMI_LEVEL: None to find the correct fermi level.
 #                       V_int and V_el are added.
-CONSTANT_FERMI_LEVEL = None  # 0.258 * consts.EV
+CONSTANT_FERMI_LEVEL = 0.9206335951628302 * consts.EV  # 0.258 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
