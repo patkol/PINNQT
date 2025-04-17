@@ -625,4 +625,30 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
         ],
     },
+    "InGaAs_transistor_x": {
+        "boundaries": [
+            0 * NM,
+            55 * NM,
+        ],
+        "potentials": [
+            0 * EV,
+            0 * EV,
+            0 * EV,
+        ],
+        "m_effs": [
+            0.041 * M_E,
+            0.041 * M_E,
+            0.041 * M_E,
+        ],
+        "dopings": [  # Not accurate: not solving Poisson here, only used for fermi energy
+            4e19 / CM**3,
+            0 / CM**3,
+            4e19 / CM**3,
+        ],
+        "permittivities": [  # vary along y
+            0 * EPSILON_0,
+            0 * EPSILON_0,
+            0 * EPSILON_0,
+        ],
+    },
 }

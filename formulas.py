@@ -20,6 +20,18 @@ import physical_constants as consts
 import parameters as params
 
 
+def get_linear_transition(
+    x: np.ndarray, *, x0: float, x1: float, y0: float, y1: float
+) -> np.ndarray:
+    distance_factor = (x - x0) / (x1 - x0)
+    # Cap the factor beyond the limits
+    distance_factor[distance_factor < 0] = 0
+    distance_factor[distance_factor > 1] = 1
+    y = y0 + distance_factor * (y1 - y0)
+
+    return y
+
+
 def transition_f(x: torch.Tensor):
     """
     Smooth transition from 0 at x <= 0 to 1 at x -> inf
@@ -150,6 +162,45 @@ def get_smooth_V_voltage(q: QuantityDict, x_L, x_R):
     return V_voltage
 
 
+def get_V_el_guess(q, guess_type: str, **kwargs):
+    if guess_type == "zero":
+        return torch.zeros_like(q["x"])
+
+    if guess_type == "rtd":
+        V_ext_range = (
+            kwargs["x_L"] - kwargs["dx_smoothing"] / 2,
+            kwargs["x_R"] + kwargs["dx_smoothing"] / 2,
+        )
+        V_drop = get_smooth_V_voltage(
+            q,
+            *V_ext_range,
+        )
+        V_mid = smooth_rectangle(q["x"], **kwargs)
+        return V_drop + V_mid
+
+    if guess_type == "transistor":
+        x_ramp_L = kwargs["x_gate_L"] - kwargs["ramp_size"]
+        x_ramp_R = kwargs["x_gate_R"] + kwargs["ramp_size"]
+        V_channel_total = kwargs["V_channel"] - q["voltage"] * consts.EV
+        V_ext = get_linear_transition(
+            q["x"],
+            x0=x_ramp_L,
+            x1=kwargs["x_gate_L"],
+            y0=0,
+            y1=V_channel_total,
+        )
+        V_ext += get_linear_transition(
+            q["x"],
+            x0=kwargs["x_gate_R"],
+            x1=x_ramp_R,
+            y0=0,
+            y1=kwargs["V_drain"] - V_channel_total,
+        )
+        return V_ext
+
+    raise Exception(f"Unknown V_el guess type: {guess_type}")
+
+
 def get_dx_model(mode: str, quantity_name: str, grid_name: str):
     name = quantity_name + "_dx"
     if mode == "exact":
@@ -194,25 +245,21 @@ def get_E_fermi(q: QuantityDict, *, i: int):
 
     dos = 8 * np.pi / consts.H**3 * torch.sqrt(2 * q[f"m_eff{i}"] ** 3 * q["DeltaE"])
 
-    best_E_f = None
-    best_abs_remaining_charge = float("inf")
-    E_fs = np.arange(0 * consts.EV, 0.8 * consts.EV, 1e-3 * consts.EV)
-    for E_f in E_fs:
+    def get_charge_mismatch(E_f: float):
         fermi_dirac = 1 / (1 + torch.exp(params.BETA * (q["DeltaE"] - E_f)))
         integrand = dos * fermi_dirac
         # Particle, not charge density
         n = quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
         abs_remaining_charge = torch.abs(n - q[f"doping{i}"]).item()
-        if abs_remaining_charge < best_abs_remaining_charge:
-            best_abs_remaining_charge = abs_remaining_charge
-            best_E_f = E_f
 
-        E_f += 1e-3 * consts.EV
+        return abs_remaining_charge
 
-    assert best_E_f is not None
-    assert best_E_f != E_fs[0] and best_E_f != E_fs[-1], E_f / consts.EV
-
-    relative_remaining_charge = best_abs_remaining_charge / q[f"doping{i}"]
+    res = scipy.optimize.minimize_scalar(
+        get_charge_mismatch, bounds=params.E_fermi_search_range, options={"disp": 1}
+    )
+    assert res.success, res.message
+    best_E_f = res.x
+    relative_remaining_charge = res.fun / q[f"doping{i}"]
     print(
         f"Best fermi energy: {best_E_f / consts.EV} eV with a relative remaining charge of {relative_remaining_charge}"
     )

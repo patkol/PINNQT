@@ -127,14 +127,8 @@ def get_trainer(
     constant_models = get_constant_models(
         device,
         dx_dict=dx_dict,
-        V_el_function=lambda q: formulas.get_smooth_V_voltage(
-            q,
-            *params.V_ext_range,
-        )
-        + (
-            0
-            if params.V_el_guess is None
-            else formulas.smooth_rectangle(q["x"], **params.V_el_guess)
+        V_el_function=lambda q: formulas.get_V_el_guess(
+            q, params.V_el_guess_type, **params.V_el_guess_kwargs
         ),
     )
     trained_models, trained_models_labels = get_trained_models(

@@ -11,22 +11,28 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "rtd1_extended_5layers"
-V_el_guess = {
-    "x_L": 30 * consts.NM,
-    "x_R": (99.2 - 30) * consts.NM,
-    "dx_smoothing": 20 * consts.NM,
-    "y0": 0,
-    "y1": 0.2 * consts.EV,
+simulated_device_name = "InGaAs_transistor_x"
+V_el_guess_type = "transistor"
+V_el_guess_kwargs = {
+    "x_gate_L": 20 * consts.NM,
+    "x_gate_R": 35 * consts.NM,
+    "ramp_size": 2 * consts.NM,
+    "V_channel": 0.9626336 * consts.EV,  # voltage is subtracted from this
+    "V_drain": -0.6 * consts.EV,
 }
-V_ext_range = (
-    V_el_guess["x_L"] - V_el_guess["dx_smoothing"] / 2,
-    V_el_guess["x_R"] + V_el_guess["dx_smoothing"] / 2,
-)
+# V_el_guess_type = "rtd"
+# V_el_guess_kwargs = {
+#     "x_L": 30 * consts.NM,
+#     "x_R": (99.2 - 30) * consts.NM,
+#     "dx_smoothing": 20 * consts.NM,
+#     "y0": 0,
+#     "y1": 0.2 * consts.EV,
+# }
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
 si_complex_dtype = torch.complex128
+E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
 loaded_parameters_index = None
@@ -74,12 +80,12 @@ reset_weights_per_nr_step = False
 soft_bc = False
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
-soft_bc_output = False
+soft_bc_output = True
 # hard_bc_direction:
 # 1: Force BC from input to output contact
 # -1: vice versa
 # 0: no hard BC
-hard_bc_dir = -1
+hard_bc_dir = 1
 # hard_bc_output: Whether to enforce hard BC on the output contact,
 # only has an effect if hard_bc_dir == 1
 hard_bc_output = False
@@ -90,19 +96,19 @@ hard_bc_without_phi_one = "conjugate"
 learn_phi_prime = False
 learn_phi_prime_polar = False
 U_input_scale = 0.1 * consts.VOLT
-E_input_scale = 0.1 * consts.EV
+E_input_scale = 0.2 * consts.EV
 E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
 
 # Plotting
 plot_each_voltage = 1
-plot_each_energy = 50
+plot_each_energy = 200
 extra_plots = True
 
 # Physical
-VOLTAGE_MIN = 0.2 * consts.VOLT
+VOLTAGE_MIN = 0.0 * consts.VOLT
 VOLTAGE_STEP = 0.05 * consts.VOLT
-VOLTAGE_MAX = 0.2 * consts.VOLT
+VOLTAGE_MAX = 0.0 * consts.VOLT
 # VOLTAGE_MIN = 0 * consts.VOLT
 # VOLTAGE_STEP = 1 * consts.VOLT
 # VOLTAGE_MAX = 0 * consts.VOLT
@@ -110,12 +116,11 @@ VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
 
 E_MIN = 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
-E_MAX = 0.6 * consts.EV
+E_MAX = 0.2 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
-E_MAX += E_STEP / 2  # Making sure that E_MAX is used
 
 X_STEP = 0.05 * consts.NM
 
@@ -123,7 +128,7 @@ TEMPERATURE = 300 * consts.KELVIN
 
 # CONSTANT_FERMI_LEVEL: None to find the correct fermi level.
 #                       V_int and V_el are added.
-CONSTANT_FERMI_LEVEL = 0.258 * consts.EV
+CONSTANT_FERMI_LEVEL = None  # 0.258 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
