@@ -832,9 +832,9 @@ def V_electrostatic_trafo(qs, *, contacts, N: int):
     #       Then remove the assertion above
     rho = consts.Q_E * (q["doping"] - q["n"])
 
-    # Dirichlet BC
-    V_voltage = -q["voltage"] * consts.EV
-    rho[..., -1] += (permittivity[-1] * V_voltage[..., 0]) / dx**2
+    # Dirichlet BC  TODO: do I need this with Neumann?
+    # V_voltage = -q["voltage"] * consts.EV
+    # rho[..., -1] += (permittivity[-1] * V_voltage[..., 0]) / dx**2
 
     Phi = q["V_el"] / -consts.Q_E
     F = torch.einsum("ij,...j->...i", M, Phi) + rho

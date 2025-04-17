@@ -203,25 +203,28 @@ if __name__ == "__main__":
 
         # Save quantities and plots
         print("Saving quantities...")
+        saved_quantities = [
+            "voltage",
+            "DeltaE",
+            "x",
+            "E_L",
+            "E_R",
+            "V_el",
+            "V_el_new",
+            "n",
+            "T_L",
+            "T_R",
+            "R_L",
+            "R_R",
+            "phi_L",
+        ]
+        if params.use_voltage2:
+            saved_quantities.append("voltage2")
         saving.save_q_bulk(
             extended_qs["bulk"],
             path_prefix=f"data/{trainer.config.saved_parameters_index:04d}/"
             + save_subpath,
-            included_quantities_labels=[
-                "voltage",
-                "DeltaE",
-                "x",
-                "E_L",
-                "E_R",
-                "V_el",
-                "V_el_new",
-                "n",
-                "T_L",
-                "T_R",
-                "R_L",
-                "R_R",
-                "phi_L",
-            ],
+            included_quantities_labels=saved_quantities,
         )
         print("Done saving quantities")
         print("Saving plots...")

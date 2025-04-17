@@ -1,7 +1,7 @@
 # Copyright (c) 2025 ETH Zurich, Patrice Kolb
 
 
-from typing import Dict, Callable, Any
+from typing import Dict, Callable, Any, Optional
 import torch
 
 from kolpinn import grids
@@ -9,16 +9,6 @@ from kolpinn.grids import Grid, Subgrid
 
 from classes import Device
 import parameters as params
-
-
-def get_voltages(*, V_min: float, V_max: float, V_step: float) -> torch.Tensor:
-    voltages = torch.arange(V_min, V_max, V_step, dtype=params.si_real_dtype)
-    return voltages
-
-
-def get_energies(*, E_min: float, E_max: float, E_step: float) -> torch.Tensor:
-    energies = torch.arange(E_min, E_max, E_step, dtype=params.si_real_dtype)
-    return energies
 
 
 def get_xs(device: Device, *, x_step: float) -> torch.Tensor:
@@ -71,20 +61,23 @@ def get_unbatched_grids(
     E_step: float,
     x_step: float,
     dx_dict: Dict[str, float],
+    use_voltage2: bool,
+    V2_min: Optional[float] = None,
+    V2_max: Optional[float] = None,
+    V2_step: Optional[float] = None,
 ) -> Dict[str, Grid]:
-    voltages = get_voltages(V_min=V_min, V_max=V_max, V_step=V_step)
-    energies = get_energies(E_min=E_min, E_max=E_max, E_step=E_step)
+    voltages = torch.arange(V_min, V_max, V_step, dtype=params.si_real_dtype)
+    energies = torch.arange(E_min, E_max, E_step, dtype=params.si_real_dtype)
     xs = get_xs(device, x_step=x_step)
     grids: Dict[str, Grid] = {}
 
     # Bulk
-    grids["bulk"] = Grid(
-        {
-            "voltage": voltages,
-            "DeltaE": energies,
-            "x": xs,
-        }
-    )
+    grid_items = [("voltage", voltages), ("DeltaE", energies), ("x", xs)]
+    if use_voltage2:
+        assert V2_min is not None and V2_max is not None and V2_step is not None
+        voltages2 = torch.arange(V2_min, V2_max, V2_step, dtype=params.si_real_dtype)
+        grid_items.insert(1, ("voltage2", voltages2))
+    grids["bulk"] = Grid(dict(grid_items))
 
     # Layers
     update_layer_subgrids(grids, device)
@@ -94,13 +87,9 @@ def get_unbatched_grids(
         for dx_string, dx_shift in dx_dict.items():
             grid_name = f"boundary{boundary_index}" + dx_string
             x = device.boundaries[boundary_index] + dx_shift
-            grids[grid_name] = Grid(
-                {
-                    "voltage": voltages,
-                    "DeltaE": energies,
-                    "x": torch.tensor([x], dtype=params.si_real_dtype),
-                }
-            )
+            assert grid_items[-1][0] == "x"
+            grid_items[-1] = ("x", torch.tensor([x], dtype=params.si_real_dtype))
+            grids[grid_name] = Grid(dict(grid_items))
 
     return grids
 

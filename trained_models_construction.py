@@ -32,6 +32,10 @@ def get_trained_models(
 
     N = device.n_layers
 
+    required_quantities_labels = ["voltage", "DeltaE", "x"]
+    if params.use_voltage2:
+        required_quantities_labels.append("voltage2")
+
     # Layers
     for i in range(1, N + 1):
         layer_grids = (
@@ -45,6 +49,8 @@ def get_trained_models(
         inputs_labels = []
         if params.continuous_voltage:
             inputs_labels.append("voltage")
+            if params.use_voltage2:
+                inputs_labels.append("voltage2")
         if params.continuous_energy:
             inputs_labels.append(
                 "DeltaE"
@@ -64,6 +70,8 @@ def get_trained_models(
             ),
             "voltage": lambda U, q: U / params.U_input_scale,
         }
+        if params.use_voltage2:
+            model_transformations["voltage2"] = model_transformations["voltage"]
 
         for contact in device.contacts:
             # The part below is partly a code duplication with `SimpleNNModel`,
@@ -84,7 +92,7 @@ def get_trained_models(
                 *,
                 grid_names=layer_grids,
                 combined_dimension_name="x",
-                required_quantities_labels=["voltage", "DeltaE", "x"],
+                required_quantities_labels=required_quantities_labels,
                 n_inputs=len(inputs_labels),
                 nn=nn,
                 model_transformations=model_transformations,

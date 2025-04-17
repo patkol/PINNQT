@@ -181,20 +181,21 @@ def get_V_el_guess(q, guess_type: str, **kwargs):
     if guess_type == "transistor":
         x_ramp_L = kwargs["x_gate_L"] - kwargs["ramp_size"]
         x_ramp_R = kwargs["x_gate_R"] + kwargs["ramp_size"]
-        V_channel_total = kwargs["V_channel"] - q["voltage"] * consts.EV
+        V_channel = kwargs["V_channel"] - q["voltage2"] * consts.EV
+        V_drain = -q["voltage"] * consts.EV
         V_ext = get_linear_transition(
             q["x"],
             x0=x_ramp_L,
             x1=kwargs["x_gate_L"],
             y0=0,
-            y1=V_channel_total,
+            y1=V_channel,
         )
         V_ext += get_linear_transition(
             q["x"],
             x0=kwargs["x_gate_R"],
             x1=x_ramp_R,
             y0=0,
-            y1=kwargs["V_drain"] - V_channel_total,
+            y1=V_drain - V_channel,
         )
         return V_ext
 

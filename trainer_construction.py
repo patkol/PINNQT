@@ -115,6 +115,10 @@ def get_trainer(
         E_step=params.E_STEP,
         x_step=params.X_STEP,
         dx_dict=dx_dict,
+        use_voltage2=params.use_voltage2,
+        V2_min=params.VOLTAGE2_MIN,
+        V2_max=params.VOLTAGE2_MAX,
+        V2_step=params.VOLTAGE2_STEP,
     )
 
     x_grad_required = (

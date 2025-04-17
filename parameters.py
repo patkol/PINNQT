@@ -17,9 +17,11 @@ V_el_guess_kwargs = {
     "x_gate_L": 20 * consts.NM,
     "x_gate_R": 35 * consts.NM,
     "ramp_size": 2 * consts.NM,
-    "V_channel": 0.9626336 * consts.EV,  # voltage is subtracted from this
-    "V_drain": -0.6 * consts.EV,
+    "V_channel": 0.9626336 * consts.EV,  # voltage2 is subtracted from this TODO: move
 }
+# voltage2: a voltage applied in the middle of the device. The voltage to the left
+# is still assumed to be zero and the one on the right to be given by voltage
+use_voltage2 = True
 # V_el_guess_type = "rtd"
 # V_el_guess_kwargs = {
 #     "x_L": 30 * consts.NM,
@@ -28,6 +30,7 @@ V_el_guess_kwargs = {
 #     "y0": 0,
 #     "y1": 0.2 * consts.EV,
 # }
+# use_voltage2 = False
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
@@ -85,7 +88,7 @@ soft_bc_output = True
 # 1: Force BC from input to output contact
 # -1: vice versa
 # 0: no hard BC
-hard_bc_dir = 1
+hard_bc_dir = -1
 # hard_bc_output: Whether to enforce hard BC on the output contact,
 # only has an effect if hard_bc_dir == 1
 hard_bc_output = False
@@ -106,13 +109,13 @@ plot_each_energy = 200
 extra_plots = True
 
 # Physical
-VOLTAGE_MIN = 0.0 * consts.VOLT
+VOLTAGE_MIN = 0.6 * consts.VOLT
 VOLTAGE_STEP = 0.05 * consts.VOLT
-VOLTAGE_MAX = 0.0 * consts.VOLT
-# VOLTAGE_MIN = 0 * consts.VOLT
-# VOLTAGE_STEP = 1 * consts.VOLT
-# VOLTAGE_MAX = 0 * consts.VOLT
-VOLTAGE_MAX += VOLTAGE_STEP / 2  # Making sure that VOLTAGE_MAX is used
+VOLTAGE_MAX = 0.60001 * consts.VOLT
+
+VOLTAGE2_MIN = 0.0 * consts.VOLT
+VOLTAGE2_STEP = 0.05 * consts.VOLT
+VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
 E_MIN = 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
