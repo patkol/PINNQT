@@ -35,14 +35,15 @@ def get_constant_models(
         a/b_phase{i}_{contact}: The ansatz that will be modulated by the NN
         E_fermi_{contact} / fermi_integral_{contact}: Global constants in "bulk"
 
-        if params.hard_bc_dir == 1:
-            incoming_coeff_{contact} = 1
+        if params.force_unity_coeff:
+            if params.hard_bc_dir == 1:
+                incoming_coeff_{contact} = 1
 
-        if params.hard_bc_dir == -1:
-            transmitted_coeff_{contact} = 1
-            phi{i}_{contact} = 1 and
-            phi{i}_{contact}_dx = contact.direction * i * k
-            at the output contact.
+            if params.hard_bc_dir == -1:
+                transmitted_coeff_{contact} = 1
+                phi{i}_{contact} = 1 and
+                phi{i}_{contact}_dx = contact.direction * i * k
+                at the output contact.
     """
 
     N = device.n_layers
@@ -88,8 +89,6 @@ def get_constant_models(
         )
 
         for contact in device.contacts:
-            x_out = device.boundaries[contact.get_out_boundary_index(i)]
-
             models_dict[f"k{i}_{contact}"] = model.FunctionModel(
                 lambda q, i=i, contact=contact: formulas.get_k(q, i, contact),
             )
@@ -114,7 +113,7 @@ def get_constant_models(
                 / q[f"m_eff{i}"]
             )
 
-        if params.hard_bc_dir == -1:
+        if params.hard_bc_dir == -1 and params.force_unity_coeff:
             # Output contact: Boundary conditions
             i = contact.out_index
             const_models_dict[i][f"phi{i}_{contact}"] = one_model
@@ -158,10 +157,13 @@ def get_constant_models(
 
     # Full device again
     for contact in device.contacts:
-        fixed_coeff = "transmitted" if params.hard_bc_dir == -1 else "incoming"
-        const_models.append(
-            model.get_multi_model(one_model, f"{fixed_coeff}_coeff_{contact}", "bulk"),
-        )
+        if params.force_unity_coeff:
+            fixed_coeff = "transmitted" if params.hard_bc_dir == -1 else "incoming"
+            const_models.append(
+                model.get_multi_model(
+                    one_model, f"{fixed_coeff}_coeff_{contact}", "bulk"
+                ),
+            )
         const_models.append(
             model.MultiModel(
                 trafos.E_fermi_trafo,

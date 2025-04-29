@@ -38,7 +38,8 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = 867
+loaded_parameters_index = None
+energy_cutoff_start = 0.2 * consts.EV
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -80,7 +81,8 @@ batch_sizes: Dict[str, int] = {
 n_newton_raphson_steps = 1
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
-soft_bc = False
+force_unity_coeff = False
+soft_bc = True
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
 soft_bc_output = False
@@ -89,11 +91,7 @@ soft_bc_output = False
 # -1: vice versa
 # 0: no hard BC
 hard_bc_dir = -1
-# hard_bc_output: Whether to enforce hard BC on the output contact,
-# only has an effect if hard_bc_dir == 1
-hard_bc_output = False
-hard_bc_output_transition_distance = 10 * consts.NM
-use_phi_one = True
+use_phi_one = False
 # hard_bc_without_phi_one: linear / multiply_linear / conjugate
 hard_bc_without_phi_one = "conjugate"
 learn_phi_prime = False
@@ -168,4 +166,7 @@ BETA = 1 / (consts.K_B * TEMPERATURE)
 
 assert hard_bc_dir in (1, -1, 0)
 assert not (learn_phi_prime and learn_phi_prime_polar)
+assert not (
+    (learn_phi_prime or learn_phi_prime_polar) and not force_unity_coeff
+), "Not implemented, see phi_trafo"
 assert ansatz in ("none", "plane", "wkb", "half_wkb")

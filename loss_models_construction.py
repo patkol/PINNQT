@@ -84,6 +84,7 @@ def get_loss_models(
                 )
             )
 
+            # OPTIM: only evaluate where necessary
             if params.hard_bc_dir != 0:
                 bc_boundary = boundary_in if params.hard_bc_dir == 1 else boundary_out
                 loss_models.append(
@@ -109,7 +110,6 @@ def get_loss_models(
                     trafos.phi_trafo,
                     f"phi{i}_{contact}",
                     kwargs={
-                        "learn_phi_prime": params.learn_phi_prime,
                         "i": i,
                         "contact": contact,
                         "grid_names": boundaries_in + bulks + boundaries_out,

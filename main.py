@@ -136,7 +136,7 @@ if params.loaded_V_el_index is not None:
 
 DeltaE_max = torch.max(unbatched_grids["bulk"]["DeltaE"]).item()
 energy_cutoffs = np.arange(
-    start=params.energy_cutoff_delta,
+    start=params.energy_cutoff_start,
     stop=DeltaE_max,
     step=params.energy_cutoff_delta,
 )

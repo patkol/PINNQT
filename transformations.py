@@ -391,7 +391,7 @@ def hard_bc_in_phi_trafo(
 ):
     """
     d * (phi0 [+ phi1]) at the input boundary.
-    Condition: phi' = gamma * (2a - phi) at the input contact.
+    Condition: phi' = gamma * (2a - phi) at the input contact,
     with gamma := contact.direction * m_eff_device / m_eff_contact * i * k_contact.
     Solved by d * phi_old
     with d = 2a / (phi_old_contact' / gamma + phi_old_contact)
@@ -427,48 +427,36 @@ def hard_bc_out_phi_trafo(
     qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
 ):
     """
-    Force the output BC at the output boundary without affecting the WF
-    at the input boundary.
-    BC on the output boundary: There can only be an
-    outgoing wave there. The criterion for that is contact.direction*i*k*phi = phi_dx.
-    Assuming that there the eff mass & potential plateau towards the
-    contacts - then the solution should approach t * e^{contact.direction*ikx}.
-    As t we use the value of the current phi at the output.
+    (phi0 [+ phi1]) + c at the input boundary.
+    Condition: phi' = gamma * phi at the input contact,
+    with gamma := contact.direction * m_eff_device / m_eff_contact * i * k_contact.
+    Solved by phi_old + c
+    with c = phi_old_contact' / gamma - phi_old_contact
     """
 
-    assert direction == 1  # Don't need this special trafo for output -> input
+    # Can't use this special trafo for input -> output as it changes the WF on both
+    # sides of the last layer without considering the second last one.
+    assert direction == -1
     assert i == contact.out_layer_index
 
-    q_in_boundary = qs[f"boundary{contact.get_in_boundary_index(i)}"]
-    q_out_boundary = qs[f"boundary{contact.get_out_boundary_index(i)}"]
-    x_in, x_out = q_in_boundary["x"].item(), q_out_boundary["x"].item()
+    boundary_index = contact.out_boundary_index
+    q_boundary = qs[f"boundary{boundary_index}"]
 
-    max_transition_distance = abs(x_out - x_in)
-    assert (
-        params.hard_bc_output_transition_distance <= max_transition_distance
-    ), f'The "hard_bc_output_transition_distance" is too wide, must be less than {max_transition_distance / consts.NM} nm for the current device'
+    phi_boundary = formulas.get_simple_phi(q_boundary, i=i, contact=contact)
+    phi_dx_boundary = formulas.get_simple_phi_dx(q_boundary, i=i, contact=contact)
+    gamma = (
+        contact.direction
+        * q_boundary[f"m_eff{i}"]
+        / q_boundary[f"m_eff{contact.out_index}"]
+        * 1j
+        * q_boundary[f"k{contact.out_index}_{contact}"]
+    )
+    c = phi_dx_boundary / gamma - phi_boundary
 
     for grid_name in grid_names:
         q = qs[grid_name]
-        delta_x = q["x"] - q_out_boundary["x"]
-        plane_wave_phase = torch.exp(
-            contact.direction * 1j * q_out_boundary[f"k{i}_{contact}"] * delta_x
-        )
-        # TODO: Force the correct transmitted amplitude based on the reflected one
-        phi_out = q_out_boundary[f"phi{i}_{contact}"] * plane_wave_phase
-
-        # Transition to phi_out
-        transition_start = (
-            x_out - contact.direction * params.hard_bc_output_transition_distance
-        )
-        transition_function = formulas.smooth_transition(
-            q["x"], transition_start, x_out, 1, 0
-        )
-        q.overwrite(
-            f"phi{i}_{contact}",
-            transition_function * q[f"phi{i}_{contact}"]
-            + (1 - transition_function) * phi_out,
-        )
+        phi = formulas.get_simple_phi(q, i=i, contact=contact)
+        q[f"phi{i}_{contact}"] = phi + c
 
     return qs
 
@@ -637,8 +625,8 @@ def phi_trafo_learn_phi_prime_polar(
     return qs
 
 
-def phi_trafo(qs, *, learn_phi_prime, **kwargs):
-    if learn_phi_prime:
+def phi_trafo(qs, **kwargs):
+    if params.learn_phi_prime:
         return phi_trafo_learn_phi_prime(qs, **kwargs, direction=params.hard_bc_dir)
 
     if params.learn_phi_prime_polar:
@@ -646,8 +634,20 @@ def phi_trafo(qs, *, learn_phi_prime, **kwargs):
             qs, **kwargs, direction=params.hard_bc_dir
         )
 
-    if params.hard_bc_dir == 0:
+    # If we don't force the input coeff, any solution works at the input contact.
+    if params.hard_bc_dir == 0 or (
+        (not params.force_unity_coeff)
+        and params.hard_bc_dir == 1
+        and kwargs["i"] == kwargs["contact"].in_layer_index
+    ):
         return simple_phi_trafo(qs, **kwargs)
+
+    if (
+        (not params.force_unity_coeff)
+        and params.hard_bc_dir == -1
+        and kwargs["i"] == kwargs["contact"].out_layer_index
+    ):
+        return hard_bc_out_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
 
     # Input layer
     if params.hard_bc_dir == 1 and kwargs["i"] == kwargs["contact"].in_layer_index:
@@ -661,14 +661,6 @@ def phi_trafo(qs, *, learn_phi_prime, **kwargs):
             hard_bc_phi_trafo_without_phi_one(
                 qs, **kwargs, direction=params.hard_bc_dir
             )
-
-    # Output layer
-    if (
-        params.hard_bc_output
-        and params.hard_bc_dir == 1
-        and kwargs["i"] == kwargs["contact"].out_layer_index
-    ):
-        hard_bc_out_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
 
     return qs
 
@@ -685,11 +677,17 @@ def contact_coeffs_trafo(qs, *, contact):
         i=contact.index,
         contact=contact,
         direction=-1,
-        get_derivative=params.hard_bc_dir == -1,
+        get_derivative=True,
+    )
+    phi_out, _ = formulas.get_phi_target(
+        q_out,
+        i=contact.out_index,
+        contact=contact,
+        direction=1,
+        get_derivative=False,
     )
 
-    if params.hard_bc_dir == -1:
-        # transmitted_coeff is fixed
+    if (not params.force_unity_coeff) or params.hard_bc_dir == -1:
         """
         phi = a * exp(sik(x-x0)) + r * exp(-sik(x-x0)) with s = contact.direction,
         phi' = sik * (a * exp(sik(x-x0)) - r * exp(-sik(x-x0)))
@@ -700,15 +698,7 @@ def contact_coeffs_trafo(qs, *, contact):
             phi_in + phi_dx_in / (contact.direction * 1j * k_in)
         )
 
-    else:
-        # incoming_coeff is fixed
-        phi_out, _ = formulas.get_phi_target(
-            q_out,
-            i=contact.out_index,
-            contact=contact,
-            direction=1,
-            get_derivative=False,
-        )
+    if (not params.force_unity_coeff) or params.hard_bc_dir != -1:
         q[f"transmitted_coeff_{contact}"] = phi_out
 
     # incoming_coeff + reflected_coeff = phi_in
