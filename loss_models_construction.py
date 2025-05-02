@@ -167,14 +167,15 @@ def get_loss_models(
                 )
             )
 
-            loss_models.append(
-                model.MultiModel(
-                    loss.j_loss_trafo,
-                    f"j_loss{i}_{contact}",
-                    kwargs={"i": i, "N": N, "contact": contact},
+            if params.use_j_loss:
+                loss_models.append(
+                    model.MultiModel(
+                        loss.j_loss_trafo,
+                        f"j_loss{i}_{contact}",
+                        kwargs={"i": i, "N": N, "contact": contact},
+                    )
                 )
-            )
-            loss_quantities[bulk_name].append(f"j_loss{i}_{contact}")
+                loss_quantities[bulk_name].append(f"j_loss{i}_{contact}")
 
             loss_models.append(
                 MultiModel(

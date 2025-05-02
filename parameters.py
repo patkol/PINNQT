@@ -39,7 +39,7 @@ E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
 loaded_parameters_index = None
-energy_cutoff_start = 0.2 * consts.EV
+energy_cutoff_start = 0.8 * consts.EV
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -50,8 +50,8 @@ use_V_el_new = True
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 10
-n_neurons_per_hidden_layer = 100
+n_hidden_layers = 12
+n_neurons_per_hidden_layer = 350
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
@@ -69,6 +69,7 @@ loss_function = mathematics.complex_abs2
 loss_aggregate_function = sum
 # loss_function = lambda x: mathematics.complex_abs2(x) ** 2
 # loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
+use_j_loss = False
 fd_first_derivatives = True
 fd_second_derivatives = True
 # Whether the voltage/energy is an input to the NN
@@ -82,7 +83,7 @@ n_newton_raphson_steps = 1
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
 force_unity_coeff = False
-soft_bc = True
+soft_bc = False
 # soft_bc_output: if True, soft BC will be applied to the output contacts even if
 # soft_bc is False
 soft_bc_output = False
@@ -91,7 +92,7 @@ soft_bc_output = False
 # -1: vice versa
 # 0: no hard BC
 hard_bc_dir = -1
-use_phi_one = False
+use_phi_one = True
 # hard_bc_without_phi_one: linear / multiply_linear / conjugate
 hard_bc_without_phi_one = "conjugate"
 learn_phi_prime = False
@@ -115,7 +116,7 @@ VOLTAGE2_MIN = 0.0 * consts.VOLT
 VOLTAGE2_STEP = 0.05 * consts.VOLT
 VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
-E_MIN = 1e-3 * consts.EV
+E_MIN = 0.6 * consts.EV  # 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
 E_MAX = 1.5 * consts.EV
 # E_MIN = 0.05 * consts.EV
@@ -145,7 +146,7 @@ ansatz: determines how a/b_phase are calculated.
       force the BC, such that the solution does not explode for highly negative
       energies / thick barriers.
 """
-ansatz = "none"
+ansatz = "wkb"
 ignore_wkb_phase = False  # Whether to use the absolute value as the wkb ansatz
 """
 output_trafo: Transformation of the NN output a/b_output
