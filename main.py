@@ -9,6 +9,7 @@ Solving the 1D Schrödinger equation with open bc using PINN.
 
 import os
 import shutil
+import copy
 import random
 import numpy as np
 import torch
@@ -24,6 +25,7 @@ from kolpinn.training import Trainer
 from classes import Device
 import physical_constants as consts
 import parameters as params
+import formulas
 import devices
 from constant_models_construction import get_constant_models
 from eval_models_construction import get_eval_models
@@ -133,6 +135,49 @@ if params.loaded_V_el_index is not None:
         quantities_requiring_grad=quantities_requiring_grad,
     )
     del loaded_q_bulk
+
+if params.imported_V_el_path is not None:
+    # Import V_el from QT lecture code
+    U_loaded = torch.tensor(np.load(params.imported_V_el_path + "U_drain.npy"))
+    U2_loaded = torch.tensor(np.load(params.imported_V_el_path + "U_gate.npy"))
+    assert torch.allclose(unbatched_grids["bulk"]["voltage"], U_loaded)
+    assert torch.allclose(unbatched_grids["bulk"]["voltage2"], U2_loaded)
+    x_loaded = torch.tensor(np.load(params.imported_V_el_path + "x.npy"))
+    V_el = np.load(params.imported_V_el_path + "V_1d.npy")
+    # PINNQT dimension order is U, U2, E, x
+    # Lecture code order is x, E, U, U2
+    V_el = torch.tensor(V_el.transpose((2, 3, 1, 0)))
+    V_el_grid_dimensions = copy.copy(unbatched_grids["bulk"].dimensions)
+    V_el_grid_dimensions["x"] = x_loaded
+    V_el_grid = Grid(V_el_grid_dimensions)
+
+    # Correct the loaded V_el to make sure it has the expected values at the contact
+    left_grid = unbatched_grids["boundary0"]
+    right_grid = unbatched_grids[f"boundary{device.n_layers}"]
+    V_el_target_left = 0
+    V_el_target_right = -right_grid["voltage"] * consts.EV
+    V_el_left = quantities.interpolate(V_el, V_el_grid, left_grid, dimension_label="x")
+    V_el_right = quantities.interpolate(
+        V_el, V_el_grid, right_grid, dimension_label="x"
+    )
+    x_left = left_grid["x"]
+    x_right = right_grid["x"]
+    dV_el = formulas.smooth_transition(
+        V_el_grid["x"],
+        x_left,
+        x_right,
+        V_el_target_left - V_el_left,
+        V_el_target_right - V_el_right,
+    )
+    V_el += dV_el
+
+    trainer = get_updated_trainer(
+        trainer,
+        V_el=V_el.to(params.device),
+        V_el_grid=V_el_grid,
+        unbatched_grids=unbatched_grids,
+        quantities_requiring_grad=quantities_requiring_grad,
+    )
 
 DeltaE_max = torch.max(unbatched_grids["bulk"]["DeltaE"]).item()
 energy_cutoffs = np.arange(

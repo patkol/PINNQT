@@ -39,10 +39,11 @@ E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
 loaded_parameters_index = None
-energy_cutoff_start = 2 * consts.EV
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
+# imported_V_el_path: for importing V_el from the QT python lecture code
+imported_V_el_path = "../QT_lecture_code/data/"
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
 use_V_el_new = True
 # `load_optimizer`: Whether to use the state of the saved optimizer
@@ -56,7 +57,7 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 0
 max_time = None
 min_loss = 1e-4
 report_each = 1
@@ -100,6 +101,8 @@ U_input_scale = 0.1 * consts.VOLT
 E_input_scale = 0.2 * consts.EV
 E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
+energy_cutoff_delta = 0.2 * consts.EV
+energy_cutoff_start = energy_cutoff_delta
 
 # Plotting
 plot_each_voltage = 1
@@ -115,9 +118,9 @@ VOLTAGE2_MIN = 0.0 * consts.VOLT
 VOLTAGE2_STEP = 0.05 * consts.VOLT
 VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
-E_MIN = 0.6 * consts.EV  # 1e-3 * consts.EV
+E_MIN = 0 * consts.EV  # 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
-E_MAX = 0.8 * consts.EV
+E_MAX = 1 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
@@ -133,7 +136,6 @@ CONSTANT_FERMI_LEVEL = 0.9206335951628302 * consts.EV  # 0.258 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
-energy_cutoff_delta = 0.2 * consts.EV
 device_smoothing_distance = 4 * consts.NM
 
 """
