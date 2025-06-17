@@ -10,6 +10,7 @@ old/
 plots/
 data/
 parameters/
+logs/
 ignored/
 kolpinn
 .vscode

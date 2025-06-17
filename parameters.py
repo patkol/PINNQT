@@ -39,7 +39,7 @@ E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
 loaded_parameters_index = None
-energy_cutoff_start = 0.8 * consts.EV
+energy_cutoff_start = 2 * consts.EV
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -50,7 +50,7 @@ use_V_el_new = True
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 12
+n_hidden_layers = 16
 n_neurons_per_hidden_layer = 350
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
@@ -58,7 +58,7 @@ model_dtype = torch.float32
 # Training
 max_n_training_steps = None
 max_time = None
-min_loss = 10000e-9
+min_loss = 1e-4
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -76,8 +76,7 @@ fd_second_derivatives = True
 continuous_voltage = True
 continuous_energy = True
 batch_sizes: Dict[str, int] = {
-    # "x": 200,
-    # "DeltaE": 100,
+    # "DeltaE": 200,
 }
 n_newton_raphson_steps = 1
 newton_raphson_rate = 1
@@ -118,7 +117,7 @@ VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
 E_MIN = 0.6 * consts.EV  # 1e-3 * consts.EV
 E_STEP = 1e-3 * consts.EV
-E_MAX = 1.5 * consts.EV
+E_MAX = 0.8 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
