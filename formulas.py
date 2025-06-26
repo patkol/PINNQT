@@ -85,10 +85,80 @@ def smooth_rectangle(
     return left_transition + right_transition
 
 
-def smoothen(quantity: torch.Tensor, grid: Grid, dim_label: str):
+def smoothen_curve_univariate_spline(x: torch.Tensor, y: torch.Tensor):
+    real_spline = scipy.interpolate.UnivariateSpline(
+        x.cpu(),
+        torch.real(y).cpu(),
+        s=1,
+    )
+    imag_spline = scipy.interpolate.UnivariateSpline(
+        x.cpu(),
+        torch.imag(y).cpu(),
+        s=1,
+    )
+
+    return torch.from_numpy(real_spline(x.cpu()) + 1j * imag_spline(x.cpu()))
+
+
+def smoothen_curve_gaussian(
+    x: torch.Tensor, y: torch.Tensor, *, sigma: float, cutoff_sigmas: float
+):
+    """
+    Similar to https://stackoverflow.com/a/24145141
+    """
+
+    N = len(x)
+    assert len(y) == N
+    # dxs = torch.diff(x)
+    # assert torch.allclose(dxs, dxs[0]), "Grid must be equispaced"
+
+    avg_dx = ((x[-1] - x[0]) / (N - 1)).item()
+    cutoff = cutoff_sigmas * sigma
+    N_cutoff = int(np.ceil(cutoff / avg_dx))
+    x_expansion_left = torch.linspace(
+        start=x[0] - cutoff, end=x[0] - avg_dx, steps=N_cutoff
+    )
+    x_expansion_right = torch.linspace(
+        start=x[-1] + avg_dx, end=x[-1] + cutoff, steps=N_cutoff
+    )
+    x_expanded = torch.cat((x_expansion_left, x, x_expansion_right))
+    y_expansion_left = (y[1] - y[0]) / (x[1] - x[0]) * (x_expansion_left - x[0]) + y[0]
+    y_expansion_right = (y[-1] - y[-2]) / (x[-1] - x[-2]) * (
+        x_expansion_right - x[-1]
+    ) + y[-1]
+    y_expanded = torch.cat((y_expansion_left, y, y_expansion_right))
+
+    assert len(x_expanded) == len(y_expanded)
+    assert len(x_expanded) == N + 2 * N_cutoff
+
+    smooth_y = torch.zeros_like(y)
+    for i in range(N):
+        i_expanded = i + N_cutoff
+        window = slice(i_expanded - N_cutoff, i_expanded + N_cutoff)
+        delta_x = x_expanded[window] - x_expanded[i_expanded]
+        weights = torch.exp(-(delta_x**2) / 2 / sigma**2)
+        weights /= sum(weights)
+        smooth_y[i] = torch.sum(y_expanded[window] * weights)
+
+    return smooth_y
+
+
+smoothen_curve_functions = {
+    "univariate_spline": smoothen_curve_univariate_spline,
+    "gaussian": smoothen_curve_gaussian,
+}
+
+
+def smoothen(
+    quantity: torch.Tensor, grid: Grid, dim_label: str, *, method: str, **kwargs
+):
     """
     Smoothen `quantity` on `grid` along `dim_label`.
     `grid` must be sorted along `dim_label`.
+    `method`:
+        "gaussian": Convolve a gaussian (works for non-equispaced data)
+        "univariate_spline": For backwards compatibility, does not behave smoothly wrt.
+            changes in `quantity`.
     """
 
     assert quantities.compatible(quantity, grid)
@@ -102,7 +172,7 @@ def smoothen(quantity: torch.Tensor, grid: Grid, dim_label: str):
 
     smoothened_quantity = torch.zeros_like(quantity)
 
-    # scipy.interpolate.UnivariateSpline only works with 1D data, so we have to
+    # The smoothing function only works with 1D data, so we have to
     # call it for all combinations of the other dimensions.
     for other_indices in itertools.product(*other_ranges):
         # Get current slice
@@ -111,18 +181,8 @@ def smoothen(quantity: torch.Tensor, grid: Grid, dim_label: str):
             slices[grid.index[other_dim_label]] = other_index
 
         # Smoothen slice
-        real_spline = scipy.interpolate.UnivariateSpline(
-            grid[dim_label].cpu(),
-            torch.real(quantity[slices]).cpu(),
-            s=1,  # TODO: make adjustable
-        )
-        imag_spline = scipy.interpolate.UnivariateSpline(
-            grid[dim_label].cpu(),
-            torch.imag(quantity[slices]).cpu(),
-            s=1,  # TODO: make adjustable
-        )
-        smoothened_quantity[slices] = torch.from_numpy(
-            real_spline(grid[dim_label].cpu()) + 1j * imag_spline(grid[dim_label].cpu())
+        smoothened_quantity[slices] = smoothen_curve_functions[method](
+            grid[dim_label], quantity[slices], **kwargs
         )
 
     return smoothened_quantity
@@ -191,6 +251,27 @@ def get_V_el_guess(q, guess_type: str, **kwargs):
             y1=V_channel,
         )
         V_ext += get_linear_transition(
+            q["x"],
+            x0=kwargs["x_gate_R"],
+            x1=x_ramp_R,
+            y0=0,
+            y1=V_drain - V_channel,
+        )
+        return V_ext
+
+    if guess_type == "transistor_smooth":
+        x_ramp_L = kwargs["x_gate_L"] - kwargs["ramp_size"]
+        x_ramp_R = kwargs["x_gate_R"] + kwargs["ramp_size"]
+        V_channel = kwargs["V_channel"] - q["voltage2"] * consts.EV
+        V_drain = -q["voltage"] * consts.EV
+        V_ext = smooth_transition(
+            q["x"],
+            x0=x_ramp_L,
+            x1=kwargs["x_gate_L"],
+            y0=0,
+            y1=V_channel,
+        )
+        V_ext = V_ext + smooth_transition(
             q["x"],
             x0=kwargs["x_gate_R"],
             x1=x_ramp_R,

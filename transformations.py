@@ -165,11 +165,13 @@ def to_bulks_and_boundaries_trafo(
 
 
 def wkb_phase_trafo(
-    qs: dict[str, QuantityDict],
+    qs: Dict[str, QuantityDict],
     *,
     contact: Contact,
     N: int,
     dx_dict: Dict[str, float],
+    smoothing_method: str,
+    smoothing_kwargs: Dict,
 ):
     for i in range(1, N + 1):
         # Set up the grid to integrate on
@@ -195,7 +197,13 @@ def wkb_phase_trafo(
         sorted_k_integral = quantities.get_cumulative_integral(
             "x", x_L, sorted_integrand, sorted_supergrid
         )
-        sorted_k_integral = formulas.smoothen(sorted_k_integral, sorted_supergrid, "x")
+        sorted_k_integral = formulas.smoothen(
+            sorted_k_integral,
+            sorted_supergrid,
+            "x",
+            method=smoothing_method,
+            **smoothing_kwargs,
+        )
         k_integral_LR = quantities.combine_quantity(
             [sorted_k_integral], [sorted_supergrid], supergrid
         )
@@ -427,8 +435,8 @@ def hard_bc_out_phi_trafo(
     qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
 ):
     """
-    (phi0 [+ phi1]) + c at the input boundary.
-    Condition: phi' = gamma * phi at the input contact,
+    (phi0 [+ phi1]) + c
+    Condition: phi' = gamma * phi at the output contact,
     with gamma := contact.direction * m_eff_device / m_eff_contact * i * k_contact.
     Solved by phi_old + c
     with c = phi_old_contact' / gamma - phi_old_contact

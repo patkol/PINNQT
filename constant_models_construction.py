@@ -204,6 +204,8 @@ def get_constant_models(
                     "contact": contact,
                     "N": N,
                     "dx_dict": dx_dict,
+                    "smoothing_method": params.wkb_smoothing_method,
+                    "smoothing_kwargs": params.wkb_smoothing_kwargs,
                 },
             )
         )

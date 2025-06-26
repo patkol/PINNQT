@@ -12,12 +12,20 @@ import physical_constants as consts
 
 # General
 simulated_device_name = "InGaAs_transistor_x"
-V_el_guess_type = "transistor"
+# MATLAB guess
+# V_el_guess_type = "transistor"
+# V_el_guess_kwargs = {
+#     "x_gate_L": 20 * consts.NM,
+#     "x_gate_R": 35 * consts.NM,
+#     "ramp_size": 2 * consts.NM,
+#     "V_channel": 0.9626336 * consts.EV,  # voltage2 is subtracted from this TODO: move
+# }
+V_el_guess_type = "transistor_smooth"
 V_el_guess_kwargs = {
-    "x_gate_L": 20 * consts.NM,
-    "x_gate_R": 35 * consts.NM,
-    "ramp_size": 2 * consts.NM,
-    "V_channel": 0.9626336 * consts.EV,  # voltage2 is subtracted from this TODO: move
+    "x_gate_L": 27.5 * consts.NM,
+    "x_gate_R": 27.5 * consts.NM,
+    "ramp_size": 27.5 * consts.NM,
+    "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this TODO: move
 }
 # voltage2: a voltage applied in the middle of the device. The voltage to the left
 # is still assumed to be zero and the one on the right to be given by voltage
@@ -43,7 +51,7 @@ loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
 # imported_V_el_path: for importing V_el from the QT python lecture code
-imported_V_el_path = "../QT_lecture_code/data/"
+imported_V_el_path = None  # "lecture_code_results/mode_space_mode1_converged/"
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
 use_V_el_new = True
 # `load_optimizer`: Whether to use the state of the saved optimizer
@@ -51,15 +59,17 @@ use_V_el_new = True
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 16
+n_hidden_layers = 12
 n_neurons_per_hidden_layer = 350
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
 max_n_training_steps = 0
-max_time = None
-min_loss = 1e-4
+max_time = 10000
+min_loss = 2e-4
+energy_cutoff_delta = 0.2 * consts.EV
+energy_cutoff_start = energy_cutoff_delta
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
@@ -77,7 +87,7 @@ fd_second_derivatives = True
 continuous_voltage = True
 continuous_energy = True
 batch_sizes: Dict[str, int] = {
-    # "DeltaE": 200,
+    # "DeltaE": 100,
 }
 n_newton_raphson_steps = 1
 newton_raphson_rate = 1
@@ -101,8 +111,6 @@ U_input_scale = 0.1 * consts.VOLT
 E_input_scale = 0.2 * consts.EV
 E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
-energy_cutoff_delta = 0.2 * consts.EV
-energy_cutoff_start = energy_cutoff_delta
 
 # Plotting
 plot_each_voltage = 1
@@ -111,16 +119,16 @@ extra_plots = True
 
 # Physical
 VOLTAGE_MIN = 0.6 * consts.VOLT
-VOLTAGE_STEP = 0.05 * consts.VOLT
+VOLTAGE_STEP = 0.3 * consts.VOLT
 VOLTAGE_MAX = 0.60001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
-VOLTAGE2_STEP = 0.05 * consts.VOLT
+VOLTAGE2_STEP = 0.3 * consts.VOLT
 VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
-E_MIN = 0 * consts.EV  # 1e-3 * consts.EV
-E_STEP = 1e-3 * consts.EV
-E_MAX = 1 * consts.EV
+E_MIN = 1e-2 * consts.EV  # 1e-3 * consts.EV
+E_STEP = 2e-2 * consts.EV
+E_MAX = 2 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
@@ -149,6 +157,11 @@ ansatz: determines how a/b_phase are calculated.
 """
 ansatz = "wkb"
 ignore_wkb_phase = False  # Whether to use the absolute value as the wkb ansatz
+wkb_smoothing_method = "gaussian"
+wkb_smoothing_kwargs = {
+    "sigma": 1 * consts.NM,
+    "cutoff_sigmas": 6,
+}
 """
 output_trafo: Transformation of the NN output a/b_output
     none: None
