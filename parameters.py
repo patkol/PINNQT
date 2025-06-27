@@ -128,7 +128,7 @@ VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
 E_MIN = 1e-2 * consts.EV  # 1e-3 * consts.EV
 E_STEP = 2e-2 * consts.EV
-E_MAX = 2 * consts.EV
+E_MAX = 0.1 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV

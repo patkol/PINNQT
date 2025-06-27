@@ -174,39 +174,48 @@ def wkb_phase_trafo(
     smoothing_kwargs: Dict,
 ):
     for i in range(1, N + 1):
-        # Set up the grid to integrate on
-        grid_names = [f"bulk{i}"]
+        bulk_grid_name = f"bulk{i}"
+        left_boundary_index = i - 1
+        right_boundary_index = i
+        x_L = qs[f"boundary{left_boundary_index}"].grid["x"].item()
+
+        # Set up combined grids
+        child_grids = {bulk_grid_name: qs[bulk_grid_name].grid}
         for i_boundary in (i - 1, i):
             for dx_string in dx_dict.keys():
-                grid_names.append(f"boundary{i_boundary}" + dx_string)
-        child_grids: dict[str, Grid] = dict(
-            (grid_name, qs[grid_name].grid) for grid_name in grid_names
-        )
+                grid_name = f"boundary{i_boundary}" + dx_string
+                child_grids[grid_name] = qs[grid_name].grid
         supergrid = Supergrid(child_grids, "x", copy_all=False)
+        # Sorting for cumulative integral and later interpolation
         sorted_supergrid = grids.get_sorted_grid_along(["x"], supergrid, copy_all=False)
-        ks = [qs[grid_name][f"k{i}_{contact}"] for grid_name in grid_names]
+
+        # Put integrand on supergrid (need x_L to be included to be able to start
+        # the integration from there)
+        ks = [qs[grid_name][f"k{i}_{contact}"] for grid_name in child_grids.keys()]
         integrand = quantities.combine_quantity(
             ks, list(supergrid.subgrids.values()), supergrid
         )
         sorted_integrand = quantities.restrict(integrand, sorted_supergrid)
 
-        left_boundary_index = i - 1
-        right_boundary_index = i
-        x_L = qs[f"boundary{left_boundary_index}"].grid["x"].item()
-
-        sorted_k_integral = quantities.get_cumulative_integral(
+        # Calculate the integral
+        k_integral_LR = quantities.get_cumulative_integral(
             "x", x_L, sorted_integrand, sorted_supergrid
         )
-        sorted_k_integral = formulas.smoothen(
-            sorted_k_integral,
+
+        # Smoothen the integral
+        k_integral_LR = formulas.smoothen(
+            k_integral_LR,
             sorted_supergrid,
             "x",
             method=smoothing_method,
             **smoothing_kwargs,
         )
+
+        # Move from sorted_supergrid to supergrid
         k_integral_LR = quantities.combine_quantity(
-            [sorted_k_integral], [sorted_supergrid], supergrid
+            [k_integral_LR], [sorted_supergrid], supergrid
         )
+
         right_k_integral = quantities.restrict(
             k_integral_LR, supergrid.subgrids[f"boundary{right_boundary_index}"]
         )
@@ -230,7 +239,7 @@ def wkb_phase_trafo(
             a_phase = torch.abs(a_phase)
             b_phase = torch.abs(b_phase)
 
-        for grid_name in grid_names:
+        for grid_name in supergrid.subgrids.keys():
             q = qs[grid_name]
             q[f"a_phase{i}_{contact}"] = quantities.restrict(
                 a_phase, supergrid.subgrids[grid_name]

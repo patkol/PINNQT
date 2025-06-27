@@ -104,13 +104,13 @@ def smoothen_curve_gaussian(
     x: torch.Tensor, y: torch.Tensor, *, sigma: float, cutoff_sigmas: float
 ):
     """
+    x: 1D Tensor
+    y[i, ...]: values at x[i]
     Similar to https://stackoverflow.com/a/24145141
     """
 
     N = len(x)
-    assert len(y) == N
-    # dxs = torch.diff(x)
-    # assert torch.allclose(dxs, dxs[0]), "Grid must be equispaced"
+    assert y.shape[0] == N
 
     avg_dx = ((x[-1] - x[0]) / (N - 1)).item()
     cutoff = cutoff_sigmas * sigma
@@ -122,23 +122,32 @@ def smoothen_curve_gaussian(
         start=x[-1] + avg_dx, end=x[-1] + cutoff, steps=N_cutoff
     )
     x_expanded = torch.cat((x_expansion_left, x, x_expansion_right))
-    y_expansion_left = (y[1] - y[0]) / (x[1] - x[0]) * (x_expansion_left - x[0]) + y[0]
-    y_expansion_right = (y[-1] - y[-2]) / (x[-1] - x[-2]) * (
-        x_expansion_right - x[-1]
-    ) + y[-1]
+    expansion_shape = [1] * len(y.shape)
+    expansion_shape[0] = -1
+    y_expansion_left = (y[1, ...] - y[0, ...]) / (x[1] - x[0]) * (
+        x_expansion_left.reshape(expansion_shape) - x[0]
+    ) + y[0, ...]
+    y_expansion_right = (y[-1, ...] - y[-2, ...]) / (x[-1] - x[-2]) * (
+        x_expansion_right.reshape(expansion_shape) - x[-1]
+    ) + y[-1, ...]
     y_expanded = torch.cat((y_expansion_left, y, y_expansion_right))
 
     assert len(x_expanded) == len(y_expanded)
     assert len(x_expanded) == N + 2 * N_cutoff
 
+    # Now we expand only over the window
     smooth_y = torch.zeros_like(y)
+    print("Smoothing...")
     for i in range(N):
         i_expanded = i + N_cutoff
-        window = slice(i_expanded - N_cutoff, i_expanded + N_cutoff)
+        window = slice(i_expanded - N_cutoff, i_expanded + N_cutoff + 1)
         delta_x = x_expanded[window] - x_expanded[i_expanded]
         weights = torch.exp(-(delta_x**2) / 2 / sigma**2)
         weights /= sum(weights)
-        smooth_y[i] = torch.sum(y_expanded[window] * weights)
+        smooth_y[i, ...] = torch.sum(
+            y_expanded[window, ...] * weights.reshape(expansion_shape), axis=0
+        )
+    print("Done")
 
     return smooth_y
 
@@ -146,6 +155,12 @@ def smoothen_curve_gaussian(
 smoothen_curve_functions = {
     "univariate_spline": smoothen_curve_univariate_spline,
     "gaussian": smoothen_curve_gaussian,
+}
+
+
+smoothen_curve_functions_is_vectorized = {
+    "univariate_spline": False,
+    "gaussian": True,
 }
 
 
@@ -162,6 +177,16 @@ def smoothen(
     """
 
     assert quantities.compatible(quantity, grid)
+
+    if smoothen_curve_functions_is_vectorized[method]:
+        dim_index = grid.index[dim_label]
+        quantity = torch.swapaxes(quantity, 0, dim_index)
+        smooth_quantity = smoothen_curve_functions[method](
+            grid[dim_label], quantity, **kwargs
+        )
+        smooth_quantity = torch.swapaxes(smooth_quantity, 0, dim_index)
+
+        return smooth_quantity
 
     other_dim_labels = copy.copy(grid.dimensions_labels)
     other_dim_labels.remove(dim_label)
