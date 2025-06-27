@@ -170,7 +170,7 @@ def wkb_phase_trafo(
     contact: Contact,
     N: int,
     dx_dict: Dict[str, float],
-    smoothing_method: str,
+    smoothing_method: Optional[str],
     smoothing_kwargs: Dict,
 ):
     for i in range(1, N + 1):
@@ -203,13 +203,14 @@ def wkb_phase_trafo(
         )
 
         # Smoothen the integral
-        k_integral_LR = formulas.smoothen(
-            k_integral_LR,
-            sorted_supergrid,
-            "x",
-            method=smoothing_method,
-            **smoothing_kwargs,
-        )
+        if smoothing_method is not None:
+            k_integral_LR = formulas.smoothen(
+                k_integral_LR,
+                sorted_supergrid,
+                "x",
+                method=smoothing_method,
+                **smoothing_kwargs,
+            )
 
         # Move from sorted_supergrid to supergrid
         k_integral_LR = quantities.combine_quantity(

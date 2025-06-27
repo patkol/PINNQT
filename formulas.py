@@ -135,9 +135,9 @@ def smoothen_curve_gaussian(
     assert len(x_expanded) == len(y_expanded)
     assert len(x_expanded) == N + 2 * N_cutoff
 
-    # Now we expand only over the window
     smooth_y = torch.zeros_like(y)
     print("Smoothing...")
+    # OPTIM: vectorize
     for i in range(N):
         i_expanded = i + N_cutoff
         window = slice(i_expanded - N_cutoff, i_expanded + N_cutoff + 1)

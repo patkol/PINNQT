@@ -65,7 +65,7 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = 10000
 min_loss = 2e-4
 energy_cutoff_delta = 0.2 * consts.EV
@@ -114,7 +114,7 @@ x_input_scale = 10 * consts.NM
 
 # Plotting
 plot_each_voltage = 1
-plot_each_energy = 200
+plot_each_energy = 20
 extra_plots = True
 
 # Physical
@@ -128,7 +128,7 @@ VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
 E_MIN = 1e-2 * consts.EV  # 1e-3 * consts.EV
 E_STEP = 2e-2 * consts.EV
-E_MAX = 0.1 * consts.EV
+E_MAX = 2 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
@@ -157,7 +157,7 @@ ansatz: determines how a/b_phase are calculated.
 """
 ansatz = "wkb"
 ignore_wkb_phase = False  # Whether to use the absolute value as the wkb ansatz
-wkb_smoothing_method = "gaussian"
+wkb_smoothing_method = "gaussian"  # None for no smoothing
 wkb_smoothing_kwargs = {
     "sigma": 1 * consts.NM,
     "cutoff_sigmas": 6,
