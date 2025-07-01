@@ -46,7 +46,7 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 968
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -59,13 +59,13 @@ use_V_el_new = True
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 12
-n_neurons_per_hidden_layer = 350
+n_hidden_layers = 8
+n_neurons_per_hidden_layer = 80
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 0
 max_time = 10000
 min_loss = 2e-4
 energy_cutoff_delta = 0.2 * consts.EV
@@ -118,13 +118,13 @@ plot_each_energy = 20
 extra_plots = True
 
 # Physical
-VOLTAGE_MIN = 0.6 * consts.VOLT
+VOLTAGE_MIN = 0.0 * consts.VOLT
 VOLTAGE_STEP = 0.3 * consts.VOLT
 VOLTAGE_MAX = 0.60001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
 VOLTAGE2_STEP = 0.3 * consts.VOLT
-VOLTAGE2_MAX = 0.00001 * consts.VOLT
+VOLTAGE2_MAX = 0.60001 * consts.VOLT
 
 E_MIN = 1e-2 * consts.EV  # 1e-3 * consts.EV
 E_STEP = 2e-2 * consts.EV
