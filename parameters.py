@@ -46,7 +46,7 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = 988
+loaded_parameters_index = 996
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -111,6 +111,9 @@ U_input_scale = 0.1 * consts.VOLT
 E_input_scale = 0.2 * consts.EV
 E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
+# use_induced_V_el: If true, the V_el used in the loss is based on the one induced by
+# the wave function, removing the need for a poisson loop.
+use_induced_V_el = True
 
 # Plotting
 plot_each_voltage = 1
@@ -123,8 +126,8 @@ VOLTAGE_STEP = 0.1 * consts.VOLT
 VOLTAGE_MAX = 0.60001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
-VOLTAGE2_STEP = 0.3 * consts.VOLT
-VOLTAGE2_MAX = 0.00001 * consts.VOLT
+VOLTAGE2_STEP = 0.1 * consts.VOLT
+VOLTAGE2_MAX = 0.60001 * consts.VOLT
 
 E_MIN = 1e-2 * consts.EV  # 1e-3 * consts.EV
 E_STEP = 2e-2 * consts.EV
