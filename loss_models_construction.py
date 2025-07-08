@@ -148,50 +148,6 @@ def get_loss_models(
             )
         )
 
-        if params.use_induced_V_el:
-            loss_models.append(
-                MultiModel(
-                    trafos.to_full_trafo,
-                    f"phi_{contact}",
-                    kwargs={
-                        "N": N,
-                        "label_fn": lambda i, *, contact=contact: f"phi{i}_{contact}",
-                        "quantity_label": f"phi_{contact}",
-                    },
-                )
-            )
-            loss_models.append(
-                MultiModel(
-                    trafos.dos_trafo,
-                    f"DOS_{contact}",
-                    kwargs={"contact": contact},
-                )
-            )
-            loss_models.append(
-                MultiModel(
-                    trafos.n_contact_trafo,
-                    f"n_{contact}",
-                    kwargs={"contact": contact},
-                )
-            )
-
-    if params.use_induced_V_el:
-        loss_models.append(
-            MultiModel(
-                trafos.n_trafo,
-                "n",
-                kwargs={"contacts": device.contacts},
-            )
-        )
-        loss_models.append(
-            MultiModel(
-                trafos.V_electrostatic_trafo,
-                "V_el_new",
-                kwargs={"contacts": device.contacts, "N": N},
-            )
-        )
-
-    for contact in device.contacts:
         # Bulk
         for i in range(1, N + 1):
             bulk_name = f"bulk{i}"

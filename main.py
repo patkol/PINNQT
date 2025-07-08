@@ -301,8 +301,8 @@ if __name__ == "__main__":
             "T_R",
             "R_L",
             "R_R",
-            # "phi_L",
-            # "phi_R",
+            "phi_L",
+            "phi_R",
             "incoming_coeff_L",
             "incoming_coeff_R",
         ]

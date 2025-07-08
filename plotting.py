@@ -96,7 +96,7 @@ def save_plots(
         q.grid,
         "-I",
         "voltage",
-        "voltage2" if params.use_voltage2 else None,
+        "voltage2",
         path_prefix=path_prefix,
         quantity_unit=1e6 / consts.CM**2,
         quantity_unit_name="10^6 A/cm^2",
@@ -106,21 +106,20 @@ def save_plots(
         lines_unit_name="V",
     )
 
-    if params.use_voltage2:
-        save_lineplot(
-            -q["I"],
-            q.grid,
-            "-I",
-            "voltage2",
-            "voltage",
-            path_prefix=path_prefix,
-            quantity_unit=1e6 / consts.CM**2,
-            quantity_unit_name="10^6 A/cm^2",
-            x_unit=consts.VOLT,
-            x_unit_name="V",
-            lines_unit=consts.VOLT,
-            lines_unit_name="V",
-        )
+    save_lineplot(
+        -q["I"],
+        q.grid,
+        "-I",
+        "voltage2",
+        "voltage",
+        path_prefix=path_prefix,
+        quantity_unit=1e6 / consts.CM**2,
+        quantity_unit_name="10^6 A/cm^2",
+        x_unit=consts.VOLT,
+        x_unit_name="V",
+        lines_unit=consts.VOLT,
+        lines_unit_name="V",
+    )
 
     fig, ax = plt.subplots()
     for contact in device.contacts:
@@ -129,7 +128,7 @@ def save_plots(
             q.grid,
             f"-I_{contact}",
             "voltage",
-            "voltage2" if params.use_voltage2 else None,
+            "voltage2",
             path_prefix=path_prefix,
             quantity_unit=1e6 / consts.CM**2,
             quantity_unit_name="10^6 A/cm^2",
@@ -138,9 +137,6 @@ def save_plots(
             lines_unit=consts.VOLT,
             lines_unit_name="V",
         )
-
-        if not params.use_voltage2:
-            continue
 
         save_lineplot(
             -q[f"I_{contact}"],
@@ -201,9 +197,10 @@ def save_plots(
 
             voltage_path_prefix = f"{path_prefix}{voltage:.2f}V/{voltage2:.2f}V2/"
             os.makedirs(voltage_path_prefix, exist_ok=True)
-            voltage_index_dict = {"voltage": [voltage_index]}
-            if params.use_voltage2:
-                voltage_index_dict["voltage2"] = [voltage2_index]
+            voltage_index_dict = {
+                "voltage": [voltage_index],
+                "voltage2": [voltage2_index],
+            }
 
             for contact in device.contacts:
                 q_full = qs["bulk"]
@@ -241,7 +238,7 @@ def save_plots(
                     q_full.grid,
                     "V",
                     "x",
-                    path_prefix=voltage_path_prefix,
+                    path_prefix=path_prefix,
                     quantity_unit=consts.EV,
                     quantity_unit_name="eV",
                     x_unit=consts.NM,
@@ -255,7 +252,7 @@ def save_plots(
                     q_full.grid,
                     "V_el_old",
                     "x",
-                    path_prefix=voltage_path_prefix,
+                    path_prefix=path_prefix,
                     quantity_unit=consts.EV,
                     quantity_unit_name="eV",
                     x_unit=consts.NM,
@@ -269,7 +266,7 @@ def save_plots(
                     q_full.grid,
                     "V_el_new",
                     "x",
-                    path_prefix=voltage_path_prefix,
+                    path_prefix=path_prefix,
                     quantity_unit=consts.EV,
                     quantity_unit_name="eV",
                     x_unit=consts.NM,
@@ -283,7 +280,7 @@ def save_plots(
                     q_full.grid,
                     "n",
                     "x",
-                    path_prefix=voltage_path_prefix,
+                    path_prefix=path_prefix,
                     quantity_unit=1 / consts.NM,
                     quantity_unit_name="1/nm",
                     x_unit=consts.NM,
