@@ -7,6 +7,7 @@
 Solving the 1D Schrödinger equation with open bc using PINN.
 """
 
+from typing import Dict, Optional, Sequence
 import os
 import shutil
 import copy
@@ -18,6 +19,7 @@ from kolpinn.grids import Grid
 from kolpinn import quantities
 from kolpinn.quantities import QuantityDict
 from kolpinn import model
+from kolpinn.model import MultiModel
 from kolpinn import storage
 from kolpinn import training
 from kolpinn.training import Trainer
@@ -25,7 +27,6 @@ from kolpinn.training import Trainer
 from classes import Device
 import physical_constants as consts
 import parameters as params
-import formulas
 import devices
 from constant_models_construction import get_constant_models
 from eval_models_construction import get_eval_models
@@ -50,13 +51,14 @@ saved_parameters_index = storage.get_next_parameters_index()
 print("saved_parameters_index =", saved_parameters_index)
 
 
-def get_trainer():
+def get_trainer(grid_ranges: Dict[str, Dict[str, float]]):
     (
         trainer,
         unbatched_grids,
         quantities_requiring_grad,
     ) = trainer_construction.get_trainer(
         device=device,
+        grid_ranges=grid_ranges,
         batch_sizes=params.batch_sizes,
         batch_bounds={},
         loss_aggregate_function=params.loss_aggregate_function,
@@ -82,7 +84,11 @@ def get_updated_trainer(
     V_el_grid: Grid,
     unbatched_grids,
     quantities_requiring_grad,
+    extra_pre_constant_models: Optional[Sequence[MultiModel]] = None,
 ) -> Trainer:
+    if extra_pre_constant_models is None:
+        extra_pre_constant_models = []
+
     def V_el_function(q: QuantityDict):
         return quantities.interpolate(V_el, V_el_grid, q.grid, dimension_label="x")
 
@@ -92,6 +98,7 @@ def get_updated_trainer(
         dx_dict=dx_dict,
         V_el_function=V_el_function,
     )
+    constant_models = [*extra_pre_constant_models, *constant_models]
     const_qs = model.get_qs(
         unbatched_grids,
         constant_models,
@@ -107,7 +114,28 @@ def get_updated_trainer(
     return training.Trainer(new_state, trainer.config)
 
 
-trainer, unbatched_grids, quantities_requiring_grad = get_trainer()
+grid_ranges = {
+    "voltage": {
+        "start": params.VOLTAGE_MIN,
+        "step": params.VOLTAGE_STEP,
+        "end": params.VOLTAGE_MAX,
+    },
+    "voltage2": {
+        "start": params.VOLTAGE2_MIN,
+        "step": params.VOLTAGE2_STEP,
+        "end": params.VOLTAGE2_MAX,
+    },
+    "DeltaE": {
+        "start": params.E_MIN,
+        "step": params.E_STEP,
+        "end": params.E_MAX,
+    },
+    "x": {
+        "step": params.X_STEP,
+    },
+}
+
+trainer, unbatched_grids, quantities_requiring_grad = get_trainer(grid_ranges)
 
 if params.loaded_parameters_index is not None:
     training.load(
@@ -151,25 +179,31 @@ if params.imported_V_el_path is not None:
     V_el_grid_dimensions["x"] = x_loaded
     V_el_grid = Grid(V_el_grid_dimensions)
 
-    # Correct the loaded V_el to make sure it has the expected values at the contact
     left_grid = unbatched_grids["boundary0"]
     right_grid = unbatched_grids[f"boundary{device.n_layers}"]
-    V_el_target_left = 0
-    V_el_target_right = -right_grid["voltage"] * consts.EV
     V_el_left = quantities.interpolate(V_el, V_el_grid, left_grid, dimension_label="x")
     V_el_right = quantities.interpolate(
         V_el, V_el_grid, right_grid, dimension_label="x"
     )
-    x_left = left_grid["x"]
-    x_right = right_grid["x"]
-    dV_el = formulas.smooth_transition(
-        V_el_grid["x"],
-        x_left,
-        x_right,
-        V_el_target_left - V_el_left,
-        V_el_target_right - V_el_right,
+
+    assert torch.allclose(
+        V_el_left, torch.zeros(()), atol=torch.max(V_el) * 1e-5
+    ), V_el_left
+
+    # The voltages might not correspond to the grid because the fermi energies are
+    # fixed instead. The actual voltages, which are stored in the qs, are not
+    # equispaced and depend on voltage2.
+    def correct_voltages(qs, *, voltage_corrected):
+        for grid_name, q in qs.items():
+            q["voltage_original"] = q["voltage"]
+            q.overwrite("voltage", voltage_corrected)
+
+    voltage_corrected = -V_el_right / consts.EV
+    voltage_correcting_model = MultiModel(
+        correct_voltages,
+        "correct_voltages",
+        kwargs={"voltage_corrected": voltage_corrected},
     )
-    V_el += dV_el
 
     trainer = get_updated_trainer(
         trainer,
@@ -177,7 +211,11 @@ if params.imported_V_el_path is not None:
         V_el_grid=V_el_grid,
         unbatched_grids=unbatched_grids,
         quantities_requiring_grad=quantities_requiring_grad,
+        extra_pre_constant_models=[voltage_correcting_model],
     )
+
+    # Otherwise I need to correct the voltages again below
+    assert params.n_newton_raphson_steps == 1
 
 DeltaE_max = torch.max(unbatched_grids["bulk"]["DeltaE"]).item()
 energy_cutoffs = np.arange(
@@ -264,9 +302,16 @@ if __name__ == "__main__":
             "R_L",
             "R_R",
             "phi_L",
+            "phi_R",
+            "incoming_coeff_L",
+            "incoming_coeff_R",
         ]
         if params.use_voltage2:
             saved_quantities.append("voltage2")
+        if params.imported_V_el_path is not None:
+            # "voltage" won't correspond to the grid value,
+            # "voltage_original" holds that
+            saved_quantities.append("voltage_original")
         saving.save_q_bulk(
             extended_qs["bulk"],
             path_prefix=f"data/{trainer.config.saved_parameters_index:04d}/"
@@ -289,7 +334,9 @@ if __name__ == "__main__":
 
         # Set up a new trainer with the updated V_el
         if params.reset_weights_per_nr_step:
-            trainer, unbatched_grids, quantities_requiring_grad = get_trainer()
+            trainer, unbatched_grids, quantities_requiring_grad = get_trainer(
+                grid_ranges
+            )
         trainer = get_updated_trainer(
             trainer,
             V_el=extended_qs["bulk"]["V_el_new"],

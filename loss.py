@@ -61,8 +61,6 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     # )
     q[f"SE_loss{i}_{contact}"] = params.loss_function(residual)
 
-    return qs
-
 
 def j_loss_trafo(qs, *, i, N, contact):
     q = qs[f"bulk{i}"]
@@ -80,8 +78,6 @@ def j_loss_trafo(qs, *, i, N, contact):
     # )
     q[f"j_loss{i}_{contact}"] = params.loss_function(residual)
 
-    return qs
-
 
 # IDEA: Fermi-Dirac weight the boundary losses
 def wc_loss_trafo(qs, *, i, contact):
@@ -93,8 +89,6 @@ def wc_loss_trafo(qs, *, i, contact):
 
     residual = q[f"phi{out_index}_{contact}"] - q[f"phi{in_index}_{contact}"]
     q[f"wc_loss{i}_{contact}"] = params.loss_function(residual)
-
-    return qs
 
 
 def cc_loss_trafo(qs, *, i, contact):
@@ -118,5 +112,3 @@ def cc_loss_trafo(qs, *, i, contact):
     residual = phi_dx_in / q[f"m_eff{in_index}"] - phi_dx_out / q[f"m_eff{out_index}"]
     residual /= params.CURRENT_CONTINUITY_OOM
     q[f"cc_loss{i}_{contact}"] = params.loss_function(residual)
-
-    return qs

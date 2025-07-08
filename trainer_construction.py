@@ -10,6 +10,7 @@ from kolpinn import quantities
 from kolpinn.quantities import QuantityDict
 from kolpinn import batching
 from kolpinn import model
+from kolpinn.model import MultiModel
 from kolpinn import training
 
 from classes import Device
@@ -90,6 +91,7 @@ def get_batched_qs_fn(
 def get_trainer(
     device: Device,
     *,
+    grid_ranges: Dict[str, Dict[str, float]],
     batch_sizes: Dict[str, int],
     batch_bounds: Dict[str, Tuple[float, float]],
     loss_aggregate_function: Callable[[Sequence], Any],
@@ -103,17 +105,21 @@ def get_trainer(
     optimizer_kwargs: Dict[str, Any],
     Scheduler: Optional[type],
     scheduler_kwargs: Dict[str, Any],
+    extra_pre_constant_models: Optional[Sequence[MultiModel]] = None,
 ):
+    """
+    extra_pre_constant_models: models to be evaluated before the ones from
+        constand_models_construction.get_constant_models, but after the grids have been
+        added.
+    """
+
+    if extra_pre_constant_models is None:
+        extra_pre_constant_models = []
+
     dx_dict = get_dx_dict()
     unbatched_grids = grid_construction.get_unbatched_grids(
         device,
-        V_min=params.VOLTAGE_MIN,
-        V_max=params.VOLTAGE_MAX,
-        V_step=params.VOLTAGE_STEP,
-        E_min=params.E_MIN,
-        E_max=params.E_MAX,
-        E_step=params.E_STEP,
-        x_step=params.X_STEP,
+        grid_ranges=grid_ranges,
         dx_dict=dx_dict,
         use_voltage2=params.use_voltage2,
         V2_min=params.VOLTAGE2_MIN,
@@ -135,6 +141,7 @@ def get_trainer(
             q, params.V_el_guess_type, **params.V_el_guess_kwargs
         ),
     )
+    constant_models = [*extra_pre_constant_models, *constant_models]
     trained_models, trained_models_labels = get_trained_models(
         device,
         dx_dict=dx_dict,

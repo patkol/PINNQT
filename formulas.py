@@ -1,7 +1,5 @@
 # Copyright (c) 2025 ETH Zurich, Patrice Kolb
 
-# OPTIM: don't return qs in trafos
-
 
 import copy
 import itertools
@@ -275,7 +273,7 @@ def get_V_el_guess(q, guess_type: str, **kwargs):
             y0=0,
             y1=V_channel,
         )
-        V_ext += get_linear_transition(
+        V_ext = V_ext + get_linear_transition(
             q["x"],
             x0=kwargs["x_gate_R"],
             x1=x_ramp_R,
@@ -330,14 +328,12 @@ def get_dx_model(mode: str, quantity_name: str, grid_name: str):
             quantity_right = qs[grid_name + "_pdx"][quantity_name]
             quantity_left = qs[grid_name + "_mdx"][quantity_name]
             qs[grid_name][name] = (quantity_right - quantity_left) / (2 * params.dx)
-            return qs
 
     elif mode == "singlegrid":
 
         def dx_qs_trafo(qs):
             q = qs[grid_name]
             q[name] = quantities.get_fd_derivative("x", q[quantity_name], q.grid)
-            return qs
 
     else:
         raise ValueError("Unknown dx mode: ", mode)

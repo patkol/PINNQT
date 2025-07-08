@@ -1,7 +1,5 @@
 # Copyright (c) 2025 ETH Zurich, Patrice Kolb
 
-# OPTIM: don't return qs in trafos
-
 
 from typing import Dict, Callable, Sequence, Optional
 import numpy as np
@@ -45,8 +43,6 @@ def to_full_trafo(
         qs["bulk"].grid,
     )
 
-    return qs
-
 
 def to_bulks_trafo(
     qs: dict[str, QuantityDict],
@@ -63,8 +59,6 @@ def to_bulks_trafo(
         q_layer = qs[f"bulk{i}"]
         assert isinstance(q_layer.grid, Subgrid)
         q_layer[label_fn(i)] = quantities.restrict(full_quantity, q_layer.grid)
-
-    return qs
 
 
 def _interpolating_to_boundaries_trafo(
@@ -89,8 +83,6 @@ def _interpolating_to_boundaries_trafo(
             q[label_fn(i)] = boundary_quantity
             q[label_fn(i + 1)] = boundary_quantity
 
-    return qs
-
 
 def _extrapolating_to_boundaries_trafo(
     qs: Dict[str, QuantityDict],
@@ -112,8 +104,6 @@ def _extrapolating_to_boundaries_trafo(
                     dimension_label="x",
                 )
 
-    return qs
-
 
 def to_boundaries_trafo(
     qs: Dict[str, QuantityDict],
@@ -131,13 +121,12 @@ def to_boundaries_trafo(
     """
 
     if one_sided:
-        return _extrapolating_to_boundaries_trafo(
-            qs, N=N, label_fn=label_fn, dx_dict=dx_dict
-        )
+        _extrapolating_to_boundaries_trafo(qs, N=N, label_fn=label_fn, dx_dict=dx_dict)
+        return
 
     assert quantity_label is not None
 
-    return _interpolating_to_boundaries_trafo(
+    _interpolating_to_boundaries_trafo(
         qs, N=N, label_fn=label_fn, quantity_label=quantity_label, dx_dict=dx_dict
     )
 
@@ -160,8 +149,6 @@ def to_bulks_and_boundaries_trafo(
         dx_dict=dx_dict,
         one_sided=one_sided,
     )
-
-    return qs
 
 
 def wkb_phase_trafo(
@@ -251,8 +238,6 @@ def wkb_phase_trafo(
                 b_phase, supergrid.subgrids[grid_name]
             )
 
-    return qs
-
 
 def E_fermi_trafo(qs, *, contact: Contact):
     q_in = qs[contact.grid_name]
@@ -260,8 +245,6 @@ def E_fermi_trafo(qs, *, contact: Contact):
     qs["bulk"][f"E_fermi_{contact}"] = (
         formulas.get_E_fermi(q_in, i=i) + q_in[f"V_int{i}"] + q_in[f"V_el{i}"]
     )
-
-    return qs
 
 
 def fermi_integral_trafo(qs, *, contact: Contact):
@@ -271,8 +254,6 @@ def fermi_integral_trafo(qs, *, contact: Contact):
     qs["bulk"][f"fermi_integral_{contact}"] = formulas.get_fermi_integral(
         m_eff=q_in[f"m_eff{i}"], E_fermi=q[f"E_fermi_{contact}"], E=q[f"E_{contact}"]
     )
-
-    return qs
 
 
 def phi_zero_one_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
@@ -300,8 +281,6 @@ def phi_zero_one_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str
         )
         q[f"phi_one{i}_{contact}"] = b_output * q[f"b_phase{i}_{contact}"]
 
-    return qs
-
 
 def simple_phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
     """phi0 + phi1 (BC not forced)"""
@@ -309,8 +288,6 @@ def simple_phi_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str])
     for grid_name in grid_names:
         q = qs[grid_name]
         q[f"phi{i}_{contact}"] = formulas.get_simple_phi(q, i=i, contact=contact)
-
-    return qs
 
 
 def hard_bc_phi_trafo_without_phi_one(
@@ -366,8 +343,6 @@ def hard_bc_phi_trafo_without_phi_one(
     else:
         raise Exception(f"Unknown hard BC: {params.hard_bc_without_phi_one}")
 
-    return qs
-
 
 def hard_bc_phi_trafo_with_phi_one(
     qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
@@ -400,8 +375,6 @@ def hard_bc_phi_trafo_with_phi_one(
         phi_zero_full = q[f"phi_zero{i}_{contact}"]
         phi_one_full = q[f"phi_one{i}_{contact}"]
         q[f"phi{i}_{contact}"] = d_zero * phi_zero_full + d_one * phi_one_full
-
-    return qs
 
 
 def hard_bc_in_phi_trafo(
@@ -438,8 +411,6 @@ def hard_bc_in_phi_trafo(
         phi = formulas.get_simple_phi(q, i=i, contact=contact)
         q[f"phi{i}_{contact}"] = d * phi
 
-    return qs
-
 
 def hard_bc_out_phi_trafo(
     qs, *, i: int, contact: Contact, grid_names: Sequence[str], direction: int
@@ -475,8 +446,6 @@ def hard_bc_out_phi_trafo(
         q = qs[grid_name]
         phi = formulas.get_simple_phi(q, i=i, contact=contact)
         q[f"phi{i}_{contact}"] = phi + c
-
-    return qs
 
 
 def phi_trafo_learn_phi_prime(
@@ -560,8 +529,6 @@ def phi_trafo_learn_phi_prime(
             integral, supergrid.subgrids[grid_name]
         )
 
-    return qs
-
 
 def phi_trafo_learn_phi_prime_polar(
     qs, i: int, contact: Contact, grid_names: Sequence[str], direction: int
@@ -640,17 +607,15 @@ def phi_trafo_learn_phi_prime_polar(
             integral, supergrid.subgrids[grid_name]
         )
 
-    return qs
-
 
 def phi_trafo(qs, **kwargs):
     if params.learn_phi_prime:
-        return phi_trafo_learn_phi_prime(qs, **kwargs, direction=params.hard_bc_dir)
+        phi_trafo_learn_phi_prime(qs, **kwargs, direction=params.hard_bc_dir)
+        return
 
     if params.learn_phi_prime_polar:
-        return phi_trafo_learn_phi_prime_polar(
-            qs, **kwargs, direction=params.hard_bc_dir
-        )
+        phi_trafo_learn_phi_prime_polar(qs, **kwargs, direction=params.hard_bc_dir)
+        return
 
     # If we don't force the input coeff, any solution works at the input contact.
     if params.hard_bc_dir == 0 or (
@@ -658,14 +623,16 @@ def phi_trafo(qs, **kwargs):
         and params.hard_bc_dir == 1
         and kwargs["i"] == kwargs["contact"].in_layer_index
     ):
-        return simple_phi_trafo(qs, **kwargs)
+        simple_phi_trafo(qs, **kwargs)
+        return
 
     if (
         (not params.force_unity_coeff)
         and params.hard_bc_dir == -1
         and kwargs["i"] == kwargs["contact"].out_layer_index
     ):
-        return hard_bc_out_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
+        hard_bc_out_phi_trafo(qs, **kwargs, direction=params.hard_bc_dir)
+        return
 
     # Input layer
     if params.hard_bc_dir == 1 and kwargs["i"] == kwargs["contact"].in_layer_index:
@@ -679,8 +646,6 @@ def phi_trafo(qs, **kwargs):
             hard_bc_phi_trafo_without_phi_one(
                 qs, **kwargs, direction=params.hard_bc_dir
             )
-
-    return qs
 
 
 def contact_coeffs_trafo(qs, *, contact):
@@ -722,8 +687,6 @@ def contact_coeffs_trafo(qs, *, contact):
     # incoming_coeff + reflected_coeff = phi_in
     q[f"reflected_coeff_{contact}"] = phi_in - q[f"incoming_coeff_{contact}"]
 
-    return qs
-
 
 def TR_trafo(qs, *, contact):
     """Transmission probability"""
@@ -740,8 +703,6 @@ def TR_trafo(qs, *, contact):
     q[f"T_{contact}"] = T
     q[f"R_{contact}"] = R
 
-    return qs
-
 
 def I_contact_trafo(qs, *, contact):
     q = qs["bulk"]
@@ -751,14 +712,10 @@ def I_contact_trafo(qs, *, contact):
     q[f"I_spectrum_{contact}"] = prefactor * integrand
     q[f"I_{contact}"] = prefactor * integral
 
-    return qs
-
 
 def I_trafo(qs, *, contacts):
     q = qs["bulk"]
     q["I"] = sum(q[f"I_{contact}"] for contact in contacts)
-
-    return qs
 
 
 def j_exact_trafo(qs, *, contact):
@@ -769,8 +726,6 @@ def j_exact_trafo(qs, *, contact):
     k = q[f"k{contact.out_index}_{contact}"]
     m_eff = q[f"m_eff{contact.out_index}"]
     q[f"j_exact_{contact}"] = -contact.direction * consts.H_BAR * k / m_eff
-
-    return qs
 
 
 def dos_trafo(qs, *, contact):
@@ -786,7 +741,6 @@ def dos_trafo(qs, *, contact):
     q[f"DOS_{contact}"] = (
         1 / (2 * np.pi) * complex_abs2(q[f"phi_{contact}"]) / dE_dk / incoming_amplitude
     )
-    return qs
 
 
 def n_contact_trafo(qs, *, contact):
@@ -797,15 +751,12 @@ def n_contact_trafo(qs, *, contact):
         fermi_integral=q[f"fermi_integral_{contact}"],
         grid=q.grid,
     )
-    return qs
 
 
 def n_trafo(qs, *, contacts):
     """Full density"""
     q = qs["bulk"]
     q["n"] = sum(q[f"n_{contact}"] for contact in contacts)
-
-    return qs
 
 
 def V_electrostatic_trafo(qs, *, contacts, N: int):
@@ -903,5 +854,3 @@ def V_electrostatic_trafo(qs, *, contacts, N: int):
     q["V_el_new"] = corrected_V_el
 
     # q["V_el_new"] = V_el
-
-    return qs

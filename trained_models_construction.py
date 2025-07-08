@@ -152,8 +152,6 @@ def get_trained_models(
                         supergrid.subgrids[grid_name],
                     )
 
-                return qs
-
             nn_model = MultiModel(
                 qs_trafo,
                 f"NN{i}_{contact}",

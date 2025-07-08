@@ -53,29 +53,23 @@ def update_layer_subgrids(grids: Dict[str, Grid], device: Device) -> None:
 def get_unbatched_grids(
     device: Device,
     *,
-    V_min: float,
-    V_max: float,
-    V_step: float,
-    E_min: float,
-    E_max: float,
-    E_step: float,
-    x_step: float,
+    grid_ranges: Dict[str, Dict[str, float]],
     dx_dict: Dict[str, float],
     use_voltage2: bool,
     V2_min: Optional[float] = None,
     V2_max: Optional[float] = None,
     V2_step: Optional[float] = None,
 ) -> Dict[str, Grid]:
-    voltages = torch.arange(V_min, V_max, V_step, dtype=params.si_real_dtype)
-    energies = torch.arange(E_min, E_max, E_step, dtype=params.si_real_dtype)
-    xs = get_xs(device, x_step=x_step)
+    voltages = torch.arange(**grid_ranges["voltage"], dtype=params.si_real_dtype)
+    energies = torch.arange(**grid_ranges["DeltaE"], dtype=params.si_real_dtype)
+    xs = get_xs(device, x_step=grid_ranges["x"]["step"])
     grids: Dict[str, Grid] = {}
 
     # Bulk
     grid_items = [("voltage", voltages), ("DeltaE", energies), ("x", xs)]
     if use_voltage2:
         assert V2_min is not None and V2_max is not None and V2_step is not None
-        voltages2 = torch.arange(V2_min, V2_max, V2_step, dtype=params.si_real_dtype)
+        voltages2 = torch.arange(**grid_ranges["voltage2"], dtype=params.si_real_dtype)
         grid_items.insert(1, ("voltage2", voltages2))
     grids["bulk"] = Grid(dict(grid_items))
 
