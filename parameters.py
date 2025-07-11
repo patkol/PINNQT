@@ -11,34 +11,29 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "InGaAs_transistor_x"
-# MATLAB guess
-# V_el_guess_type = "transistor"
-# V_el_guess_kwargs = {
-#     "x_gate_L": 20 * consts.NM,
-#     "x_gate_R": 35 * consts.NM,
-#     "ramp_size": 2 * consts.NM,
-#     "V_channel": 0.9626336 * consts.EV,  # voltage2 is subtracted from this TODO: move
-# }
-V_el_guess_type = "transistor_smooth"
+simulated_device_name = "rtd1_extended_5layers_real_params"
+V_el_guess_type = "rtd"
 V_el_guess_kwargs = {
-    "x_gate_L": 27.5 * consts.NM,
-    "x_gate_R": 27.5 * consts.NM,
-    "ramp_size": 27.5 * consts.NM,
-    "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this TODO: move
+    "x_L": 30 * consts.NM,
+    "x_R": 69.2 * consts.NM,
+    "dx_smoothing": 20 * consts.NM,
+    "y0": 0,
+    "y1": 0.2 * consts.EV,
 }
-# voltage2: a voltage applied in the middle of the device. The voltage to the left
-# is still assumed to be zero and the one on the right to be given by voltage
-use_voltage2 = True
-# V_el_guess_type = "rtd"
+use_voltage2 = False
+
+# simulated_device_name = "InGaAs_transistor_x"
+# V_el_guess_type = "transistor_smooth"
 # V_el_guess_kwargs = {
-#     "x_L": 30 * consts.NM,
-#     "x_R": (99.2 - 30) * consts.NM,
-#     "dx_smoothing": 20 * consts.NM,
-#     "y0": 0,
-#     "y1": 0.2 * consts.EV,
+#     "x_gate_L": 27.5 * consts.NM,
+#     "x_gate_R": 27.5 * consts.NM,
+#     "ramp_size": 27.5 * consts.NM,
+#     "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this TODO: move
 # }
-# use_voltage2 = False
+# # voltage2: a voltage applied in the middle of the device. The voltage to the left
+# # is still assumed to be zero and the one on the right to be given by voltage
+# use_voltage2 = True
+
 seed = 0
 device = "cuda"
 si_real_dtype = torch.float64
@@ -46,7 +41,7 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = 988
+loaded_parameters_index = None
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -111,6 +106,9 @@ U_input_scale = 0.1 * consts.VOLT
 E_input_scale = 0.2 * consts.EV
 E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
+# use_induced_V_el: If true, the V_el used in the loss is based on the one induced by
+# the wave function, removing the need for a poisson loop.
+use_induced_V_el = True
 
 # Plotting
 plot_each_voltage = 1
@@ -119,16 +117,16 @@ extra_plots = True
 
 # Physical
 VOLTAGE_MIN = 0.0 * consts.VOLT
-VOLTAGE_STEP = 0.1 * consts.VOLT
+VOLTAGE_STEP = 0.01 * consts.VOLT
 VOLTAGE_MAX = 0.60001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
 VOLTAGE2_STEP = 0.3 * consts.VOLT
 VOLTAGE2_MAX = 0.00001 * consts.VOLT
 
-E_MIN = 1e-2 * consts.EV  # 1e-3 * consts.EV
-E_STEP = 2e-2 * consts.EV
-E_MAX = 2 * consts.EV
+E_MIN = 1e-3 * consts.EV  # 1e-3 * consts.EV
+E_STEP = 2e-3 * consts.EV
+E_MAX = 0.6 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
@@ -140,7 +138,7 @@ TEMPERATURE = 300 * consts.KELVIN
 
 # CONSTANT_FERMI_LEVEL: None to find the correct fermi level.
 #                       V_int and V_el are added.
-CONSTANT_FERMI_LEVEL = 0.9206335951628302 * consts.EV  # 0.258 * consts.EV
+CONSTANT_FERMI_LEVEL = 0.258 * consts.EV  # 0.9206335951628302 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV

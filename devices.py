@@ -625,6 +625,53 @@ device_kwargs_dict: dict[str, dict] = {
             12 * EPSILON_0,
         ],
     },
+    "rtd1_extended_5layers_real_params": {
+        "boundaries": [
+            0 * NM,
+            45 * NM,
+            47.6 * NM,
+            51.6 * NM,
+            54.2 * NM,
+            99.2 * NM,
+        ],
+        "potentials": [
+            0 * EV,
+            0 * EV,
+            0.251 * EV,
+            0 * EV,
+            0.251 * EV,
+            0 * EV,
+            0 * EV,
+        ],
+        "m_effs": [
+            0.0635 * M_E,
+            0.0635 * M_E,
+            0.0895 * M_E,
+            0.0635 * M_E,
+            0.0895 * M_E,
+            0.0635 * M_E,
+            0.0635 * M_E,
+        ],
+        "dopings": [
+            1e19 / CM**3,
+            lambda q: 1e19 / CM**3 * (q["x"] < 30 * NM),
+            0,
+            0,
+            0,
+            lambda q: 1e19 / CM**3 * (q["x"] > 69.2 * NM),
+            1e19 / CM**3,
+        ],
+        "permittivities": [
+            12.9 * EPSILON_0,
+            12.9 * EPSILON_0,
+            12.0 * EPSILON_0,
+            12.9 * EPSILON_0,
+            12.0 * EPSILON_0,
+            12.9 * EPSILON_0,
+            12.9 * EPSILON_0,
+        ],
+    },
+    # Corresponds to real params
     "InGaAs_transistor_x": {
         "boundaries": [
             0 * NM,

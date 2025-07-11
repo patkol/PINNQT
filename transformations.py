@@ -50,6 +50,7 @@ def to_bulks_trafo(
     N: int,
     label_fn: Callable[[int], str],
     quantity_label: str,
+    overwrite: bool = False,
 ):
     """
     Inverse of `to_full_trafo`
@@ -58,7 +59,11 @@ def to_bulks_trafo(
     for i in range(1, N + 1):
         q_layer = qs[f"bulk{i}"]
         assert isinstance(q_layer.grid, Subgrid)
-        q_layer[label_fn(i)] = quantities.restrict(full_quantity, q_layer.grid)
+        restricted_quantity = quantities.restrict(full_quantity, q_layer.grid)
+        if overwrite:
+            q_layer.overwrite(label_fn(i), restricted_quantity)
+        else:
+            q_layer[label_fn(i)] = restricted_quantity
 
 
 def _interpolating_to_boundaries_trafo(
@@ -68,6 +73,7 @@ def _interpolating_to_boundaries_trafo(
     label_fn: Callable[[int], str],
     quantity_label: str,
     dx_dict: Dict[str, float],
+    overwrite: bool,
 ):
     full_quantity = qs["bulk"][quantity_label]
     full_grid = qs["bulk"].grid
@@ -80,8 +86,12 @@ def _interpolating_to_boundaries_trafo(
                 q.grid,
                 dimension_label="x",
             )
-            q[label_fn(i)] = boundary_quantity
-            q[label_fn(i + 1)] = boundary_quantity
+            if overwrite:
+                q.overwrite(label_fn(i), boundary_quantity)
+                q.overwrite(label_fn(i + 1), boundary_quantity)
+            else:
+                q[label_fn(i)] = boundary_quantity
+                q[label_fn(i + 1)] = boundary_quantity
 
 
 def _extrapolating_to_boundaries_trafo(
@@ -90,6 +100,7 @@ def _extrapolating_to_boundaries_trafo(
     N: int,
     label_fn: Callable[[int], str],
     dx_dict: Dict[str, float],
+    overwrite: bool,
 ):
     for i_layer in range(1, N + 1):
         q_bulk = qs[f"bulk{i_layer}"]
@@ -97,12 +108,16 @@ def _extrapolating_to_boundaries_trafo(
         for i_boundary in (i_layer - 1, i_layer):
             for dx_string in dx_dict.keys():
                 q_boundary = qs[f"boundary{i_boundary}" + dx_string]
-                q_boundary[label] = quantities.interpolate(
+                boundary_quantity = quantities.interpolate(
                     q_bulk[label],
                     q_bulk.grid,
                     q_boundary.grid,
                     dimension_label="x",
                 )
+                if overwrite:
+                    q_boundary.overwrite(label, boundary_quantity)
+                else:
+                    q_boundary[label] = boundary_quantity
 
 
 def to_boundaries_trafo(
@@ -113,6 +128,7 @@ def to_boundaries_trafo(
     quantity_label: Optional[str] = None,
     dx_dict: Dict[str, float],
     one_sided: bool,
+    overwrite: bool = False,
 ):
     """
     Interpolate from "bulk" to the boundaries.
@@ -121,13 +137,20 @@ def to_boundaries_trafo(
     """
 
     if one_sided:
-        _extrapolating_to_boundaries_trafo(qs, N=N, label_fn=label_fn, dx_dict=dx_dict)
+        _extrapolating_to_boundaries_trafo(
+            qs, N=N, label_fn=label_fn, dx_dict=dx_dict, overwrite=overwrite
+        )
         return
 
     assert quantity_label is not None
 
     _interpolating_to_boundaries_trafo(
-        qs, N=N, label_fn=label_fn, quantity_label=quantity_label, dx_dict=dx_dict
+        qs,
+        N=N,
+        label_fn=label_fn,
+        quantity_label=quantity_label,
+        dx_dict=dx_dict,
+        overwrite=overwrite,
     )
 
 
@@ -139,8 +162,11 @@ def to_bulks_and_boundaries_trafo(
     quantity_label: str,
     dx_dict: Dict[str, float],
     one_sided: bool,
+    overwrite: bool = False,
 ):
-    to_bulks_trafo(qs, N=N, label_fn=label_fn, quantity_label=quantity_label)
+    to_bulks_trafo(
+        qs, N=N, label_fn=label_fn, quantity_label=quantity_label, overwrite=overwrite
+    )
     to_boundaries_trafo(
         qs,
         N=N,
@@ -148,6 +174,7 @@ def to_bulks_and_boundaries_trafo(
         quantity_label=quantity_label,
         dx_dict=dx_dict,
         one_sided=one_sided,
+        overwrite=overwrite,
     )
 
 
