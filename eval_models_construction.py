@@ -43,11 +43,25 @@ def get_eval_models(device: Device) -> Sequence[MultiModel]:
                 kwargs={"contact": contact},
             )
         )
+        eval_models.append(
+            MultiModel(
+                trafos.I_averaged_contact_trafo,
+                f"I_averaged_{contact}",
+                kwargs={"contact": contact},
+            )
+        )
 
     eval_models.append(
         MultiModel(
             trafos.I_trafo,
             "I",
+            kwargs={"contacts": device.contacts},
+        )
+    )
+    eval_models.append(
+        MultiModel(
+            trafos.I_averaged_trafo,
+            "I_averaged",
             kwargs={"contacts": device.contacts},
         )
     )

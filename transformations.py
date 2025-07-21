@@ -733,11 +733,30 @@ def TR_trafo(qs, *, contact):
 
 def I_contact_trafo(qs, *, contact):
     q = qs["bulk"]
-    integrand = q[f"T_{contact}"] * q[f"fermi_integral_{contact}"]
-    integral = quantities.sum_dimension("DeltaE", integrand, q.grid) * params.E_STEP
     prefactor = -consts.Q_E / consts.H_BAR / (2 * np.pi) * contact.direction
-    q[f"I_spectrum_{contact}"] = prefactor * integrand
-    q[f"I_{contact}"] = prefactor * integral
+    I_spectrum = prefactor * q[f"T_{contact}"] * q[f"fermi_integral_{contact}"]
+    I_integrated = (
+        quantities.sum_dimension("DeltaE", I_spectrum, q.grid) * params.E_STEP
+    )
+    q[f"I_spectrum_{contact}"] = I_spectrum
+    q[f"I_{contact}"] = I_integrated
+
+
+def I_averaged_contact_trafo(qs, *, contact):
+    q = qs["bulk"]
+    q_in = qs[contact.grid_name]
+    real_v_in = torch.real(q_in[f"v{contact.index}_{contact}"])
+    incoming_amplitude = complex_abs2(q[f"incoming_coeff_{contact}"])
+    T = q[f"j_{contact}"] / real_v_in / incoming_amplitude
+    prefactor = -consts.Q_E / consts.H_BAR / (2 * np.pi)
+    spectral_current = prefactor * T * q[f"fermi_integral_{contact}"]
+    current = (
+        quantities.sum_dimension("DeltaE", spectral_current, q.grid) * params.E_STEP
+    )
+    current_averaged = quantities.mean_dimension("x", current, q.grid)
+    q[f"I_spectrum_xdep_{contact}"] = spectral_current
+    q[f"I_xdep_{contact}"] = current
+    q[f"I_averaged_{contact}"] = current_averaged
 
 
 def I_trafo(qs, *, contacts):
@@ -745,14 +764,10 @@ def I_trafo(qs, *, contacts):
     q["I"] = sum(q[f"I_{contact}"] for contact in contacts)
 
 
-def j_exact_trafo(qs, *, contact):
-    """
-    Calculate the exact current at the output contact
-    """
-    q = qs[f"boundary{contact.out_boundary_index}"]
-    k = q[f"k{contact.out_index}_{contact}"]
-    m_eff = q[f"m_eff{contact.out_index}"]
-    q[f"j_exact_{contact}"] = -contact.direction * consts.H_BAR * k / m_eff
+def I_averaged_trafo(qs, *, contacts):
+    q = qs["bulk"]
+    q["I_xdep"] = sum(q[f"I_xdep_{contact}"] for contact in contacts)
+    q["I_averaged"] = sum(q[f"I_averaged_{contact}"] for contact in contacts)
 
 
 def dos_trafo(qs, *, contact):
@@ -789,6 +804,8 @@ def n_trafo(qs, *, contacts):
 def V_electrostatic_trafo(qs, *, contacts, N: int):
     q = qs["bulk"]
 
+    # TODO: implementation that works if x is not the last coordinate,
+    #       kolpinn function
     assert q.grid.dimensions_labels[-1] == "x"
 
     # Construct the discretized Laplace operator M assuming an
@@ -808,51 +825,51 @@ def V_electrostatic_trafo(qs, *, contacts, N: int):
     # Von Neumann BC
     M[0, 0] = -(permittivity[0] + permittivity[1]) / (2 * dx**2)
     M[-1, -1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
-
     # # Dirichlet BC
     # M[0, 0] = -(3 * permittivity[0] + permittivity[1]) / (2 * dx**2)
     # M[-1, -1] = -(3 * permittivity[-1] + permittivity[-2]) / (2 * dx**2)
 
-    # TODO: implementation that works if x is not the last coordinate,
-    #       kolpinn function
-    #       Then remove the assertion above
     rho = consts.Q_E * (q["doping"] - q["n"])
 
-    # Dirichlet BC  TODO: do I need this with Neumann?
+    # Dirichlet BC
     # V_voltage = -q["voltage"] * consts.EV
     # rho[..., -1] += (permittivity[-1] * V_voltage[..., 0]) / dx**2
 
-    Phi = q["V_el"] / -consts.Q_E
-    F = torch.einsum("ij,...j->...i", M, Phi) + rho
+    if params.newton_raphson_rate is None:
+        raise Exception("Not implemented")
 
-    # Get the density if the potential was shifted by dV
-    n_pdVs = []
-    for contact in contacts:
-        q_in = qs[contact.grid_name]
-        i = contact.index
-        fermi_integral_pdV = formulas.get_fermi_integral(
-            m_eff=q_in[f"m_eff{i}"],
-            E_fermi=q[f"E_fermi_{contact}"],
-            E=q[f"E_{contact}"] + params.dV_poisson,
-        )
-        n_pdV = formulas.get_n_contact(
-            dos=q[f"DOS_{contact}"],
-            fermi_integral=fermi_integral_pdV,
-            grid=q.grid,
-        )
-        n_pdVs.append(n_pdV)
-    n_pdV = sum(n_pdVs)
+    else:
+        Phi = q["V_el"] / -consts.Q_E
+        F = torch.einsum("ij,...j->...i", M, Phi) + rho
 
-    dn_dV = (n_pdV - q["n"]) / params.dV_poisson
-    drho_dV = -consts.Q_E * dn_dV
-    drho_dPhi = -consts.Q_E * drho_dV
-    torch.unsqueeze(M, 0)
-    torch.unsqueeze(M, 0)
-    J = M + torch.diag_embed(drho_dPhi)
+        # Get the density if the potential was shifted by dV
+        n_pdVs = []
+        for contact in contacts:
+            q_in = qs[contact.grid_name]
+            i = contact.index
+            fermi_integral_pdV = formulas.get_fermi_integral(
+                m_eff=q_in[f"m_eff{i}"],
+                E_fermi=q[f"E_fermi_{contact}"],
+                E=q[f"E_{contact}"] + params.dV_poisson,
+            )
+            n_pdV = formulas.get_n_contact(
+                dos=q[f"DOS_{contact}"],
+                fermi_integral=fermi_integral_pdV,
+                grid=q.grid,
+            )
+            n_pdVs.append(n_pdV)
+        n_pdV = sum(n_pdVs)
 
-    dPhi = params.newton_raphson_rate * torch.linalg.solve(-J, F)
-    dV = dPhi * -consts.Q_E
-    V_el = q["V_el"] + dV
+        dn_dV = (n_pdV - q["n"]) / params.dV_poisson
+        drho_dV = -consts.Q_E * dn_dV
+        drho_dPhi = -consts.Q_E * drho_dV
+        torch.unsqueeze(M, 0)
+        torch.unsqueeze(M, 0)
+        J = M + torch.diag_embed(drho_dPhi)
+
+        dPhi = params.newton_raphson_rate * torch.linalg.solve(-J, F)
+        dV = dPhi * -consts.Q_E
+        V_el = q["V_el"] + dV
 
     # Correct V_el: Add a linear potential gradient to V_el s.t.
     # it matches the boundary potentials

@@ -44,6 +44,8 @@ def get_loss_models(
 
     for i in range(1, N + 1):
         loss_quantities[f"bulk{i}"] = []
+    if params.use_full_j_loss:
+        loss_quantities["bulk"] = []
     if params.soft_bc or params.soft_bc_output:
         # Only the contact boundaries have losses if only soft_bc_output is True
         boundary_indices = range(0, N + 1) if params.soft_bc else (0, N)
@@ -237,7 +239,7 @@ def get_loss_models(
                     model.MultiModel(
                         loss.j_loss_trafo,
                         f"j_loss{i}_{contact}",
-                        kwargs={"i": i, "N": N, "contact": contact},
+                        kwargs={"i": i, "contact": contact},
                     )
                 )
                 loss_quantities[bulk_name].append(f"j_loss{i}_{contact}")
@@ -250,12 +252,33 @@ def get_loss_models(
                         "qs_full": None,
                         "with_grad": True,
                         "i": i,
-                        "N": N,
                         "contact": contact,
                     },
                 )
             )
             loss_quantities[bulk_name].append(f"SE_loss{i}_{contact}")
+
+        loss_models.append(
+            model.MultiModel(
+                trafos.to_full_trafo,
+                f"j_{contact}_promotion",
+                kwargs={
+                    "N": N,
+                    "label_fn": lambda i, contact=contact: f"j{i}_{contact}",
+                    "quantity_label": f"j_{contact}",
+                },
+            )
+        )
+
+        if params.use_full_j_loss:
+            loss_models.append(
+                model.MultiModel(
+                    loss.j_loss_trafo,
+                    f"j_loss_{contact}",
+                    kwargs={"i": "", "contact": contact},
+                )
+            )
+            loss_quantities["bulk"].append(f"j_loss_{contact}")
 
         if not params.soft_bc and not params.soft_bc_output:
             continue

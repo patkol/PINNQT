@@ -12,7 +12,7 @@ import physical_constants as consts
 import parameters as params
 
 
-def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
+def SE_loss_trafo(qs, *, qs_full, with_grad, i, contact):
     """
     i: layer index in [1,N]
     For a constant effective mass only if fd_second_derivatives!
@@ -62,20 +62,18 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, N, contact):
     q[f"SE_loss{i}_{contact}"] = params.loss_function(residual)
 
 
-def j_loss_trafo(qs, *, i, N, contact):
+def j_loss_trafo(qs, *, i, contact):
+    """
+    i = "" for averaging over the full device
+    """
+
     q = qs[f"bulk{i}"]
 
-    prob_current = q[f"j{i}_{contact}"]
-    residual = prob_current - quantities.mean_dimension("x", prob_current, q.grid)
-    residual /= complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
-    # residual /= quantities.mean_dimension("x", complex_abs2(q[f"phi{i}_{contact}"]), q.grid)
-    residual /= params.PROBABILITY_CURRENT_OOM
-    # exact_prob_current = qs["bulk"][f"j_exact_{contact}"]
-    # residual = torch.log(complex_abs2(prob_current / exact_prob_current))
-    # Fermi-Dirac weighting
-    # residual *= 1 / (
-    #     1 + torch.exp(params.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
-    # )
+    real_v_in = torch.real(qs[contact.grid_name][f"v{contact.index}_{contact}"])
+    incoming_amplitude = complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
+    T = q[f"j{i}_{contact}"] / real_v_in / incoming_amplitude
+    T_averaged = quantities.mean_dimension("x", T, q.grid)
+    residual = T - T_averaged
     q[f"j_loss{i}_{contact}"] = params.loss_function(residual)
 
 

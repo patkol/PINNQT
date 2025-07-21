@@ -98,7 +98,21 @@ def save_plots(
         "voltage",
         "voltage2" if params.use_voltage2 else None,
         path_prefix=path_prefix,
-        quantity_unit=1e6 / consts.CM**2,
+        quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
+        quantity_unit_name="10^6 A/cm^2",
+        x_unit=consts.VOLT,
+        x_unit_name="V",
+        lines_unit=consts.VOLT,
+        lines_unit_name="V",
+    )
+    save_lineplot(
+        -q["I_averaged"],
+        q.grid,
+        "-I_averaged",
+        "voltage",
+        "voltage2" if params.use_voltage2 else None,
+        path_prefix=path_prefix,
+        quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
         quantity_unit_name="10^6 A/cm^2",
         x_unit=consts.VOLT,
         x_unit_name="V",
@@ -114,10 +128,25 @@ def save_plots(
             "voltage2",
             "voltage",
             path_prefix=path_prefix,
-            quantity_unit=1e6 / consts.CM**2,
+            quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
             quantity_unit_name="10^6 A/cm^2",
             x_unit=consts.VOLT,
             x_unit_name="V",
+            lines_unit=consts.VOLT,
+            lines_unit_name="V",
+        )
+    else:
+        save_lineplot(
+            -q["I_xdep"],
+            q.grid,
+            "-I_xdep",
+            "x",
+            "voltage",
+            path_prefix=path_prefix,
+            quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
+            quantity_unit_name="10^6 A/cm^2",
+            x_unit=consts.NM,
+            x_unit_name="nm",
             lines_unit=consts.VOLT,
             lines_unit_name="V",
         )
@@ -131,7 +160,21 @@ def save_plots(
             "voltage",
             "voltage2" if params.use_voltage2 else None,
             path_prefix=path_prefix,
-            quantity_unit=1e6 / consts.CM**2,
+            quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
+            quantity_unit_name="10^6 A/cm^2",
+            x_unit=consts.VOLT,
+            x_unit_name="V",
+            lines_unit=consts.VOLT,
+            lines_unit_name="V",
+        )
+        save_lineplot(
+            -q[f"I_averaged_{contact}"],
+            q.grid,
+            f"-I_averaged_{contact}",
+            "voltage",
+            "voltage2" if params.use_voltage2 else None,
+            path_prefix=path_prefix,
+            quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
             quantity_unit_name="10^6 A/cm^2",
             x_unit=consts.VOLT,
             x_unit_name="V",
@@ -140,6 +183,20 @@ def save_plots(
         )
 
         if not params.use_voltage2:
+            save_lineplot(
+                -q[f"I_xdep_{contact}"],
+                q.grid,
+                f"-I_xdep_{contact}",
+                "x",
+                "voltage",
+                path_prefix=path_prefix,
+                quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
+                quantity_unit_name="10^6 A/cm^2",
+                x_unit=consts.NM,
+                x_unit_name="nm",
+                lines_unit=consts.VOLT,
+                lines_unit_name="V",
+            )
             continue
 
         save_lineplot(
@@ -149,7 +206,7 @@ def save_plots(
             "voltage2",
             "voltage",
             path_prefix=path_prefix,
-            quantity_unit=1e6 / consts.CM**2,
+            quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
             quantity_unit_name="10^6 A/cm^2",
             x_unit=consts.VOLT,
             x_unit_name="V",
@@ -205,6 +262,8 @@ def save_plots(
             if params.use_voltage2:
                 voltage_index_dict["voltage2"] = [voltage2_index]
 
+            # TODO: some quantities in the following loop are not contact dependent,
+            # take them out
             for contact in device.contacts:
                 q_full = qs["bulk"]
                 full_grid = Subgrid(q_full.grid, voltage_index_dict, copy_all=False)
@@ -246,8 +305,6 @@ def save_plots(
                     quantity_unit_name="eV",
                     x_unit=consts.NM,
                     x_unit_name="nm",
-                    lines_unit=consts.VOLT,
-                    lines_unit_name="V",
                 )
 
                 save_lineplot(
@@ -260,8 +317,6 @@ def save_plots(
                     quantity_unit_name="eV",
                     x_unit=consts.NM,
                     x_unit_name="nm",
-                    lines_unit=consts.VOLT,
-                    lines_unit_name="V",
                 )
 
                 save_lineplot(
@@ -274,8 +329,6 @@ def save_plots(
                     quantity_unit_name="eV",
                     x_unit=consts.NM,
                     x_unit_name="nm",
-                    lines_unit=consts.VOLT,
-                    lines_unit_name="V",
                 )
 
                 save_lineplot(
@@ -288,8 +341,18 @@ def save_plots(
                     quantity_unit_name="1/nm",
                     x_unit=consts.NM,
                     x_unit_name="nm",
-                    lines_unit=consts.VOLT,
-                    lines_unit_name="V",
+                )
+
+                save_lineplot(
+                    q_full[f"fermi_integral_{contact}"],
+                    q_full.grid,
+                    f"fermi_integral_{contact}",
+                    "DeltaE",
+                    path_prefix=voltage_path_prefix,
+                    quantity_unit=1 / consts.NM**2,
+                    quantity_unit_name="nm^-2",
+                    x_unit=consts.EV,
+                    x_unit_name="eV",
                 )
 
                 # Wave function
@@ -367,6 +430,21 @@ def save_plots(
                 )
 
                 # Transmission and reflection probabilities
+                save_lineplot(
+                    complex_abs2(
+                        q_full[f"transmitted_coeff_{contact}"]
+                        / q_full[f"incoming_coeff_{contact}"]
+                    ),
+                    q_full.grid,
+                    f"transmitted_coeff_{contact}",
+                    "DeltaE",
+                    x_quantity=q_full[f"E_{contact}"],
+                    x_label="E",
+                    x_unit=consts.EV,
+                    x_unit_name="eV",
+                    path_prefix=voltage_path_prefix,
+                )
+
                 fig, ax = plt.subplots()
                 add_lineplot(
                     ax,
@@ -436,10 +514,30 @@ def save_plots(
                     "DeltaE",
                     x_quantity=q_full[f"E_{contact}"],
                     x_label="E",
-                    quantity_unit=1 / consts.CM**2 / consts.EV,
+                    quantity_unit=consts.COULOMB
+                    / consts.SECOND
+                    / consts.CM**2
+                    / consts.EV,
                     quantity_unit_name="A/cm^2/eV",
                     x_unit=consts.EV,
                     x_unit_name="eV",
+                    path_prefix=voltage_path_prefix,
+                )
+                save_heatmap(
+                    q_full[f"I_spectrum_xdep_{contact}"],
+                    q_full.grid,
+                    f"I_spectrum_xdep_{contact}",
+                    "x",
+                    "DeltaE",
+                    quantity_unit=consts.COULOMB
+                    / consts.SECOND
+                    / consts.CM**2
+                    / consts.EV,
+                    quantity_unit_name="A/cm^2/eV",
+                    x_unit=consts.NM,
+                    x_unit_name="nm",
+                    y_unit=consts.EV,
+                    y_unit_name="eV",
                     path_prefix=voltage_path_prefix,
                 )
 

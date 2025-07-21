@@ -28,7 +28,7 @@ use_voltage2 = False
 #     "x_gate_L": 27.5 * consts.NM,
 #     "x_gate_R": 27.5 * consts.NM,
 #     "ramp_size": 27.5 * consts.NM,
-#     "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this TODO: move
+#     "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this
 # }
 # # voltage2: a voltage applied in the middle of the device. The voltage to the left
 # # is still assumed to be zero and the one on the right to be given by voltage
@@ -41,7 +41,7 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 1017
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -60,10 +60,10 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 0
 max_time = 10000
-min_loss = 2e-4
-energy_cutoff_delta = 0.2 * consts.EV
+min_loss = 2e-6
+energy_cutoff_delta = 2 * consts.EV
 energy_cutoff_start = energy_cutoff_delta
 report_each = 1
 Optimizer = torch.optim.LBFGS
@@ -76,6 +76,7 @@ loss_aggregate_function = sum
 # loss_function = lambda x: mathematics.complex_abs2(x) ** 2
 # loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
 use_j_loss = False
+use_full_j_loss = False
 fd_first_derivatives = True
 fd_second_derivatives = True
 # Whether the voltage/energy is an input to the NN
@@ -85,6 +86,8 @@ batch_sizes: Dict[str, int] = {
     # "DeltaE": 100,
 }
 n_newton_raphson_steps = 1
+# newton_raphson_rate: None for directly solving the
+# Poisson equation (not newton_raphson)
 newton_raphson_rate = 1
 reset_weights_per_nr_step = False
 force_unity_coeff = False
@@ -108,7 +111,7 @@ E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
 # use_induced_V_el: If true, the V_el used in the loss is based on the one induced by
 # the wave function, removing the need for a poisson loop.
-use_induced_V_el = True
+use_induced_V_el = False
 
 # Plotting
 plot_each_voltage = 1
@@ -117,7 +120,7 @@ extra_plots = True
 
 # Physical
 VOLTAGE_MIN = 0.0 * consts.VOLT
-VOLTAGE_STEP = 0.01 * consts.VOLT
+VOLTAGE_STEP = 0.05 * consts.VOLT
 VOLTAGE_MAX = 0.60001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
@@ -138,7 +141,7 @@ TEMPERATURE = 300 * consts.KELVIN
 
 # CONSTANT_FERMI_LEVEL: None to find the correct fermi level.
 #                       V_int and V_el are added.
-CONSTANT_FERMI_LEVEL = 0.258 * consts.EV  # 0.9206335951628302 * consts.EV
+CONSTANT_FERMI_LEVEL = None  # 0.258 * consts.EV  # 0.9206335951628302 * consts.EV
 
 dx = 0.01 * consts.NM  # Used for derivatives
 dV_poisson = 1e-4 * consts.EV
