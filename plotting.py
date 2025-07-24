@@ -135,6 +135,20 @@ def save_plots(
             lines_unit=consts.VOLT,
             lines_unit_name="V",
         )
+        save_lineplot(
+            -q["I_averaged"],
+            q.grid,
+            "-I_averaged",
+            "voltage2",
+            "voltage",
+            path_prefix=path_prefix,
+            quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
+            quantity_unit_name="10^6 A/cm^2",
+            x_unit=consts.VOLT,
+            x_unit_name="V",
+            lines_unit=consts.VOLT,
+            lines_unit_name="V",
+        )
     else:
         save_lineplot(
             -q["I_xdep"],
@@ -182,7 +196,36 @@ def save_plots(
             lines_unit_name="V",
         )
 
-        if not params.use_voltage2:
+        if params.use_voltage2:
+            save_lineplot(
+                -q[f"I_{contact}"],
+                q.grid,
+                f"-I_{contact}",
+                "voltage2",
+                "voltage",
+                path_prefix=path_prefix,
+                quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
+                quantity_unit_name="10^6 A/cm^2",
+                x_unit=consts.VOLT,
+                x_unit_name="V",
+                lines_unit=consts.VOLT,
+                lines_unit_name="V",
+            )
+            save_lineplot(
+                -q[f"I_averaged_{contact}"],
+                q.grid,
+                f"-I_averaged_{contact}",
+                "voltage2",
+                "voltage",
+                path_prefix=path_prefix,
+                quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
+                quantity_unit_name="10^6 A/cm^2",
+                x_unit=consts.VOLT,
+                x_unit_name="V",
+                lines_unit=consts.VOLT,
+                lines_unit_name="V",
+            )
+        else:
             save_lineplot(
                 -q[f"I_xdep_{contact}"],
                 q.grid,
@@ -197,22 +240,6 @@ def save_plots(
                 lines_unit=consts.VOLT,
                 lines_unit_name="V",
             )
-            continue
-
-        save_lineplot(
-            -q[f"I_{contact}"],
-            q.grid,
-            f"-I_{contact}",
-            "voltage2",
-            "voltage",
-            path_prefix=path_prefix,
-            quantity_unit=1e6 * consts.COULOMB / consts.SECOND / consts.CM**2,
-            quantity_unit_name="10^6 A/cm^2",
-            x_unit=consts.VOLT,
-            x_unit_name="V",
-            lines_unit=consts.VOLT,
-            lines_unit_name="V",
-        )
 
     # Per voltage plots
     voltages = next(iter(qs.values())).grid["voltage"]

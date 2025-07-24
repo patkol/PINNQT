@@ -9,6 +9,7 @@ Solving the 1D Schrödinger equation with open bc using PINN.
 
 from typing import Dict, Optional, Sequence
 import os
+import time
 import shutil
 import copy
 import random
@@ -37,6 +38,7 @@ import plotting
 
 # Setup
 
+start_time = time.perf_counter()
 random.seed(params.seed)
 torch.manual_seed(params.seed)
 torch.set_default_device(params.device)
@@ -262,6 +264,9 @@ if __name__ == "__main__":
                 save_if_best=True,
                 save_subpath=save_subpath,
             )
+            print(
+                "Total time passed:", time.perf_counter() - start_time, "s", flush=True
+            )
 
         # Print evaluation times
         eval_times = dict(
@@ -275,9 +280,10 @@ if __name__ == "__main__":
         eval_relatives = dict(
             (key, value / total_eval_time) for key, value in eval_times.items()
         )
-        print("Evaluation time: ", total_eval_time * 1e-9, "s")
+        print("Total time passed:", time.perf_counter() - start_time, "s", flush=True)
+        print("Evaluation time: ", total_eval_time * 1e-9, "s", flush=True)
         for _, model_name in zip(range(25), eval_relatives):
-            print(f"{eval_relatives[model_name]:.1%} {model_name}")
+            print(f"{eval_relatives[model_name]:.1%} {model_name}", flush=True)
 
         # Get all quantities
         extended_qs = training.get_extended_qs(
@@ -285,7 +291,7 @@ if __name__ == "__main__":
         )
 
         # Save quantities and plots
-        print("Saving quantities...")
+        print("Saving quantities...", flush=True)
         saved_quantities = [
             "voltage",
             "DeltaE",
@@ -301,8 +307,8 @@ if __name__ == "__main__":
             "T_R",
             "R_L",
             "R_R",
-            # "phi_L",
-            # "phi_R",
+            "phi_L",
+            "phi_R",
             "incoming_coeff_L",
             "incoming_coeff_R",
         ]
@@ -318,10 +324,10 @@ if __name__ == "__main__":
             + save_subpath,
             included_quantities_labels=saved_quantities,
         )
-        print("Done saving quantities")
-        print("Saving plots...")
+        print("Done saving quantities", flush=True)
+        print("Saving plots...", flush=True)
         plotting.save_plots(extended_qs, trainer, device, prefix=save_subpath)
-        print("Done saving plots")
+        print("Done saving plots", flush=True)
 
         # Set up the next Newton-Raphson step
         newton_raphson_step += 1
@@ -329,7 +335,7 @@ if __name__ == "__main__":
             break
 
         print()
-        print("Newton-Raphson step", newton_raphson_step)
+        print("Newton-Raphson step", newton_raphson_step, flush=True)
         print()
 
         # Set up a new trainer with the updated V_el

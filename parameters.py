@@ -11,28 +11,28 @@ import physical_constants as consts
 
 
 # General
-simulated_device_name = "rtd1_extended_5layers_real_params"
-V_el_guess_type = "rtd"
-V_el_guess_kwargs = {
-    "x_L": 30 * consts.NM,
-    "x_R": 69.2 * consts.NM,
-    "dx_smoothing": 20 * consts.NM,
-    "y0": 0,
-    "y1": 0.2 * consts.EV,
-}
-use_voltage2 = False
-
-# simulated_device_name = "InGaAs_transistor_x"
-# V_el_guess_type = "transistor_smooth"
+# simulated_device_name = "rtd1_extended_5layers_real_params"
+# V_el_guess_type = "rtd"
 # V_el_guess_kwargs = {
-#     "x_gate_L": 27.5 * consts.NM,
-#     "x_gate_R": 27.5 * consts.NM,
-#     "ramp_size": 27.5 * consts.NM,
-#     "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this
+#     "x_L": 30 * consts.NM,
+#     "x_R": 69.2 * consts.NM,
+#     "dx_smoothing": 20 * consts.NM,
+#     "y0": 0,
+#     "y1": 0.2 * consts.EV,
 # }
-# # voltage2: a voltage applied in the middle of the device. The voltage to the left
-# # is still assumed to be zero and the one on the right to be given by voltage
-# use_voltage2 = True
+# use_voltage2 = False
+
+simulated_device_name = "InGaAs_transistor_x"
+V_el_guess_type = "transistor_smooth"
+V_el_guess_kwargs = {
+    "x_gate_L": 27.5 * consts.NM,
+    "x_gate_R": 27.5 * consts.NM,
+    "ramp_size": 27.5 * consts.NM,
+    "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this
+}
+# voltage2: a voltage applied in the middle of the device. The voltage to the left
+# is still assumed to be zero and the one on the right to be given by voltage
+use_voltage2 = True
 
 seed = 0
 device = "cuda"
@@ -41,12 +41,12 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = 1017
+loaded_parameters_index = 1058
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
 # imported_V_el_path: for importing V_el from the QT python lecture code
-imported_V_el_path = None  # "../QT_lecture_code/data/step2/mode0/"  # lecture_code_results/mode_space_mode1_converged/"
+imported_V_el_path = "../QT_lecture_code/data/real_params_iteration/step3/mode2/"  # lecture_code_results/mode_space_mode1_converged/"
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
 use_V_el_new = True
 # `load_optimizer`: Whether to use the state of the saved optimizer
@@ -60,10 +60,10 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = 10000
-min_loss = 2e-6
-energy_cutoff_delta = 2 * consts.EV
+min_loss = 2e-4
+energy_cutoff_delta = 0.2 * consts.EV
 energy_cutoff_start = energy_cutoff_delta
 report_each = 1
 Optimizer = torch.optim.LBFGS
@@ -120,16 +120,16 @@ extra_plots = True
 
 # Physical
 VOLTAGE_MIN = 0.0 * consts.VOLT
-VOLTAGE_STEP = 0.05 * consts.VOLT
+VOLTAGE_STEP = 0.1 * consts.VOLT
 VOLTAGE_MAX = 0.60001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
-VOLTAGE2_STEP = 0.3 * consts.VOLT
-VOLTAGE2_MAX = 0.00001 * consts.VOLT
+VOLTAGE2_STEP = 0.1 * consts.VOLT
+VOLTAGE2_MAX = 0.60001 * consts.VOLT
 
-E_MIN = 1e-3 * consts.EV  # 1e-3 * consts.EV
-E_STEP = 2e-3 * consts.EV
-E_MAX = 0.6 * consts.EV
+E_MIN = 1e-2 * consts.EV  # 1e-3 * consts.EV
+E_STEP = 2e-2 * consts.EV
+E_MAX = 2 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV

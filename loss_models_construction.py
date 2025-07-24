@@ -193,6 +193,10 @@ def get_loss_models(
                 kwargs={"contacts": device.contacts, "N": N},
             )
         )
+        # TODO: take into account changing V_el at boundaries
+        # TODO: take into account that V_el also changes e.g. k & the ansatz -
+        #       basically need to redo const_models_construction here as I do in
+        #       main.update_trainer
         loss_models.append(
             MultiModel(
                 lambda qs: qs["bulk"].overwrite("V_el", qs["bulk"]["V_el_new"]),
