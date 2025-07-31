@@ -167,11 +167,11 @@ if params.loaded_V_el_index is not None:
     del loaded_q_bulk
 
 if params.imported_V_el_path is not None:
+    assert params.use_voltage2, "Not implemented"
+
     # Import V_el from QT lecture code
     U_loaded = torch.tensor(np.load(params.imported_V_el_path + "U_drain.npy"))
     U2_loaded = torch.tensor(np.load(params.imported_V_el_path + "U_gate.npy"))
-    assert torch.allclose(unbatched_grids["bulk"]["voltage"], U_loaded)
-    assert torch.allclose(unbatched_grids["bulk"]["voltage2"], U2_loaded)
     x_loaded = torch.tensor(np.load(params.imported_V_el_path + "x.npy"))
     V_el = np.load(params.imported_V_el_path + "V_1d.npy")
     # PINNQT dimension order is U, U2, E, x
@@ -180,6 +180,19 @@ if params.imported_V_el_path is not None:
     V_el_grid_dimensions = copy.copy(unbatched_grids["bulk"].dimensions)
     V_el_grid_dimensions["x"] = x_loaded
     V_el_grid = Grid(V_el_grid_dimensions)
+
+    if params.allow_imported_V_el_voltage_interpolation:
+        # Interpolate voltages
+        loaded_grid_dimensions = copy.copy(V_el_grid.dimensions)
+        loaded_grid_dimensions["voltage"] = U_loaded
+        loaded_grid_dimensions["voltage2"] = U2_loaded
+        loaded_grid = Grid(loaded_grid_dimensions)
+        V_el = quantities.interpolate_multiple(
+            V_el, loaded_grid, V_el_grid, dimension_labels=("voltage", "voltage2")
+        )
+    else:
+        assert torch.allclose(unbatched_grids["bulk"]["voltage"], U_loaded)
+        assert torch.allclose(unbatched_grids["bulk"]["voltage2"], U2_loaded)
 
     left_grid = unbatched_grids["boundary0"]
     right_grid = unbatched_grids[f"boundary{device.n_layers}"]
