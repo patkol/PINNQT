@@ -20,6 +20,7 @@ def get_loss_models(
     device: Device,
     *,
     dx_dict: Dict[str, float],
+    M,
 ) -> Tuple[Sequence[MultiModel], Dict[str, Sequence[str]]]:
     """
     Get the weight-dependent models needed to calculate the loss
@@ -190,7 +191,12 @@ def get_loss_models(
             MultiModel(
                 trafos.V_electrostatic_trafo,
                 "V_el_new",
-                kwargs={"contacts": device.contacts, "N": N},
+                kwargs={
+                    "contacts": device.contacts,
+                    "N": N,
+                    "bc": params.poisson_bc,
+                    "M": M,
+                },
             )
         )
         # TODO: take into account changing V_el at boundaries

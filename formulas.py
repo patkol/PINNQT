@@ -473,3 +473,31 @@ def a_output_transformation(
 
 def b_output_transformation(b_output, **kwargs):
     return a_output_transformation(b_output, **kwargs)
+
+
+def get_poisson_equation(q_bulk: QuantityDict, bc: str):
+    """
+    Construct the discretized Laplace operator M assuming an
+    equispaced x grid.
+    The injection has to be calculated seperately.
+    """
+    Nx = q_bulk.grid.dim_size["x"]
+    dx = params.X_STEP
+    M = torch.zeros(Nx, Nx)
+    permittivity = quantities.squeeze_to(["x"], q_bulk["permittivity"], q_bulk.grid)
+    for i in range(1, Nx):
+        M[i, i - 1] = (permittivity[i] + permittivity[i - 1]) / (2 * dx**2)
+    for i in range(0, Nx - 1):
+        M[i, i + 1] = (permittivity[i] + permittivity[i + 1]) / (2 * dx**2)
+    for i in range(1, Nx - 1):
+        M[i, i] = -M[i, i - 1] - M[i, i + 1]
+
+    if bc == "neumann":
+        M[0, 0] = -(permittivity[0] + permittivity[1]) / (2 * dx**2)
+        M[-1, -1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
+    else:
+        assert bc == "dirichlet"
+        M[0, 0] = -(3 * permittivity[0] + permittivity[1]) / (2 * dx**2)
+        M[-1, -1] = -(3 * permittivity[-1] + permittivity[-2]) / (2 * dx**2)
+
+    return M

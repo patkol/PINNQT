@@ -11,28 +11,28 @@ import physical_constants as consts
 
 
 # General
-# simulated_device_name = "rtd1_extended_5layers_real_params"
-# V_el_guess_type = "rtd"
-# V_el_guess_kwargs = {
-#     "x_L": 30 * consts.NM,
-#     "x_R": 69.2 * consts.NM,
-#     "dx_smoothing": 20 * consts.NM,
-#     "y0": 0,
-#     "y1": 0.2 * consts.EV,
-# }
-# use_voltage2 = False
-
-simulated_device_name = "InGaAs_transistor_x"
-V_el_guess_type = "transistor_smooth"
+simulated_device_name = "rtd1_extended_5layers_real_params"
+V_el_guess_type = "rtd"
 V_el_guess_kwargs = {
-    "x_gate_L": 27.5 * consts.NM,
-    "x_gate_R": 27.5 * consts.NM,
-    "ramp_size": 27.5 * consts.NM,
-    "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this
+    "x_L": 30 * consts.NM,
+    "x_R": 69.2 * consts.NM,
+    "dx_smoothing": 20 * consts.NM,
+    "y0": 0,
+    "y1": 0.2 * consts.EV,
 }
-# voltage2: a voltage applied in the middle of the device. The voltage to the left
-# is still assumed to be zero and the one on the right to be given by voltage
-use_voltage2 = True
+use_voltage2 = False
+
+# simulated_device_name = "InGaAs_transistor_x"
+# V_el_guess_type = "transistor_smooth"
+# V_el_guess_kwargs = {
+#     "x_gate_L": 27.5 * consts.NM,
+#     "x_gate_R": 27.5 * consts.NM,
+#     "ramp_size": 27.5 * consts.NM,
+#     "V_channel": 0.9 * consts.EV,  # voltage2 is subtracted from this
+# }
+# # voltage2: a voltage applied in the middle of the device. The voltage to the left
+# # is still assumed to be zero and the one on the right to be given by voltage
+# use_voltage2 = True
 
 seed = 0
 device = "cuda"
@@ -41,13 +41,13 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = 1059
+loaded_parameters_index = None
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
 # imported_V_el_path: for importing V_el from the QT python lecture code
-imported_V_el_path = "../QT_lecture_code/data/real_params_iteration/step3/mode2/"  # lecture_code_results/mode_space_mode1_converged/"
-allow_imported_V_el_voltage_interpolation = True
+imported_V_el_path = None  # "../QT_lecture_code/data/real_params_iteration/step3/mode0/"  # lecture_code_results/mode_space_mode1_converged/"
+allow_imported_V_el_voltage_interpolation = False
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
 use_V_el_new = True
 # `load_optimizer`: Whether to use the state of the saved optimizer
@@ -61,9 +61,9 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
+max_n_training_steps = None
 max_time = 10000
-min_loss = 2e-4
+min_loss = 5e-5
 energy_cutoff_delta = 2 * consts.EV
 energy_cutoff_start = energy_cutoff_delta
 report_each = 1
@@ -89,7 +89,7 @@ batch_sizes: Dict[str, int] = {
 n_newton_raphson_steps = 1
 # newton_raphson_rate: None for directly solving the
 # Poisson equation (not newton_raphson)
-newton_raphson_rate = 1
+newton_raphson_rate = 0.1
 reset_weights_per_nr_step = False
 force_unity_coeff = False
 soft_bc = False
@@ -112,7 +112,10 @@ E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
 # use_induced_V_el: If true, the V_el used in the loss is based on the one induced by
 # the wave function, removing the need for a poisson loop.
-use_induced_V_el = False
+use_induced_V_el = True
+# poisson_bc: "dirichlet" or "neumann". If "neumann" the electrostatic potential is
+# corrected to match the boundary contact potentials
+poisson_bc = "dirichlet"
 
 # Plotting
 plot_each_voltage = 1
@@ -120,17 +123,17 @@ plot_each_energy = 20
 extra_plots = True
 
 # Physical
-VOLTAGE_MIN = 0.0 * consts.VOLT
-VOLTAGE_STEP = 0.025 * consts.VOLT
-VOLTAGE_MAX = 0.60001 * consts.VOLT
+VOLTAGE_MIN = 0.3 * consts.VOLT
+VOLTAGE_STEP = 0.1 * consts.VOLT
+VOLTAGE_MAX = 0.30001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
-VOLTAGE2_STEP = 0.025 * consts.VOLT
+VOLTAGE2_STEP = 0.1 * consts.VOLT
 VOLTAGE2_MAX = 0.60001 * consts.VOLT
 
-E_MIN = 1e-2 * consts.EV  # 1e-3 * consts.EV
-E_STEP = 2e-2 * consts.EV
-E_MAX = 2 * consts.EV
+E_MIN = 1e-3 * consts.EV  # 1e-3 * consts.EV
+E_STEP = 2e-3 * consts.EV
+E_MAX = 0.6 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV

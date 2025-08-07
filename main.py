@@ -28,6 +28,7 @@ from kolpinn.training import Trainer
 from classes import Device
 import physical_constants as consts
 import parameters as params
+import formulas
 import devices
 from constant_models_construction import get_constant_models
 from eval_models_construction import get_eval_models
@@ -48,7 +49,6 @@ torch.set_default_dtype(params.si_real_dtype)
 
 device_kwargs = devices.device_kwargs_dict[params.simulated_device_name]
 device = Device(**device_kwargs)
-eval_models = get_eval_models(device)
 saved_parameters_index = storage.get_next_parameters_index()
 print("saved_parameters_index =", saved_parameters_index)
 
@@ -92,7 +92,9 @@ def get_updated_trainer(
         extra_pre_constant_models = []
 
     def V_el_function(q: QuantityDict):
-        return quantities.interpolate(V_el, V_el_grid, q.grid, dimension_label="x")
+        return quantities.interpolate(
+            V_el, V_el_grid, q.grid, dimension_label="x", search_method="incremental"
+        )
 
     dx_dict = trainer_construction.get_dx_dict()
     constant_models = get_constant_models(
@@ -188,7 +190,11 @@ if params.imported_V_el_path is not None:
         loaded_grid_dimensions["voltage2"] = U2_loaded
         loaded_grid = Grid(loaded_grid_dimensions)
         V_el = quantities.interpolate_multiple(
-            V_el, loaded_grid, V_el_grid, dimension_labels=("voltage", "voltage2")
+            V_el,
+            loaded_grid,
+            V_el_grid,
+            dimension_labels=("voltage", "voltage2"),
+            search_method="incremental",
         )
     else:
         assert torch.allclose(unbatched_grids["bulk"]["voltage"], U_loaded)
@@ -196,9 +202,11 @@ if params.imported_V_el_path is not None:
 
     left_grid = unbatched_grids["boundary0"]
     right_grid = unbatched_grids[f"boundary{device.n_layers}"]
-    V_el_left = quantities.interpolate(V_el, V_el_grid, left_grid, dimension_label="x")
+    V_el_left = quantities.interpolate(
+        V_el, V_el_grid, left_grid, dimension_label="x", search_method="searchsorted"
+    )
     V_el_right = quantities.interpolate(
-        V_el, V_el_grid, right_grid, dimension_label="x"
+        V_el, V_el_grid, right_grid, dimension_label="x", search_method="searchsorted"
     )
 
     assert torch.allclose(
@@ -240,6 +248,13 @@ energy_cutoffs = np.arange(
 )
 if len(energy_cutoffs) == 0 or energy_cutoffs[-1] < DeltaE_max:
     energy_cutoffs = np.append(energy_cutoffs, [DeltaE_max])
+
+eval_models = get_eval_models(
+    device,
+    M=formulas.get_poisson_equation(
+        trainer.state.const_qs["bulk"], bc=params.poisson_bc
+    ),
+)
 
 
 if __name__ == "__main__":

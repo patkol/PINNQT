@@ -85,6 +85,7 @@ def _interpolating_to_boundaries_trafo(
                 full_grid,
                 q.grid,
                 dimension_label="x",
+                search_method="searchsorted",
             )
             if overwrite:
                 q.overwrite(label_fn(i), boundary_quantity)
@@ -113,6 +114,7 @@ def _extrapolating_to_boundaries_trafo(
                     q_bulk.grid,
                     q_boundary.grid,
                     dimension_label="x",
+                    search_method="searchsorted",
                 )
                 if overwrite:
                     q_boundary.overwrite(label, boundary_quantity)
@@ -801,39 +803,21 @@ def n_trafo(qs, *, contacts):
     q["n"] = sum(q[f"n_{contact}"] for contact in contacts)
 
 
-def V_electrostatic_trafo(qs, *, contacts, N: int):
+def V_electrostatic_trafo(qs, *, contacts, N: int, bc: str, M):
     q = qs["bulk"]
 
     # TODO: implementation that works if x is not the last coordinate,
     #       kolpinn function
     assert q.grid.dimensions_labels[-1] == "x"
-
-    # Construct the discretized Laplace operator M assuming an
-    # equispaced x grid
-    # OPTIM: do this only once
-    Nx = q.grid.dim_size["x"]
-    dx = params.X_STEP
-    M = torch.zeros(Nx, Nx)
-    permittivity = quantities.squeeze_to(["x"], q["permittivity"], q.grid)
-    for i in range(1, Nx):
-        M[i, i - 1] = (permittivity[i] + permittivity[i - 1]) / (2 * dx**2)
-    for i in range(0, Nx - 1):
-        M[i, i + 1] = (permittivity[i] + permittivity[i + 1]) / (2 * dx**2)
-    for i in range(1, Nx - 1):
-        M[i, i] = -M[i, i - 1] - M[i, i + 1]
-
-    # Von Neumann BC
-    M[0, 0] = -(permittivity[0] + permittivity[1]) / (2 * dx**2)
-    M[-1, -1] = -(permittivity[-1] + permittivity[-2]) / (2 * dx**2)
-    # # Dirichlet BC
-    # M[0, 0] = -(3 * permittivity[0] + permittivity[1]) / (2 * dx**2)
-    # M[-1, -1] = -(3 * permittivity[-1] + permittivity[-2]) / (2 * dx**2)
+    assert bc in ("neumann", "dirichlet"), bc
 
     rho = consts.Q_E * (q["doping"] - q["n"])
 
-    # Dirichlet BC
-    # V_voltage = -q["voltage"] * consts.EV
-    # rho[..., -1] += (permittivity[-1] * V_voltage[..., 0]) / dx**2
+    if bc == "dirichlet":
+        V_voltage = -q["voltage"] * consts.EV
+        rho[..., -1] -= (
+            q["permittivity"][..., -1] * torch.squeeze(V_voltage, -1)
+        ) / params.X_STEP**2
 
     if params.newton_raphson_rate is None:
         raise Exception("Not implemented")
@@ -871,30 +855,38 @@ def V_electrostatic_trafo(qs, *, contacts, N: int):
         dV = dPhi * -consts.Q_E
         V_el = q["V_el"] + dV
 
+    V_el_target_left = torch.zeros((1,) * q.grid.n_dim)
+    V_el_target_right = -q["voltage"] * consts.EV
     # Correct V_el: Add a linear potential gradient to V_el s.t.
     # it matches the boundary potentials
-    V_el_target_left = 0
-    V_el_target_right = -q["voltage"] * consts.EV
     V_el_left = quantities.interpolate(
-        V_el, q.grid, qs["boundary0"].grid, dimension_label="x"
+        V_el,
+        q.grid,
+        qs["boundary0"].grid,
+        dimension_label="x",
+        search_method="searchsorted",
     )
     V_el_right = quantities.interpolate(
         V_el,
         q.grid,
         qs[f"boundary{N}"].grid,
         dimension_label="x",
+        search_method="searchsorted",
     )
+    if bc == "dirichlet":
+        # Should be fine already before the correction
+        # (we still correct to make sure inaccuracies don't accumulate)
+        assert torch.allclose(V_el_left, V_el_target_left, rtol=1e-3, atol=1e-3)
+        assert torch.allclose(V_el_right, V_el_target_right, rtol=1e-3, atol=1e-3)
     x_left = qs["boundary0"]["x"]
     x_right = qs[f"boundary{N}"]["x"]
     device_length = x_right - x_left
     left_factor = (x_right - q["x"]) / device_length
     right_factor = (q["x"] - x_left) / device_length
-    corrected_V_el = (
+    V_el = (
         V_el
         + (V_el_target_left - V_el_left) * left_factor
         + (V_el_target_right - V_el_right) * right_factor
     )
 
-    q["V_el_new"] = corrected_V_el
-
-    # q["V_el_new"] = V_el
+    q["V_el_new"] = V_el

@@ -10,7 +10,7 @@ import parameters as params
 import transformations as trafos
 
 
-def get_eval_models(device: Device) -> Sequence[MultiModel]:
+def get_eval_models(device: Device, *, M) -> Sequence[MultiModel]:
     """
     Get parameters which are used for the evaluation of the results, but not necessary
     for calculating the losses (these are in loss_models).
@@ -105,7 +105,12 @@ def get_eval_models(device: Device) -> Sequence[MultiModel]:
             MultiModel(
                 trafos.V_electrostatic_trafo,
                 "V_el_new",
-                kwargs={"contacts": device.contacts, "N": N},
+                kwargs={
+                    "contacts": device.contacts,
+                    "N": N,
+                    "bc": params.poisson_bc,
+                    "M": M,
+                },
             )
         )
 

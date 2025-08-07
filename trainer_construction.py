@@ -142,6 +142,11 @@ def get_trainer(
         ),
     )
     constant_models = [*extra_pre_constant_models, *constant_models]
+    const_qs = model.get_qs(
+        unbatched_grids,
+        constant_models,
+        quantities_requiring_grad,
+    )
     trained_models, trained_models_labels = get_trained_models(
         device,
         dx_dict=dx_dict,
@@ -149,12 +154,7 @@ def get_trainer(
     dependent_models, loss_quantities = get_loss_models(
         device,
         dx_dict=dx_dict,
-    )
-
-    const_qs = model.get_qs(
-        unbatched_grids,
-        constant_models,
-        quantities_requiring_grad,
+        M=formulas.get_poisson_equation(const_qs["bulk"], bc=params.poisson_bc),
     )
 
     get_batched_qs = get_batched_qs_fn(

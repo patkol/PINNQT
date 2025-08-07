@@ -167,14 +167,14 @@ def get_constant_models(
         const_models.append(
             model.MultiModel(
                 trafos.E_fermi_trafo,
-                "E_fermi_{contact}",
+                f"E_fermi_{contact}",
                 kwargs={"contact": contact},
             )
         )
         const_models.append(
             model.MultiModel(
                 trafos.fermi_integral_trafo,
-                "fermi_integral_{contact}",
+                f"fermi_integral_{contact}",
                 kwargs={"contact": contact},
             )
         )
