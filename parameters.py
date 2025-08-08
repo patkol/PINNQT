@@ -89,7 +89,7 @@ batch_sizes: Dict[str, int] = {
 n_newton_raphson_steps = 1
 # newton_raphson_rate: None for directly solving the
 # Poisson equation (not newton_raphson)
-newton_raphson_rate = 0.1
+newton_raphson_rate = None
 reset_weights_per_nr_step = False
 force_unity_coeff = False
 soft_bc = False
@@ -123,9 +123,9 @@ plot_each_energy = 20
 extra_plots = True
 
 # Physical
-VOLTAGE_MIN = 0.0 * consts.VOLT
+VOLTAGE_MIN = 0.3 * consts.VOLT
 VOLTAGE_STEP = 0.1 * consts.VOLT
-VOLTAGE_MAX = 0.60001 * consts.VOLT
+VOLTAGE_MAX = 0.30001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
 VOLTAGE2_STEP = 0.1 * consts.VOLT

@@ -830,7 +830,10 @@ def V_electrostatic_trafo(qs, *, contacts, N: int, bc: str, M):
         ) / dx**2
 
     if params.newton_raphson_rate is None:
-        raise Exception("Not implemented")
+        M = torch.unsqueeze(M, 0)
+        M = torch.unsqueeze(M, 0)
+        Phi = torch.linalg.solve(M, -rho)
+        V_el = Phi * -consts.Q_E
 
     else:
         Phi = q["V_el"] / -consts.Q_E
@@ -846,46 +849,43 @@ def V_electrostatic_trafo(qs, *, contacts, N: int, bc: str, M):
 
         drho_dV = -consts.Q_E * dn_dV
         drho_dPhi = -consts.Q_E * drho_dV
-        torch.unsqueeze(M, 0)
-        torch.unsqueeze(M, 0)
+        M = torch.unsqueeze(M, 0)
+        M = torch.unsqueeze(M, 0)
         J = M + torch.diag_embed(drho_dPhi)
 
         dPhi = params.newton_raphson_rate * torch.linalg.solve(-J, F)
         dV = dPhi * -consts.Q_E
         V_el = q["V_el"] + dV
 
-    V_el_target_left = torch.zeros((1,) * q.grid.n_dim)
-    V_el_target_right = -q["voltage"] * consts.EV
-    # Correct V_el: Add a linear potential gradient to V_el s.t.
-    # it matches the boundary potentials
-    V_el_left = quantities.interpolate(
-        V_el,
-        q.grid,
-        qs["boundary0"].grid,
-        dimension_label="x",
-        search_method="searchsorted",
-    )
-    V_el_right = quantities.interpolate(
-        V_el,
-        q.grid,
-        qs[f"boundary{N}"].grid,
-        dimension_label="x",
-        search_method="searchsorted",
-    )
-    if bc == "dirichlet":
-        # Should be fine already before the correction
-        # (we still correct to make sure inaccuracies don't accumulate)
-        assert torch.allclose(V_el_left, V_el_target_left, rtol=1e-3, atol=1e-3)
-        assert torch.allclose(V_el_right, V_el_target_right, rtol=1e-3, atol=1e-3)
-    x_left = qs["boundary0"]["x"]
-    x_right = qs[f"boundary{N}"]["x"]
-    device_length = x_right - x_left
-    left_factor = (x_right - q["x"]) / device_length
-    right_factor = (q["x"] - x_left) / device_length
-    V_el = (
-        V_el
-        + (V_el_target_left - V_el_left) * left_factor
-        + (V_el_target_right - V_el_right) * right_factor
-    )
+    if params.newton_raphson_rate is not None or bc == "neumann":
+        # Correct V_el: Add a linear potential gradient to V_el s.t.
+        # it matches the boundary potentials
+        # (Even if dirichlet w/ NR to make sure inaccuracies don't accumulate)
+        V_el_target_left = torch.zeros((1,) * q.grid.n_dim)
+        V_el_target_right = -q["voltage"] * consts.EV
+        V_el_left = quantities.interpolate(
+            V_el,
+            q.grid,
+            qs["boundary0"].grid,
+            dimension_label="x",
+            search_method="searchsorted",
+        )
+        V_el_right = quantities.interpolate(
+            V_el,
+            q.grid,
+            qs[f"boundary{N}"].grid,
+            dimension_label="x",
+            search_method="searchsorted",
+        )
+        x_left = qs["boundary0"]["x"]
+        x_right = qs[f"boundary{N}"]["x"]
+        device_length = x_right - x_left
+        left_factor = (x_right - q["x"]) / device_length
+        right_factor = (q["x"] - x_left) / device_length
+        V_el = (
+            V_el
+            + (V_el_target_left - V_el_left) * left_factor
+            + (V_el_target_right - V_el_right) * right_factor
+        )
 
     q["V_el_new"] = V_el
