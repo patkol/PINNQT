@@ -135,7 +135,7 @@ grid_ranges = {
         "end": params.E_MAX,
     },
     "x": {
-        "step": params.X_STEP,
+        "step_target": params.X_STEP_TARGET,
     },
 }
 

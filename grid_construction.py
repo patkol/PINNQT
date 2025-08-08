@@ -11,15 +11,18 @@ from classes import Device
 import parameters as params
 
 
-def get_xs(device: Device, *, x_step: float) -> torch.Tensor:
+def get_xs(device: Device, *, x_step_target: float) -> torch.Tensor:
     x_left = device.boundaries[0]
     x_right = device.boundaries[-1]
     # We're excluding the left- and rightmost points to avoid special cases
-    xs = torch.arange(
-        start=x_left + x_step / 2,
-        end=x_right - x_step / 2,
-        step=x_step,
-    )
+    # xs = torch.arange(
+    #     start=x_left + x_step / 2,
+    #     end=x_right - x_step / 2,
+    #     step=x_step,
+    # )
+    Nx = round((x_right - x_left) / x_step_target) + 1
+    # We're adding an extra point to avoid special cases
+    xs = torch.linspace(x_left, x_right, Nx + 1)[1:-1]
     return xs
 
 
@@ -62,7 +65,7 @@ def get_unbatched_grids(
 ) -> Dict[str, Grid]:
     voltages = torch.arange(**grid_ranges["voltage"], dtype=params.si_real_dtype)
     energies = torch.arange(**grid_ranges["DeltaE"], dtype=params.si_real_dtype)
-    xs = get_xs(device, x_step=grid_ranges["x"]["step"])
+    xs = get_xs(device, x_step_target=grid_ranges["x"]["step_target"])
     grids: Dict[str, Grid] = {}
 
     # Bulk

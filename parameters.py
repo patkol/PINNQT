@@ -62,7 +62,7 @@ model_dtype = torch.float32
 
 # Training
 max_n_training_steps = None
-max_time = 10000
+max_time = 50000
 min_loss = 5e-5
 energy_cutoff_delta = 2 * consts.EV
 energy_cutoff_start = energy_cutoff_delta
@@ -123,9 +123,9 @@ plot_each_energy = 20
 extra_plots = True
 
 # Physical
-VOLTAGE_MIN = 0.3 * consts.VOLT
+VOLTAGE_MIN = 0.0 * consts.VOLT
 VOLTAGE_STEP = 0.1 * consts.VOLT
-VOLTAGE_MAX = 0.30001 * consts.VOLT
+VOLTAGE_MAX = 0.60001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
 VOLTAGE2_STEP = 0.1 * consts.VOLT
@@ -139,7 +139,7 @@ E_MAX = 0.6 * consts.EV
 # E_MAX = 0.05 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 
-X_STEP = 0.05 * consts.NM
+X_STEP_TARGET = 0.05 * consts.NM
 
 TEMPERATURE = 300 * consts.KELVIN
 

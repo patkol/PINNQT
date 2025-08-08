@@ -814,10 +814,11 @@ def V_electrostatic_trafo(qs, *, contacts, N: int, bc: str, M):
     rho = consts.Q_E * (q["doping"] - q["n"])
 
     if bc == "dirichlet":
+        dx = q.grid["x"][1] - q.grid["x"][0]
         V_voltage = -q["voltage"] * consts.EV
         rho[..., -1] -= (
             q["permittivity"][..., -1] * torch.squeeze(V_voltage, -1)
-        ) / params.X_STEP**2
+        ) / dx**2
 
     if params.newton_raphson_rate is None:
         raise Exception("Not implemented")

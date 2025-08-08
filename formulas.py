@@ -482,7 +482,7 @@ def get_poisson_equation(q_bulk: QuantityDict, bc: str):
     The injection has to be calculated seperately.
     """
     Nx = q_bulk.grid.dim_size["x"]
-    dx = params.X_STEP
+    dx = q_bulk.grid["x"][1] - q_bulk.grid["x"][0]
     M = torch.zeros(Nx, Nx)
     permittivity = quantities.squeeze_to(["x"], q_bulk["permittivity"], q_bulk.grid)
     for i in range(1, Nx):
