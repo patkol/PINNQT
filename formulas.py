@@ -406,6 +406,14 @@ def get_fermi_integral(*, m_eff, E_fermi, E):
     )
 
 
+def get_fermi_integral_dE(*, m_eff, E_fermi, E):
+    return (
+        -m_eff
+        / (np.pi * consts.H_BAR**2)
+        * torch.special.expit(params.BETA * (E_fermi - E))
+    )
+
+
 def get_n_contact(*, dos, fermi_integral, grid: Grid):
     integrand = dos * fermi_integral
     n_contact = quantities.sum_dimension("DeltaE", integrand, grid) * params.E_STEP

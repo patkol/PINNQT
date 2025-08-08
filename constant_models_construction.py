@@ -178,6 +178,13 @@ def get_constant_models(
                 kwargs={"contact": contact},
             )
         )
+        const_models.append(
+            model.MultiModel(
+                trafos.fermi_integral_dE_trafo,
+                f"fermi_integral_{contact}_dE",
+                kwargs={"contact": contact},
+            )
+        )
 
     # Promoting quantities to full grid
     for contact in device.contacts:

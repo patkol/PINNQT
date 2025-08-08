@@ -285,6 +285,15 @@ def fermi_integral_trafo(qs, *, contact: Contact):
     )
 
 
+def fermi_integral_dE_trafo(qs, *, contact: Contact):
+    q = qs["bulk"]
+    q_in = qs[contact.grid_name]
+    i = contact.index
+    qs["bulk"][f"fermi_integral_{contact}_dE"] = formulas.get_fermi_integral_dE(
+        m_eff=q_in[f"m_eff{i}"], E_fermi=q[f"E_fermi_{contact}"], E=q[f"E_{contact}"]
+    )
+
+
 def phi_zero_one_trafo(qs, *, i: int, contact: Contact, grid_names: Sequence[str]):
     """
     Add phi_zero and phi_one.
@@ -827,25 +836,14 @@ def V_electrostatic_trafo(qs, *, contacts, N: int, bc: str, M):
         Phi = q["V_el"] / -consts.Q_E
         F = torch.einsum("ij,...j->...i", M, Phi) + rho
 
-        # Get the density if the potential was shifted by dV
-        n_pdVs = []
+        dn_dV = 0
         for contact in contacts:
-            q_in = qs[contact.grid_name]
-            i = contact.index
-            fermi_integral_pdV = formulas.get_fermi_integral(
-                m_eff=q_in[f"m_eff{i}"],
-                E_fermi=q[f"E_fermi_{contact}"],
-                E=q[f"E_{contact}"] + params.dV_poisson,
-            )
-            n_pdV = formulas.get_n_contact(
+            dn_dV = dn_dV + formulas.get_n_contact(
                 dos=q[f"DOS_{contact}"],
-                fermi_integral=fermi_integral_pdV,
+                fermi_integral=q[f"fermi_integral_{contact}_dE"],
                 grid=q.grid,
             )
-            n_pdVs.append(n_pdV)
-        n_pdV = sum(n_pdVs)
 
-        dn_dV = (n_pdV - q["n"]) / params.dV_poisson
         drho_dV = -consts.Q_E * dn_dV
         drho_dPhi = -consts.Q_E * drho_dV
         torch.unsqueeze(M, 0)
