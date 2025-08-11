@@ -55,8 +55,8 @@ use_V_el_new = True
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 8
-n_neurons_per_hidden_layer = 80
+n_hidden_layers = 6
+n_neurons_per_hidden_layer = 60
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
@@ -89,7 +89,7 @@ batch_sizes: Dict[str, int] = {
 n_newton_raphson_steps = 1
 # newton_raphson_rate: None for directly solving the
 # Poisson equation (not newton_raphson)
-newton_raphson_rate = None
+newton_raphson_rate = 0.1
 reset_weights_per_nr_step = False
 force_unity_coeff = False
 soft_bc = False
