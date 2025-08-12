@@ -855,7 +855,8 @@ def V_electrostatic_trafo(qs, *, contacts, N: int, bc: str, M):
 
         try:
             dPhi = params.newton_raphson_rate * torch.linalg.solve(-J, F)
-        except torch._C._LinAlgError:
+        except torch._C._LinAlgError as error:
+            print("Error in solving -J * dPhi = F:", error)
             dPhi = float("nan")
         dV = dPhi * -consts.Q_E
         V_el = q["V_el"] + dV
