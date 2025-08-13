@@ -163,12 +163,14 @@ def get_trainer(
         dx_dict=dx_dict,
         M=formulas.get_poisson_equation(const_qs["bulk"], bc=params.poisson_bc),
     )
-    update_const_qs_models = [
-        MultiModel(
-            transfer_V_el_to_const_trafo,
-            "transfer_V_el_to_const",
+    update_const_qs_models = []
+    if params.use_induced_V_el:
+        update_const_qs_models.append(
+            MultiModel(
+                transfer_V_el_to_const_trafo,
+                "transfer_V_el_to_const",
+            )
         )
-    ]
 
     get_batched_qs = get_batched_qs_fn(
         unbatched_grids=unbatched_grids,

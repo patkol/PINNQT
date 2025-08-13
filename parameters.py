@@ -62,13 +62,15 @@ model_dtype = torch.float32
 
 # Training
 max_n_training_steps = None
-max_time = 50000
+max_time = 20000
 min_loss = 5e-5
 energy_cutoff_delta = 2 * consts.EV
 energy_cutoff_start = energy_cutoff_delta
 report_each = 1
 Optimizer = torch.optim.LBFGS
 optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
+# Optimizer = torch.optim.AdamW
+# optimizer_kwargs = {"lr": 1e-3}
 optimizer_reset_tol = 100
 Scheduler = None
 scheduler_kwargs: Dict[str, Any] = {}
@@ -89,7 +91,7 @@ batch_sizes: Dict[str, int] = {
 n_newton_raphson_steps = 1
 # newton_raphson_rate: None for directly solving the
 # Poisson equation (not newton_raphson)
-newton_raphson_rate = 0.1
+newton_raphson_rate = None
 reset_weights_per_nr_step = False
 force_unity_coeff = False
 soft_bc = False
