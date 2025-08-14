@@ -41,9 +41,9 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = 1132
-loaded_parameters_NR_step = 0
-loaded_V_el_index = None
+loaded_parameters_index = 1133
+loaded_parameters_NR_step = 4
+loaded_V_el_index = loaded_parameters_index
 loaded_V_el_NR_step = loaded_parameters_NR_step
 # imported_V_el_path: for importing V_el from the QT python lecture code
 imported_V_el_path = None  # "../QT_lecture_code/data/real_params_iteration/step3/mode0/"  # lecture_code_results/mode_space_mode1_converged/"
@@ -61,7 +61,7 @@ activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = None
+max_n_training_steps = 0
 max_time = 20000
 min_loss = 5e-5
 energy_cutoff_delta = 2 * consts.EV

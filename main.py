@@ -176,7 +176,8 @@ if params.loaded_V_el_index is not None:
         loaded_step -= 1
         loaded_label += "_new"
     loaded_q_bulk = torch.load(
-        f"data/{params.loaded_V_el_index:04d}/newton_step{loaded_step:04d}/q_bulk.pkl"
+        f"data/{params.loaded_V_el_index:04d}/newton_step{loaded_step:04d}/q_bulk.pkl",
+        weights_only=False,
     )
     trainer = get_updated_trainer(
         trainer,
@@ -354,10 +355,15 @@ if __name__ == "__main__":
             "T_R",
             "R_L",
             "R_R",
-            "phi_L",
-            "phi_R",
+            # "phi_L",
+            # "phi_R",
             "incoming_coeff_L",
             "incoming_coeff_R",
+            "I_L",
+            "I_R",
+            "I_averaged_L",
+            "I_averaged_R",
+            "I",
         ]
         if params.use_voltage2:
             saved_quantities.append("voltage2")
