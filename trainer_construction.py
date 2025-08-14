@@ -88,13 +88,6 @@ def get_batched_qs_fn(
     return get_batched_qs
 
 
-def transfer_V_el_to_const_trafo(const_qs_full, *, extended_qs_batched):
-    for grid_name, extended_q_batched in extended_qs_batched.items():
-        for quantity_name, quantity in extended_q_batched.items():
-            if quantity_name.startswith("V_el") and not quantity_name.endswith("_new"):
-                const_qs_full[grid_name].overwrite(quantity_name, quantity.detach())
-
-
 def get_trainer(
     device: Device,
     *,
@@ -112,6 +105,7 @@ def get_trainer(
     optimizer_kwargs: Dict[str, Any],
     Scheduler: Optional[type],
     scheduler_kwargs: Dict[str, Any],
+    update_const_qs_models: Sequence[MultiModel],
     extra_pre_constant_models: Optional[Sequence[MultiModel]] = None,
 ):
     """
@@ -163,14 +157,6 @@ def get_trainer(
         dx_dict=dx_dict,
         M=formulas.get_poisson_equation(const_qs["bulk"], bc=params.poisson_bc),
     )
-    update_const_qs_models = []
-    if params.use_induced_V_el:
-        update_const_qs_models.append(
-            MultiModel(
-                transfer_V_el_to_const_trafo,
-                "transfer_V_el_to_const",
-            )
-        )
 
     get_batched_qs = get_batched_qs_fn(
         unbatched_grids=unbatched_grids,

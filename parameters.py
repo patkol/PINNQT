@@ -41,7 +41,7 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = None
+loaded_parameters_index = 1132
 loaded_parameters_NR_step = 0
 loaded_V_el_index = None
 loaded_V_el_NR_step = loaded_parameters_NR_step
@@ -88,10 +88,10 @@ continuous_energy = True
 batch_sizes: Dict[str, int] = {
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 1
+n_newton_raphson_steps = 5
 # newton_raphson_rate: None for directly solving the
 # Poisson equation (not newton_raphson)
-newton_raphson_rate = None
+newton_raphson_rate = 1
 reset_weights_per_nr_step = False
 force_unity_coeff = False
 soft_bc = False
@@ -114,7 +114,7 @@ E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
 # use_induced_V_el: If true, the V_el used in the loss is based on the one induced by
 # the wave function, removing the need for a poisson loop.
-use_induced_V_el = True
+use_induced_V_el = False
 # poisson_bc: "dirichlet" or "neumann". If "neumann" the electrostatic potential is
 # corrected to match the boundary contact potentials
 poisson_bc = "dirichlet"
@@ -125,9 +125,9 @@ plot_each_energy = 20
 extra_plots = True
 
 # Physical
-VOLTAGE_MIN = 0.3 * consts.VOLT
+VOLTAGE_MIN = 0.0 * consts.VOLT
 VOLTAGE_STEP = 0.1 * consts.VOLT
-VOLTAGE_MAX = 0.30001 * consts.VOLT
+VOLTAGE_MAX = 0.60001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
 VOLTAGE2_STEP = 0.1 * consts.VOLT

@@ -53,6 +53,23 @@ saved_parameters_index = storage.get_next_parameters_index()
 print("saved_parameters_index =", saved_parameters_index)
 
 
+def transfer_V_el_to_const_trafo(const_qs_full, *, extended_qs_batched):
+    for grid_name, extended_q_batched in extended_qs_batched.items():
+        for quantity_name, quantity in extended_q_batched.items():
+            if quantity_name.startswith("V_el") and not quantity_name.endswith("_new"):
+                const_qs_full[grid_name].overwrite(quantity_name, quantity.detach())
+
+
+update_const_qs_models = []
+if params.use_induced_V_el:
+    update_const_qs_models.append(
+        MultiModel(
+            transfer_V_el_to_const_trafo,
+            "transfer_V_el_to_const",
+        )
+    )
+
+
 def get_trainer(grid_ranges: Dict[str, Dict[str, float]]):
     (
         trainer,
@@ -74,6 +91,7 @@ def get_trainer(grid_ranges: Dict[str, Dict[str, float]]):
         optimizer_kwargs=params.optimizer_kwargs,
         Scheduler=params.Scheduler,
         scheduler_kwargs=params.scheduler_kwargs,
+        update_const_qs_models=update_const_qs_models,
     )
 
     return trainer, unbatched_grids, quantities_requiring_grad
@@ -113,6 +131,7 @@ def get_updated_trainer(
         const_qs,
         trainer.state.trained_models,
         trainer.state.dependent_models,
+        update_const_qs_models=update_const_qs_models,
     )
 
     return training.Trainer(new_state, trainer.config)
