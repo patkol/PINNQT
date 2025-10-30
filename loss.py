@@ -44,9 +44,24 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, contact):
             create_graph=with_grad,
         )
         phi_dx_over_m_dx = quantities.restrict(phi_dx_over_m_dx_full, q.grid)
+    # complex energy shift
+    if params.eta is None:
+        E_shift = 0
+    else:
+        V_el_max, _ = torch.max(
+            qs["bulk"]["V_el"], dim=qs["bulk"].grid.index["x"], keepdim=True
+        )
+        E_shift = (
+            (q[f"E_{contact}"] < V_el_max)
+            * (q["x"] >= params.eta_kwargs["x_L"])
+            * (q["x"] < params.eta_kwargs["x_R"])
+            * 1j
+            * params.eta
+        )
     residual = (
         -0.5 * consts.H_BAR**2 * phi_dx_over_m_dx
-        + (q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"]) * q[f"phi{i}_{contact}"]
+        + (q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"] - E_shift)
+        * q[f"phi{i}_{contact}"]
     )
     # residual = -0.5 * consts.H_BAR * hbar_phi_dx_over_m_dx / q[f"phi{i}_{contact}"] + (
     #     q[f"V_int{i}"] + q[f"V_el{i}"] - q[f"E_{contact}"]
@@ -56,9 +71,14 @@ def SE_loss_trafo(qs, *, qs_full, with_grad, i, contact):
     residual /= qs["bulk"][f"incoming_coeff_{contact}"]
     residual /= params.V_OOM
     # Fermi-Dirac weighting
-    # residual *= 1 / (
-    #     1 + torch.exp(params.BETA * (q[f"E_{contact}"] - params.CONSTANT_FERMI_LEVEL))
-    # )
+    # E_fermi = qs["bulk"][f"E_fermi_{contact}"]
+    # residual *= 1 / (1 + torch.exp(params.BETA * (q[f"E_{contact}"] - E_fermi)))
+    # Averaged transmission weighting (code duplication w/ j_loss_trafo)
+    # real_v_in = torch.real(qs[contact.grid_name][f"v{contact.index}_{contact}"])
+    # incoming_amplitude = complex_abs2(qs["bulk"][f"incoming_coeff_{contact}"])
+    # T = q[f"j{i}_{contact}"] / real_v_in / incoming_amplitude
+    # T_averaged = quantities.mean_dimension("x", T, q.grid).detach()
+    # residual *= torch.abs(T_averaged) + 0.2
     q[f"SE_loss{i}_{contact}"] = params.loss_function(residual)
 
 

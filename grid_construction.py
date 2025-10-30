@@ -16,9 +16,9 @@ def get_xs(device: Device, *, x_step_target: float) -> torch.Tensor:
     x_right = device.boundaries[-1]
     # We're excluding the left- and rightmost points to avoid special cases
     # xs = torch.arange(
-    #     start=x_left + x_step / 2,
-    #     end=x_right - x_step / 2,
-    #     step=x_step,
+    #     start=x_left + x_step_target / 2,
+    #     end=x_right - x_step_target / 2,
+    #     step=x_step_target,
     # )
     Nx = round((x_right - x_left) / x_step_target) + 1
     # We're adding an extra point to avoid special cases

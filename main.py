@@ -105,13 +105,21 @@ def get_updated_trainer(
     unbatched_grids,
     quantities_requiring_grad,
     extra_pre_constant_models: Optional[Sequence[MultiModel]] = None,
+    extra_interpolation_dimensions: Optional[Sequence[str]] = None,
 ) -> Trainer:
     if extra_pre_constant_models is None:
         extra_pre_constant_models = []
+    if extra_interpolation_dimensions is None:
+        extra_interpolation_dimensions = []
 
     def V_el_function(q: QuantityDict):
-        return quantities.interpolate(
-            V_el, V_el_grid, q.grid, dimension_label="x", search_method="incremental"
+        interpolation_dimensions = ["x"] + extra_interpolation_dimensions
+        return quantities.interpolate_multiple(
+            V_el,
+            V_el_grid,
+            q.grid,
+            dimension_labels=interpolation_dimensions,
+            search_method="incremental",
         )
 
     dx_dict = trainer_construction.get_dx_dict()
@@ -179,12 +187,16 @@ if params.loaded_V_el_index is not None:
         f"data/{params.loaded_V_el_index:04d}/newton_step{loaded_step:04d}/q_bulk.pkl",
         weights_only=False,
     )
+    extra_interpolation_dimensions = []
+    if params.allow_V_el_voltage_interpolation:
+        extra_interpolation_dimensions.append("voltage")
     trainer = get_updated_trainer(
         trainer,
         V_el=loaded_q_bulk[loaded_label].to(params.device),
         V_el_grid=loaded_q_bulk.grid,
         unbatched_grids=unbatched_grids,
         quantities_requiring_grad=quantities_requiring_grad,
+        extra_interpolation_dimensions=extra_interpolation_dimensions,
     )
     del loaded_q_bulk
 
@@ -203,7 +215,7 @@ if params.imported_V_el_path is not None:
     V_el_grid_dimensions["x"] = x_loaded
     V_el_grid = Grid(V_el_grid_dimensions)
 
-    if params.allow_imported_V_el_voltage_interpolation:
+    if params.allow_V_el_voltage_interpolation:
         # Interpolate voltages
         loaded_grid_dimensions = copy.copy(V_el_grid.dimensions)
         loaded_grid_dimensions["voltage"] = U_loaded
@@ -355,8 +367,8 @@ if __name__ == "__main__":
             "T_R",
             "R_L",
             "R_R",
-            # "phi_L",
-            # "phi_R",
+            "phi_L",
+            "phi_R",
             "incoming_coeff_L",
             "incoming_coeff_R",
             "I_L",

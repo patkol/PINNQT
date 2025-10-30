@@ -20,6 +20,12 @@ V_el_guess_kwargs = {
     "y0": 0,
     "y1": 0.2 * consts.EV,
 }
+# eta: complex energy shift in SE loss, None for no shift
+eta = 1e-3 * consts.EV
+eta_kwargs = {
+    "x_L": V_el_guess_kwargs["x_L"],
+    "x_R": V_el_guess_kwargs["x_R"],
+}
 use_voltage2 = False
 
 # simulated_device_name = "InGaAs_transistor_x"
@@ -41,29 +47,29 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = 1133
-loaded_parameters_NR_step = 4
-loaded_V_el_index = loaded_parameters_index
-loaded_V_el_NR_step = loaded_parameters_NR_step
+loaded_parameters_index = None
+loaded_parameters_NR_step = 0
+loaded_V_el_index = None  # loaded_parameters_index
+loaded_V_el_NR_step = 5  # loaded_parameters_NR_step
 # imported_V_el_path: for importing V_el from the QT python lecture code
 imported_V_el_path = None  # "../QT_lecture_code/data/real_params_iteration/step3/mode0/"  # lecture_code_results/mode_space_mode1_converged/"
-allow_imported_V_el_voltage_interpolation = False
+allow_V_el_voltage_interpolation = False
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
-use_V_el_new = True
+use_V_el_new = False
 # `load_optimizer`: Whether to use the state of the saved optimizer
 #                   (possibly overwriting optimizer_kwargs)
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 6
-n_neurons_per_hidden_layer = 60
+n_hidden_layers = 12
+n_neurons_per_hidden_layer = 100
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 0
-max_time = 20000
-min_loss = 5e-5
+max_n_training_steps = 1000
+max_time = None
+min_loss = 2e-6
 energy_cutoff_delta = 2 * consts.EV
 energy_cutoff_start = energy_cutoff_delta
 report_each = 1
@@ -74,10 +80,10 @@ optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
 optimizer_reset_tol = 100
 Scheduler = None
 scheduler_kwargs: Dict[str, Any] = {}
-loss_function = mathematics.complex_abs2
-loss_aggregate_function = sum
-# loss_function = lambda x: mathematics.complex_abs2(x) ** 2
-# loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
+# loss_function = mathematics.complex_abs2
+# loss_aggregate_function = sum
+loss_function = lambda x: mathematics.complex_abs2(x) ** 2
+loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
 use_j_loss = False
 use_full_j_loss = False
 fd_first_derivatives = True
@@ -88,7 +94,7 @@ continuous_energy = True
 batch_sizes: Dict[str, int] = {
     # "DeltaE": 100,
 }
-n_newton_raphson_steps = 5
+n_newton_raphson_steps = 1
 # newton_raphson_rate: None for directly solving the
 # Poisson equation (not newton_raphson)
 newton_raphson_rate = 1
@@ -110,14 +116,14 @@ learn_phi_prime = False
 learn_phi_prime_polar = False
 U_input_scale = 0.1 * consts.VOLT
 E_input_scale = 0.2 * consts.EV
-E_input_scale_sqrt = None  # 2e-2 * consts.EV
+E_input_scale_sqrt = 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
 # use_induced_V_el: If true, the V_el used in the loss is based on the one induced by
 # the wave function, removing the need for a poisson loop.
 use_induced_V_el = False
 # poisson_bc: "dirichlet" or "neumann". If "neumann" the electrostatic potential is
 # corrected to match the boundary contact potentials
-poisson_bc = "dirichlet"
+poisson_bc = "neumann"
 
 # Plotting
 plot_each_voltage = 1
@@ -135,7 +141,7 @@ VOLTAGE2_MAX = 0.60001 * consts.VOLT
 
 E_MIN = 1e-3 * consts.EV  # 1e-3 * consts.EV
 E_STEP = 2e-3 * consts.EV
-E_MAX = 0.6 * consts.EV
+E_MAX = 0.35 * consts.EV
 # E_MIN = 0.05 * consts.EV
 # E_STEP = 0.05 * consts.EV
 # E_MAX = 0.05 * consts.EV
