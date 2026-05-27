@@ -1,3 +1,6 @@
+# Copyright (c) 2026 ETH Zurich, Patrice Kolb
+
+
 import torch
 import matplotlib.pyplot as plt
 

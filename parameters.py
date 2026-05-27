@@ -1,4 +1,4 @@
-# Copyright (c) 2025 ETH Zurich, Patrice Kolb
+# Copyright (c) 2026 ETH Zurich, Patrice Kolb
 
 
 from typing import Dict, Any
@@ -47,13 +47,13 @@ si_complex_dtype = torch.complex128
 E_fermi_search_range = (0, 2 * consts.EV)
 
 # Models
-loaded_parameters_index = None
-loaded_parameters_NR_step = 0
-loaded_V_el_index = None  # loaded_parameters_index
-loaded_V_el_NR_step = 5  # loaded_parameters_NR_step
+loaded_parameters_index = 1241
+loaded_parameters_NR_step = 4
+loaded_V_el_index = 12  # loaded_parameters_index
+loaded_V_el_NR_step = 4  # loaded_parameters_NR_step
 # imported_V_el_path: for importing V_el from the QT python lecture code
 imported_V_el_path = None  # "../QT_lecture_code/data/real_params_iteration/step3/mode0/"  # lecture_code_results/mode_space_mode1_converged/"
-allow_V_el_voltage_interpolation = False
+allow_V_el_voltage_interpolation = True
 # use_V_el_new: Whether to use V_el_new from loaded_V_el_NR_step - 1
 use_V_el_new = False
 # `load_optimizer`: Whether to use the state of the saved optimizer
@@ -61,16 +61,16 @@ use_V_el_new = False
 load_optimizer = False
 load_scheduler = False
 save_optimizer = False
-n_hidden_layers = 12
+n_hidden_layers = 10
 n_neurons_per_hidden_layer = 100
 activation_function = torch.nn.Tanh()
 model_dtype = torch.float32
 
 # Training
-max_n_training_steps = 1000
+max_n_training_steps = 0
 max_time = None
-min_loss = 2e-6
-energy_cutoff_delta = 2 * consts.EV
+min_loss = 5e-7
+energy_cutoff_delta = 5 * consts.EV
 energy_cutoff_start = energy_cutoff_delta
 report_each = 1
 Optimizer = torch.optim.LBFGS
@@ -80,10 +80,10 @@ optimizer_kwargs = {"lr": 1, "tolerance_grad": 0, "tolerance_change": 0}
 optimizer_reset_tol = 100
 Scheduler = None
 scheduler_kwargs: Dict[str, Any] = {}
-# loss_function = mathematics.complex_abs2
-# loss_aggregate_function = sum
-loss_function = lambda x: mathematics.complex_abs2(x) ** 2
-loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
+loss_function = mathematics.complex_abs2
+loss_aggregate_function = sum
+# loss_function = lambda x: mathematics.complex_abs2(x) ** 2
+# loss_aggregate_function = lambda losses: torch.sqrt(sum(losses))
 use_j_loss = False
 use_full_j_loss = False
 fd_first_derivatives = True
@@ -115,8 +115,8 @@ hard_bc_without_phi_one = "conjugate"
 learn_phi_prime = False
 learn_phi_prime_polar = False
 U_input_scale = 0.1 * consts.VOLT
-E_input_scale = 0.2 * consts.EV
-E_input_scale_sqrt = 2e-2 * consts.EV
+E_input_scale = 0.1 * consts.EV
+E_input_scale_sqrt = None  # 2e-2 * consts.EV
 x_input_scale = 10 * consts.NM
 # use_induced_V_el: If true, the V_el used in the loss is based on the one induced by
 # the wave function, removing the need for a poisson loop.
@@ -131,20 +131,17 @@ plot_each_energy = 20
 extra_plots = True
 
 # Physical
-VOLTAGE_MIN = 0.0 * consts.VOLT
-VOLTAGE_STEP = 0.1 * consts.VOLT
-VOLTAGE_MAX = 0.60001 * consts.VOLT
+VOLTAGE_MIN = 0.3 * consts.VOLT
+VOLTAGE_STEP = 0.02 * consts.VOLT
+VOLTAGE_MAX = 0.30001 * consts.VOLT
 
 VOLTAGE2_MIN = 0.0 * consts.VOLT
-VOLTAGE2_STEP = 0.1 * consts.VOLT
-VOLTAGE2_MAX = 0.60001 * consts.VOLT
+VOLTAGE2_STEP = 0.01 * consts.VOLT
+VOLTAGE2_MAX = 0.10001 * consts.VOLT
 
-E_MIN = 1e-3 * consts.EV  # 1e-3 * consts.EV
-E_STEP = 2e-3 * consts.EV
-E_MAX = 0.35 * consts.EV
-# E_MIN = 0.05 * consts.EV
-# E_STEP = 0.05 * consts.EV
-# E_MAX = 0.05 * consts.EV
+E_MIN = 0.2 * consts.EV  # 1e-3 * consts.EV
+E_STEP = 1e-3 * consts.EV
+E_MAX = 0.2001 * consts.EV
 E_MIN += 1e-6 * consts.EV  # Avoiding problems at E == V (sqrt(E-V)' not defined)
 
 X_STEP_TARGET = 0.05 * consts.NM

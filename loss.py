@@ -1,4 +1,4 @@
-# Copyright (c) 2025 ETH Zurich, Patrice Kolb
+# Copyright (c) 2026 ETH Zurich, Patrice Kolb
 
 # IDEA: turn these into single models (q_full is now passed through)
 

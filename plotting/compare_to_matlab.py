@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2025 ETH Zurich, Patrice Kolb
+# Copyright (c) 2026 ETH Zurich, Patrice Kolb
 
 
 import numpy as np
